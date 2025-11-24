@@ -1,0 +1,383 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Perdia v5 is an AI-powered content production system built with React 19, Vite, and Supabase. The application orchestrates a two-pass AI generation pipeline (Grok for drafting → Claude for humanization) to produce SEO-optimized articles with automated quality assurance, contributor assignment, and WordPress publishing capabilities.
+
+## Development Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server (default: http://localhost:5173)
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Run ESLint
+npm run lint
+```
+
+## Environment Setup
+
+The application requires environment variables in `.env.local`:
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for database access
+- `VITE_GROK_API_KEY` and `VITE_CLAUDE_API_KEY` for AI generation
+- `VITE_DATAFORSEO_USERNAME` and `VITE_DATAFORSEO_PASSWORD` for keyword research (optional)
+
+Copy `.env.example` to `.env.local` and fill in credentials before development.
+
+## Architecture Overview
+
+### Core Application Flow
+
+1. **Authentication Layer** (`src/contexts/AuthContext.jsx`): Manages user authentication state using Supabase Auth with React Context. Provides `signIn`, `signUp`, `signOut` methods and tracks loading/user state.
+
+2. **Routing Structure** (`src/App.jsx`): React Router 7 with protected routes. All app routes (`/`, `/editor/:articleId`, `/library`, `/analytics`, `/settings`) require authentication via `ProtectedRoute` wrapper. Uses nested routes with `MainLayout` as the parent route containing an `<Outlet />` for child page components.
+
+3. **Layout System** (`src/components/layout/MainLayout.jsx`): Shared layout component with navigation that wraps all authenticated pages. Renders child routes via React Router's `<Outlet />` component.
+
+### AI Generation Pipeline
+
+The generation pipeline is the heart of the application, orchestrated by `src/services/generationService.js`:
+
+**Two-Pass Generation Process:**
+
+1. **Stage 1 - Draft (Grok)**: Initial article generation via `grokClient.js`
+   - Generates structured content with headings
+   - Creates FAQ sections
+   - Produces SEO metadata (title, description, focus keyword)
+
+2. **Stage 2 - Contributor Assignment**: Automatic matching algorithm
+   - Scores contributors based on expertise areas, content types, and topic relevance
+   - Uses semantic matching against contributor profiles stored in `article_contributors` table
+
+3. **Stage 3 - Humanization (Claude)**: Anti-AI-detection rewriting via `claudeClient.js`
+   - Applies contributor voice/writing style
+   - Optimizes for perplexity and burstiness metrics
+   - Removes banned phrases and AI-detection patterns
+
+4. **Stage 4 - Internal Linking**: Intelligent link insertion
+   - Fetches relevant articles from `site_articles` catalog (1000+ articles)
+   - Scores articles by relevance using title/topic overlap
+   - Uses Claude to insert 3-5 contextual links naturally into content
+
+5. **Stage 5 - Quality Scoring**: Automated QA metrics
+   - Word count check (target: 1500-2500 words)
+   - Internal link count (target: 3-5)
+   - External citation count (target: 2-4)
+   - FAQ presence (minimum: 3 items)
+   - Heading structure validation (H2/H3 hierarchy)
+   - Readability score (sentence length heuristic)
+   - Returns quality score 0-100 and array of issues with severity levels
+
+### Data Layer
+
+**Supabase Integration** (`src/services/supabaseClient.js`):
+- PostgreSQL database with 14 tables (see README.md for full schema)
+- Row-level security (RLS) policies for multi-user access
+- Real-time subscriptions for live updates
+
+**Key Tables:**
+- `articles` - Main content storage with status workflow (idea → drafting → refinement → qa_review → ready_to_publish → published)
+- `content_ideas` - Article ideas with approval workflow (pending → approved → rejected → completed)
+- `article_contributors` - 9 specialized AI personas with expertise areas, content types, writing styles
+- `site_articles` - Internal linking catalog with link tracking
+- `generation_queue` - Automatic mode task queue
+
+**TanStack React Query** (`src/lib/queryClient.js`):
+- Centralized query client configuration with 5-minute staleTime and 30-minute cacheTime
+- Handles caching, refetching, and optimistic updates
+- Custom hooks in `src/hooks/` wrap common queries (useArticles, useContentIdeas, useGeneration)
+- Mutations automatically invalidate relevant queries for cache consistency
+
+### State Management Pattern
+
+No global state manager (Redux/Zustand) - state is managed through:
+1. **React Query** for server state (articles, ideas, contributors, settings)
+2. **React Context** for authentication state only
+3. **Local component state** for UI-specific state (form inputs, modals, etc.)
+
+### Component Organization
+
+**Pages** (`src/pages/`):
+- Route-level components that compose smaller components
+- Handle data fetching via custom hooks
+- Manage page-specific UI state
+
+**Components** (`src/components/`):
+- `ui/` - Reusable UI primitives (buttons, inputs, cards, etc.)
+- `layout/` - Layout components (MainLayout, navigation)
+- `dashboard/` - Dashboard-specific components (Kanban board, metrics)
+- `editor/` - Article editor components (React Quill integration)
+
+## Important Technical Considerations
+
+### Security Warning
+
+**CRITICAL**: The current implementation includes `dangerouslyAllowBrowser: true` in `src/services/ai/claudeClient.js`. This exposes API keys in the browser and is **FOR DEVELOPMENT ONLY**. In production:
+- Move all AI API calls to Supabase Edge Functions
+- Never commit API keys to version control
+- Use environment variables server-side only
+
+### AI Client Architecture
+
+Both `grokClient.js` and `claudeClient.js` follow a similar pattern:
+- Initialize API client in constructor (apiKey defaults to environment variables)
+- Expose high-level methods (`generateDraft`, `humanize`, `autoFixQualityIssues`)
+- Handle prompt engineering internally via dedicated prompt builder methods
+- Return structured data objects (Grok returns parsed JSON, Claude returns text)
+
+**Grok Client** (`grokClient.js`):
+- Uses xAI's Grok API (model: `grok-beta`)
+- Expects JSON responses from prompts
+- Primary methods: `generateDraft()`, `generateIdeas()`, `generateMetadata()`
+- Direct fetch-based HTTP client implementation
+
+**Claude Client** (`claudeClient.js`):
+- Uses Anthropic SDK (model: `claude-3-5-sonnet-20250122`)
+- Returns raw text content
+- Primary methods: `humanize()`, `autoFixQualityIssues()`, `reviseWithFeedback()`, `extractLearningPatterns()`
+- High temperature (0.9) for humanization, lower (0.7) for fixing/revision
+
+When modifying AI prompts:
+- Keep context windows in mind (max_tokens: 4000-4500)
+- Test with various content types (guide, tutorial, listicle, ranking, review, explainer)
+- Validate output structure matches expected schema (especially Grok's JSON responses)
+- Be aware of the "banned phrases" list in Claude's humanization prompt
+
+### Database Migrations
+
+Supabase migrations are in `supabase/migrations/`:
+1. `20250101000000_initial_schema.sql` - Creates all 14 tables
+2. `20250101000001_seed_contributors.sql` - Seeds 9 AI contributor personas
+3. `20250101000002_seed_settings.sql` - Seeds system configuration
+
+Run migrations in order via Supabase SQL Editor when setting up new environments.
+
+### Quality Metrics Implementation
+
+The quality scoring system in `generationService.js` uses simple heuristics:
+- Word count via regex HTML stripping
+- Link counting via regex pattern matching
+- Readability via sentence length calculation
+
+When improving quality checks:
+- Keep calculations client-side performant
+- Add new checks to `calculateQualityMetrics()` method
+- Update quality score algorithm weights carefully
+- Add corresponding UI feedback in article editor
+
+### Content Workflow States
+
+Articles progress through status pipeline (enforced by database CHECK constraint):
+- `idea` - Initial concept stage
+- `drafting` - Initial AI generation complete
+- `refinement` - Human editing in progress
+- `qa_review` - Quality assurance review
+- `ready_to_publish` - Approved, awaiting publication
+- `published` - Published to WordPress
+
+Content ideas have a separate workflow:
+- `pending` - Awaiting approval
+- `approved` - Ready for generation
+- `rejected` - Not to be used
+- `completed` - Article has been generated
+
+State transitions should update `status` field and optionally create `article_revisions` records for audit trail. Use the `useUpdateArticleStatus` hook for status changes.
+
+## Styling and UI
+
+- **Tailwind CSS 4.1** with custom configuration
+- **Class Variance Authority (CVA)** for variant-based component styling
+- **Lucide React** for icons
+- **Shadcn/ui patterns** for component architecture (not full Shadcn install, but follows similar patterns)
+
+Use `clsx` and `tailwind-merge` via the `cn()` utility in `src/lib/utils.js` for conditional class merging.
+
+## Testing Considerations
+
+Currently no test suite exists. When adding tests:
+- Use Vitest (already compatible with Vite)
+- Test generation pipeline in isolation with mocked AI responses
+- Test quality metrics calculation with known content samples
+- Test contributor assignment algorithm with fixture data
+
+## Feature Development Guidelines
+
+### Adding New AI Features
+
+1. Create service in `src/services/ai/` if new provider
+2. Update `generationService.js` to orchestrate new capability
+3. Add corresponding UI in relevant page component
+4. Update quality metrics if feature affects quality score
+
+### Adding New Database Tables
+
+1. Create migration file in `supabase/migrations/` with timestamp prefix
+2. Include RLS policies in migration
+3. Create custom hook in `src/hooks/` for data access
+4. Update relevant page components to use new hook
+
+### Modifying Generation Pipeline
+
+The pipeline stages in `GenerationService.generateArticle()` are designed to be extended:
+- Each stage is isolated with clear inputs/outputs
+- Stages can be made optional via `options` parameter
+- New stages can be inserted between existing stages
+- Error handling at stage level allows partial recovery
+
+## Common Patterns
+
+### Data Fetching Pattern
+
+Custom hooks in `src/hooks/` wrap React Query operations and include authentication context:
+
+```javascript
+// Query hook pattern
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
+
+export function useArticles(filters = {}) {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['articles', filters], // Include filters in key for proper caching
+    queryFn: async () => {
+      let query = supabase
+        .from('articles')
+        .select('*, article_contributors(*)') // Join related data
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+
+      // Apply dynamic filters
+      if (filters.status) query = query.eq('status', filters.status)
+
+      const { data, error } = await query
+      if (error) throw error
+      return data
+    },
+    enabled: !!user, // Only run when user is authenticated
+  })
+}
+
+// Mutation hook pattern
+export function useUpdateArticle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, updates }) => {
+      const { data, error } = await supabase
+        .from('articles')
+        .update(updates)
+        .eq('id', articleId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: (data) => {
+      // Invalidate both list and individual item caches
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['article', data.id] })
+    },
+  })
+}
+```
+
+### AI Generation Pattern
+
+The `GenerationService` class orchestrates the complete pipeline. Always instantiate it before use:
+
+```javascript
+import GenerationService from '../services/generationService'
+
+// In a component or hook
+const generationService = new GenerationService()
+
+// Generate complete article from idea
+const articleData = await generationService.generateArticle(idea, {
+  contentType: 'guide',        // guide, listicle, ranking, explainer, review
+  targetWordCount: 2000,
+  autoAssignContributor: true,
+  addInternalLinks: true,
+})
+
+// Save to database
+const savedArticle = await generationService.saveArticle(
+  articleData,
+  ideaId,
+  userId
+)
+```
+
+All AI client calls should be wrapped in try/catch for error handling:
+
+```javascript
+try {
+  const result = await grokClient.generateDraft(idea, options)
+  // Process result
+} catch (error) {
+  console.error('AI generation error:', error)
+  // Handle error appropriately - show user feedback, retry, or fallback
+}
+```
+
+### Form Handling Pattern
+
+The codebase uses React Hook Form with Zod validation:
+- Define Zod schema for validation
+- Use `useForm()` with `zodResolver`
+- Handle submission with async/await
+- Show validation errors inline
+
+## Important Implementation Details
+
+### Contributor Assignment Algorithm
+
+The `assignContributor()` method in `generationService.js` uses a scoring system:
+- 50 points for expertise area match with idea topics
+- 30 points for content type compatibility
+- 20 points for title keyword matches
+- Returns highest-scoring contributor, falls back gracefully if none match
+
+### Internal Linking Relevance Scoring
+
+The `getRelevantSiteArticles()` method scores articles by:
+- Title word overlap (10 points per common word)
+- Topic array matches (15 points per matching topic)
+- Filters out articles with zero relevance score
+- Prioritizes articles with fewer existing links (`times_linked_to` field)
+
+### Quality Metrics Weights
+
+Quality score starts at 100 and deducts points:
+- Word count < 1500: -15 (major)
+- Word count > 2500: -5 (minor)
+- Internal links < 3: -15 (major)
+- External links < 2: -10 (minor)
+- FAQs < 3: -10 (minor)
+- Heading count < 3 H2s: -10 (minor)
+- Average sentence length > 25 words: -10 (minor)
+
+Minimum score is clamped to 0.
+
+## Known Limitations
+
+1. **No automatic mode implementation yet** - Queue processing and autonomous operation not implemented
+2. **No WordPress publishing** - API integration pending (Edge Function defined but not implemented)
+3. **No drag-and-drop Kanban** - Status updates via dropdowns only
+4. **Basic rich text editor** - React Quill integration incomplete
+5. **No mobile optimization** - Desktop-first design
+6. **Client-side API keys** - Security risk, needs Edge Functions migration
+
+Refer to README.md "Next Steps" section for planned improvements.
