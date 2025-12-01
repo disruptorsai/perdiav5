@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useArticles, useUpdateArticleStatus } from '../hooks/useArticles'
 import { useContentIdeas } from '../hooks/useContentIdeas'
 import { useGenerateArticle } from '../hooks/useGeneration'
-import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical } from 'lucide-react'
+import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -114,8 +115,21 @@ function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex flex-col items-center justify-center h-screen">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        >
+          <Loader2 className="w-10 h-10 text-blue-600" />
+        </motion.div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="mt-4 text-gray-500"
+        >
+          Loading your content pipeline...
+        </motion.p>
       </div>
     )
   }
@@ -131,51 +145,80 @@ function Dashboard() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="p-8">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="p-8"
+      >
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="mb-8 flex items-center justify-between"
+        >
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Content Pipeline</h1>
             <p className="text-gray-600 mt-1">Manage your content workflow from idea to publication</p>
           </div>
 
           {/* Auto/Manual Mode Toggle */}
-          <div className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+          >
             <span className="text-sm font-medium text-gray-700">Automation Mode:</span>
             <button
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
               title="Manual Mode: Generate articles one at a time on demand"
             >
               Manual
             </button>
             <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium opacity-50 cursor-not-allowed"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium opacity-50 cursor-not-allowed transition-colors"
               disabled
               title="Auto Mode: Coming soon - autonomous article generation"
             >
               Auto (Coming Soon)
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
       {/* Stats */}
       <div className="grid grid-cols-5 gap-4 mb-8">
-        {STATUSES.map(status => {
+        {STATUSES.map((status, index) => {
           const count = getArticlesByStatus(status.value).length
           const StatusIcon = status.icon
 
           return (
-            <div key={status.value} className="bg-white p-4 rounded-lg border border-gray-200">
+            <motion.div
+              key={status.value}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
+              whileHover={{ scale: 1.02, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+              className="bg-white p-4 rounded-lg border border-gray-200 cursor-default"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{status.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{count}</p>
+                  <motion.p
+                    key={count}
+                    initial={{ scale: 1.2 }}
+                    animate={{ scale: 1 }}
+                    className="text-2xl font-bold text-gray-900 mt-1"
+                  >
+                    {count}
+                  </motion.p>
                 </div>
                 <div className={`p-3 rounded-lg ${status.color}`}>
                   <StatusIcon className="w-5 h-5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )
         })}
       </div>
@@ -183,69 +226,105 @@ function Dashboard() {
       {/* Kanban Board */}
       <div className="grid grid-cols-5 gap-4">
         {/* Ideas Column */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="bg-gray-50 rounded-lg p-4"
+        >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Ideas</h3>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h3 className="font-semibold text-gray-900">Ideas</h3>
+            </div>
             <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
               {ideas.length}
             </span>
           </div>
 
           <div className="space-y-3">
-            {ideas.map(idea => (
-              <div
-                key={idea.id}
-                className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <h4 className="font-medium text-gray-900 text-sm mb-2">{idea.title}</h4>
-                {idea.description && (
-                  <p className="text-xs text-gray-600 mb-3 line-clamp-2">{idea.description}</p>
-                )}
-
-                <button
-                  onClick={() => handleGenerateArticle(idea)}
-                  disabled={generatingIdea === idea.id}
-                  className="w-full bg-blue-600 text-white text-xs py-2 px-3 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+            <AnimatePresence mode="popLayout">
+              {ideas.map((idea, index) => (
+                <motion.div
+                  key={idea.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2, delay: index * 0.03 }}
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
                 >
-                  {generatingIdea === idea.id ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-3 h-3 mr-1" />
-                      Generate Article
-                    </>
+                  <h4 className="font-medium text-gray-900 text-sm mb-2">{idea.title}</h4>
+                  {idea.description && (
+                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{idea.description}</p>
                   )}
-                </button>
-              </div>
-            ))}
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleGenerateArticle(idea)}
+                    disabled={generatingIdea === idea.id}
+                    className="w-full bg-blue-600 text-white text-xs py-2 px-3 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center transition-colors"
+                  >
+                    {generatingIdea === idea.id ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        >
+                          <Loader2 className="w-3 h-3 mr-1" />
+                        </motion.div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3 h-3 mr-1" />
+                        Generate Article
+                      </>
+                    )}
+                  </motion.button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
 
             {ideas.length === 0 && (
-              <div className="text-center text-sm text-gray-500 py-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center text-sm text-gray-500 py-8"
+              >
                 No approved ideas yet
-              </div>
+              </motion.div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Article Columns */}
-        {STATUSES.slice(1).map(status => {
+        {STATUSES.slice(1).map((status, columnIndex) => {
           const statusArticles = getArticlesByStatus(status.value)
           const StatusIcon = status.icon
 
           return (
             <DroppableColumn key={status.value} id={status.value}>
-              <div className="bg-gray-50 rounded-lg p-4 h-full">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.25 + columnIndex * 0.05 }}
+                className="bg-gray-50 rounded-lg p-4 h-full"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center">
                     <StatusIcon className="w-4 h-4 mr-2 text-gray-600" />
                     <h3 className="font-semibold text-gray-900">{status.label}</h3>
                   </div>
-                  <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                  <motion.span
+                    key={statusArticles.length}
+                    initial={{ scale: 1.2 }}
+                    animate={{ scale: 1 }}
+                    className="text-sm text-gray-600 bg-white px-2 py-1 rounded"
+                  >
                     {statusArticles.length}
-                  </span>
+                  </motion.span>
                 </div>
 
                 <SortableContext
@@ -253,23 +332,30 @@ function Dashboard() {
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="space-y-3">
-                    {statusArticles.map(article => (
-                      <SortableArticleCard
-                        key={article.id}
-                        article={article}
-                        onClick={() => handleArticleClick(article)}
-                        onStatusChange={handleStatusChange}
-                      />
-                    ))}
+                    <AnimatePresence mode="popLayout">
+                      {statusArticles.map((article, index) => (
+                        <SortableArticleCard
+                          key={article.id}
+                          article={article}
+                          onClick={() => handleArticleClick(article)}
+                          onStatusChange={handleStatusChange}
+                          index={index}
+                        />
+                      ))}
+                    </AnimatePresence>
 
                     {statusArticles.length === 0 && (
-                      <div className="text-center text-sm text-gray-500 py-8">
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-center text-sm text-gray-500 py-8 border-2 border-dashed border-gray-200 rounded-lg"
+                      >
                         Drop articles here
-                      </div>
+                      </motion.div>
                     )}
                   </div>
                 </SortableContext>
-              </div>
+              </motion.div>
             </DroppableColumn>
           )
         })}
@@ -281,7 +367,7 @@ function Dashboard() {
           <ArticleCard article={activeArticle} isDragging />
         ) : null}
       </DragOverlay>
-    </div>
+      </motion.div>
     </DndContext>
   )
 }
@@ -307,7 +393,7 @@ function DroppableColumn({ id, children }) {
 }
 
 // Sortable Article Card Component
-function SortableArticleCard({ article, onClick, onStatusChange }) {
+function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
   const {
     attributes,
     listeners,
@@ -320,13 +406,17 @@ function SortableArticleCard({ article, onClick, onStatusChange }) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
   }
 
   return (
-    <div
+    <motion.div
       ref={setNodeRef}
       style={style}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.2, delay: index * 0.02 }}
+      whileHover={{ scale: isDragging ? 1 : 1.02 }}
       className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group"
     >
       <div className="flex items-start space-x-2">
@@ -353,34 +443,42 @@ function SortableArticleCard({ article, onClick, onStatusChange }) {
           )}
 
           <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">{article.word_count} words</span>
+            <span className="text-gray-500">{article.word_count || 0} words</span>
             {article.quality_score > 0 && (
-              <span className={`px-2 py-1 rounded ${
-                article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
-                article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                'bg-red-100 text-red-700'
-              }`}>
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className={`px-2 py-1 rounded ${
+                  article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
+                  article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }`}
+              >
                 {article.quality_score}
-              </span>
+              </motion.span>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
 // Simple Article Card (for drag overlay)
 function ArticleCard({ article, isDragging = false }) {
   return (
-    <div className={`bg-white p-4 rounded-lg border-2 border-blue-500 shadow-lg ${isDragging ? 'rotate-3' : ''}`}>
+    <motion.div
+      initial={{ scale: 1, rotate: 0 }}
+      animate={{ scale: 1.05, rotate: isDragging ? 3 : 0 }}
+      className="bg-white p-4 rounded-lg border-2 border-blue-500 shadow-xl"
+    >
       <h4 className="font-medium text-gray-900 text-sm mb-2">
         {article.title}
       </h4>
       {article.contributor_name && (
         <p className="text-xs text-gray-600">By {article.contributor_name}</p>
       )}
-    </div>
+    </motion.div>
   )
 }
 

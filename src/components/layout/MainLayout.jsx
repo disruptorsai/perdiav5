@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   LayoutDashboard,
@@ -8,6 +9,13 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   LogOut,
+  ClipboardCheck,
+  Globe,
+  Hash,
+  Zap,
+  Plug,
+  Users,
+  Brain,
 } from 'lucide-react'
 
 function MainLayout() {
@@ -18,6 +26,13 @@ function MainLayout() {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Content Ideas', href: '/ideas', icon: Lightbulb },
     { name: 'Library', href: '/library', icon: Library },
+    { name: 'Review Queue', href: '/review', icon: ClipboardCheck },
+    { name: 'Automation', href: '/automation', icon: Zap },
+    { name: 'Site Catalog', href: '/catalog', icon: Globe },
+    { name: 'Keywords', href: '/keywords', icon: Hash },
+    { name: 'Integrations', href: '/integrations', icon: Plug },
+    { name: 'Contributors', href: '/contributors', icon: Users },
+    { name: 'AI Training', href: '/ai-training', icon: Brain },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: SettingsIcon },
   ]
@@ -33,48 +48,86 @@ function MainLayout() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200">
+      <motion.div
+        initial={{ x: -280 }}
+        animate={{ x: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-sm"
+      >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center h-16 px-6 border-b border-gray-200">
-            <FileText className="w-8 h-8 text-blue-600" />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex items-center h-16 px-6 border-b border-gray-200"
+          >
+            <motion.div
+              whileHover={{ rotate: 10 }}
+              transition={{ type: 'spring', stiffness: 400 }}
+            >
+              <FileText className="w-8 h-8 text-blue-600" />
+            </motion.div>
             <span className="ml-2 text-xl font-bold text-gray-900">Perdia</span>
-          </div>
+          </motion.div>
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
+            {navigation.map((item, index) => {
               const isActive = location.pathname === item.href
               const Icon = item.icon
 
               return (
-                <Link
+                <motion.div
                   key={item.name}
-                  to={item.href}
-                  className={`
-                    flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors
-                    ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                    }
-                  `}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + index * 0.03 }}
                 >
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </Link>
+                  <Link
+                    to={item.href}
+                    className={`
+                      relative flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200
+                      ${
+                        isActive
+                          ? 'text-blue-700'
+                          : 'text-gray-700 hover:text-gray-900'
+                      }
+                    `}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeNav"
+                        className="absolute inset-0 bg-blue-50 rounded-lg"
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative flex items-center">
+                      <Icon className="w-5 h-5 mr-3" />
+                      {item.name}
+                    </span>
+                  </Link>
+                </motion.div>
               )
             })}
           </nav>
 
           {/* User Section */}
-          <div className="p-4 border-t border-gray-200">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="p-4 border-t border-gray-200"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center min-w-0">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
+                  <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-medium shadow-sm"
+                  >
                     {user?.email?.[0].toUpperCase()}
-                  </div>
+                  </motion.div>
                 </div>
                 <div className="ml-3 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">
@@ -82,22 +135,34 @@ function MainLayout() {
                   </p>
                 </div>
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={handleSignOut}
                 className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-5 h-5" />
-              </button>
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Main Content */}
       <div className="pl-64">
         <main className="min-h-screen">
-          <Outlet />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

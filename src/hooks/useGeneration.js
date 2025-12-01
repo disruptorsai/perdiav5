@@ -127,6 +127,43 @@ export function useReviseArticle() {
 }
 
 /**
+ * Humanize content using Claude
+ */
+export function useHumanizeContent() {
+  return useMutation({
+    mutationFn: async ({ content, contributorStyle, contributorName }) => {
+      const humanizedContent = await generationService.humanizeContent(
+        content,
+        {
+          writingStyle: contributorStyle,
+          contributorName: contributorName
+        }
+      )
+
+      return { content: humanizedContent }
+    },
+  })
+}
+
+/**
+ * Generate ideas from a topic
+ */
+export function useGenerateIdeas() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ topic, count = 5 }) => {
+      const ideas = await generationService.generateIdeas(topic, count)
+      return ideas
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+    },
+  })
+}
+
+/**
  * Get contributors (for display)
  */
 export function useContributors() {

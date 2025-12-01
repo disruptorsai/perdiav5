@@ -494,6 +494,68 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
   }
 
   /**
+   * Humanize existing content using Claude
+   * @param {string} content - The content to humanize
+   * @param {Object} options - Options including writingStyle and contributorName
+   * @returns {string} - Humanized content
+   */
+  async humanizeContent(content, options = {}) {
+    const { writingStyle, contributorName } = options
+
+    const prompt = `Humanize this content to sound more natural and engaging.
+
+${writingStyle ? `WRITING STYLE: ${writingStyle}` : ''}
+${contributorName ? `AUTHOR PERSONA: ${contributorName}` : ''}
+
+CURRENT CONTENT:
+${content}
+
+INSTRUCTIONS:
+1. Maintain the core information and structure
+2. Make the language more conversational and engaging
+3. Vary sentence length and structure for better flow
+4. Remove any robotic or formulaic phrases
+5. Add personality while keeping professionalism
+6. Keep all HTML formatting intact
+7. Do NOT add new sections or significantly expand content
+
+OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
+
+    try {
+      const humanizedContent = await this.claude.chat([
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], {
+        temperature: 0.9,
+        max_tokens: 4500,
+      })
+
+      return humanizedContent
+    } catch (error) {
+      console.error('Error humanizing content:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate content ideas from a topic
+   * @param {string} topic - The topic to generate ideas for
+   * @param {number} count - Number of ideas to generate
+   * @returns {Array} - Array of idea objects
+   */
+  async generateIdeas(topic, count = 5) {
+    try {
+      const ideas = await this.grok.generateIdeas(topic, count)
+      return ideas
+    } catch (error) {
+      console.error('Error generating ideas:', error)
+      throw error
+    }
+  }
+
+  /**
    * Helper to update progress
    */
   updateProgress(callback, message, percentage) {
