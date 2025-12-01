@@ -15,6 +15,7 @@ import {
 import { useContentIdeas } from '@/hooks/useContentIdeas'
 import { useGenerateArticle } from '@/hooks/useGeneration'
 import { useSettingsMap } from '@/hooks/useSystemSettings'
+import AutomationEngine from '@/components/automation/AutomationEngine'
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -96,6 +97,7 @@ export default function Automation() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedIdeas, setSelectedIdeas] = useState([])
   const [processingId, setProcessingId] = useState(null)
+  const [mode, setMode] = useState('queue') // 'queue' | 'auto' - queue for manual queue, auto for full automation
 
   // Refs for automation control
   const shouldStopRef = useRef(false)
@@ -301,10 +303,61 @@ export default function Automation() {
               Automation Engine
             </h1>
             <p className="text-gray-600 text-lg">
-              Automate article generation from approved content ideas
+              {mode === 'auto'
+                ? 'Full automation: Discover ideas and generate articles automatically'
+                : 'Queue-based automation: Process approved ideas in sequence'}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Mode Toggle */}
+            <div className="flex rounded-lg bg-gray-100 p-1">
+              <button
+                onClick={() => setMode('queue')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  mode === 'queue'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <ListChecks className="w-4 h-4 inline mr-2" />
+                Queue Mode
+              </button>
+              <button
+                onClick={() => setMode('auto')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  mode === 'auto'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Zap className="w-4 h-4 inline mr-2" />
+                Full Auto
+              </button>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Full Auto Mode */}
+        {mode === 'auto' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <AutomationEngine
+              onComplete={(results) => {
+                console.log('Automation complete:', results)
+              }}
+            />
+          </motion.div>
+        )}
+
+        {/* Queue Mode Controls - only show in queue mode */}
+        {mode === 'queue' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3"
+          >
             {isRunning ? (
               <Button onClick={handleStop} variant="destructive" className="gap-2">
                 <Square className="w-4 h-4" />
@@ -328,9 +381,12 @@ export default function Automation() {
               <Plus className="w-4 h-4" />
               Add to Queue
             </Button>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
+        {/* Queue Mode Content */}
+        {mode === 'queue' && (
+          <>
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="border-none shadow-sm">
@@ -587,6 +643,8 @@ export default function Automation() {
             )}
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
 
       {/* Add to Queue Dialog */}

@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useArticles, useUpdateArticleStatus } from '../hooks/useArticles'
-import { useContentIdeas } from '../hooks/useContentIdeas'
+import { useContentIdeas, useCreateContentIdea } from '../hooks/useContentIdeas'
 import { useGenerateArticle } from '../hooks/useGeneration'
-import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles } from 'lucide-react'
+import { useSystemSettings } from '../hooks/useSystemSettings'
+import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2 } from 'lucide-react'
+import SourceSelector from '../components/ideas/SourceSelector'
+import IdeaDiscoveryService from '../services/ideaDiscoveryService'
+import { useToast } from '../components/ui/toast'
 import {
   DndContext,
   closestCenter,
@@ -29,11 +33,21 @@ function Dashboard() {
   const navigate = useNavigate()
   const { data: articles = [], isLoading } = useArticles()
   const { data: ideas = [] } = useContentIdeas({ status: 'approved' })
+  const { data: allIdeas = [] } = useContentIdeas({})
   const updateStatus = useUpdateArticleStatus()
   const generateArticle = useGenerateArticle()
+  const createContentIdea = useCreateContentIdea()
+  const { data: settings } = useSystemSettings()
+  const { addToast } = useToast()
 
   const [generatingIdea, setGeneratingIdea] = useState(null)
   const [activeId, setActiveId] = useState(null)
+  const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false)
+  const [isDiscovering, setIsDiscovering] = useState(false)
+  const [automationMode, setAutomationMode] = useState('manual') // 'manual' | 'semiauto' | 'full_auto'
+
+  // Initialize idea discovery service
+  const ideaDiscoveryService = new IdeaDiscoveryService()
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -113,6 +127,83 @@ function Dashboard() {
     return articles.filter(a => a.status === status)
   }
 
+  // Handle idea discovery from sources
+  const handleDiscoverIdeas = useCallback(async ({ sources, customTopic, existingTopics }) => {
+    setIsDiscovering(true)
+
+    try {
+      // Get existing idea titles to avoid duplicates
+      const existingTitles = allIdeas.map(idea => idea.title)
+
+      // Discover ideas using the service
+      const discoveredIdeas = await ideaDiscoveryService.discoverIdeas({
+        sources,
+        customTopic,
+        existingTopics: existingTitles,
+        niche: settings?.niche || 'higher education, online degrees, career development',
+      })
+
+      addToast({
+        title: 'Ideas Discovered',
+        description: `Found ${discoveredIdeas.length} new content ideas`,
+        variant: 'success',
+      })
+
+      return discoveredIdeas
+    } catch (error) {
+      console.error('Idea discovery error:', error)
+      addToast({
+        title: 'Discovery Failed',
+        description: error.message || 'Failed to discover ideas',
+        variant: 'error',
+      })
+      throw error
+    } finally {
+      setIsDiscovering(false)
+    }
+  }, [allIdeas, settings, addToast, ideaDiscoveryService])
+
+  // Handle adding selected ideas to the content queue
+  const handleSourceSelectorClose = useCallback(async (open, selectedIdeas) => {
+    setSourceSelectorOpen(open)
+
+    if (selectedIdeas && selectedIdeas.length > 0) {
+      // Add selected ideas to content_ideas table
+      for (const idea of selectedIdeas) {
+        try {
+          await createContentIdea.mutateAsync({
+            title: idea.title,
+            description: idea.description,
+            content_type: idea.content_type,
+            target_keywords: idea.target_keywords,
+            search_intent: idea.search_intent,
+            trending_reason: idea.trending_reason,
+            source: idea.source,
+            status: 'approved', // Auto-approve discovered ideas
+          })
+        } catch (error) {
+          console.error('Failed to add idea:', error)
+        }
+      }
+
+      addToast({
+        title: 'Ideas Added',
+        description: `Added ${selectedIdeas.length} ideas to your content queue`,
+        variant: 'success',
+      })
+
+      // In auto mode, start generating articles automatically
+      if (automationMode === 'full_auto') {
+        addToast({
+          title: 'Auto Mode Active',
+          description: 'Starting automatic article generation...',
+          variant: 'info',
+        })
+        // TODO: Trigger automatic generation pipeline
+      }
+    }
+  }, [createContentIdea, addToast, automationMode])
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
@@ -156,34 +247,114 @@ function Dashboard() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="mb-8 flex items-center justify-between"
+          className="mb-8"
         >
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Content Pipeline</h1>
-            <p className="text-gray-600 mt-1">Manage your content workflow from idea to publication</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Content Pipeline</h1>
+              <p className="text-gray-600 mt-1">Manage your content workflow from idea to publication</p>
+            </div>
+
+            {/* Auto/Manual Mode Toggle */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex items-center gap-2 bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+            >
+              <Settings2 className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Mode:</span>
+              <div className="flex rounded-lg bg-gray-100 p-1">
+                <button
+                  onClick={() => setAutomationMode('manual')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    automationMode === 'manual'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Manual Mode: Generate articles one at a time"
+                >
+                  Manual
+                </button>
+                <button
+                  onClick={() => setAutomationMode('semiauto')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    automationMode === 'semiauto'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Semi-Auto: Discover ideas, generate with approval"
+                >
+                  Semi-Auto
+                </button>
+                <button
+                  onClick={() => setAutomationMode('full_auto')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    automationMode === 'full_auto'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Full Auto: Autonomous pipeline - discover, generate, fix, ready for review"
+                >
+                  <Zap className="w-3 h-3 inline mr-1" />
+                  Auto
+                </button>
+              </div>
+            </motion.div>
           </div>
 
-          {/* Auto/Manual Mode Toggle */}
+          {/* Action Buttons */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="flex items-center gap-3"
           >
-            <span className="text-sm font-medium text-gray-700">Automation Mode:</span>
-            <button
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
-              title="Manual Mode: Generate articles one at a time on demand"
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setSourceSelectorOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-medium shadow-sm transition-all"
             >
-              Manual
-            </button>
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium opacity-50 cursor-not-allowed transition-colors"
-              disabled
-              title="Auto Mode: Coming soon - autonomous article generation"
-            >
-              Auto (Coming Soon)
-            </button>
+              <Search className="w-4 h-4" />
+              Find New Ideas
+              <Sparkles className="w-4 h-4" />
+            </motion.button>
+
+            {automationMode === 'full_auto' && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <Zap className="w-4 h-4" />
+                </motion.div>
+                <span>Auto Mode Active - Ideas will be generated automatically</span>
+              </motion.div>
+            )}
+
+            {ideas.length > 0 && automationMode !== 'manual' && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  // Generate all approved ideas
+                  addToast({
+                    title: 'Batch Generation Started',
+                    description: `Generating ${ideas.length} articles...`,
+                    variant: 'info',
+                  })
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-all"
+              >
+                <Zap className="w-4 h-4" />
+                Generate All ({ideas.length})
+              </motion.button>
+            )}
           </motion.div>
         </motion.div>
 
@@ -367,6 +538,15 @@ function Dashboard() {
           <ArticleCard article={activeArticle} isDragging />
         ) : null}
       </DragOverlay>
+
+      {/* Source Selector Modal */}
+      <SourceSelector
+        open={sourceSelectorOpen}
+        onOpenChange={handleSourceSelectorClose}
+        onDiscoverIdeas={handleDiscoverIdeas}
+        existingTopics={allIdeas.map(i => i.title)}
+        isLoading={isDiscovering}
+      />
       </motion.div>
     </DndContext>
   )

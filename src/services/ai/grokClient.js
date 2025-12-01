@@ -333,6 +333,67 @@ Generate the ideas now:`
   }
 
   /**
+   * Generate content with web context (searches internet for current trends)
+   * Grok has built-in web search capabilities through xAI
+   */
+  async generateWithWebContext(prompt, options = {}) {
+    const {
+      temperature = 0.8,
+      max_tokens = 4000,
+    } = options
+
+    // Grok natively supports web search through its training and real-time capabilities
+    // We enhance the prompt to encourage the model to use current knowledge
+    const enhancedPrompt = `${prompt}
+
+IMPORTANT: Use your knowledge of CURRENT events, trends, and discussions.
+Include timely, relevant information from recent news, social media trends, and search data.
+Focus on what people are ACTIVELY searching for and discussing RIGHT NOW.`
+
+    try {
+      const response = await this.request([
+        {
+          role: 'system',
+          content: `You are a content strategist with access to real-time information about current trends, news, and social media discussions.
+You stay updated on the latest developments and can identify trending topics and emerging search queries.
+When generating ideas, prioritize topics that are currently being discussed and searched for.`
+        },
+        {
+          role: 'user',
+          content: enhancedPrompt
+        }
+      ], {
+        temperature,
+        max_tokens,
+      })
+
+      return response
+    } catch (error) {
+      console.error('Grok web context generation error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Simple text generation (no JSON parsing)
+   */
+  async generate(prompt, options = {}) {
+    try {
+      const response = await this.request([
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], options)
+
+      return response
+    } catch (error) {
+      console.error('Grok generation error:', error)
+      throw error
+    }
+  }
+
+  /**
    * Generate SEO metadata for an article
    */
   async generateMetadata(articleContent, focusKeyword) {

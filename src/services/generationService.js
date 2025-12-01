@@ -7,11 +7,16 @@
 import GrokClient from './ai/grokClient'
 import ClaudeClient from './ai/claudeClient'
 import { supabase } from './supabaseClient'
+import IdeaDiscoveryService from './ideaDiscoveryService'
 
 class GenerationService {
   constructor() {
     this.grok = new GrokClient()
     this.claude = new ClaudeClient()
+    this.ideaDiscovery = new IdeaDiscoveryService()
+    this.isProcessing = false
+    this.processingQueue = []
+    this.currentTask = null
   }
 
   /**
@@ -563,6 +568,358 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
       callback({ message, percentage })
     }
     console.log(`[${percentage}%] ${message}`)
+  }
+
+  // ========================================
+  // AUTOMATIC PIPELINE METHODS
+  // ========================================
+
+  /**
+   * Run the full automatic pipeline:
+   * 1. Discover new ideas from sources
+   * 2. Filter duplicates and validate
+   * 3. Generate articles for each idea
+   * 4. Quality check and auto-fix
+   * 5. Save to database
+   */
+  async runAutoPipeline(options = {}, onProgress, onComplete) {
+    const {
+      sources = ['reddit', 'news', 'trends', 'general'],
+      customTopic = '',
+      maxIdeas = 10,
+      generateImmediately = true,
+      userId,
+      niche = 'higher education, online degrees, career development',
+    } = options
+
+    if (this.isProcessing) {
+      throw new Error('Pipeline already running')
+    }
+
+    this.isProcessing = true
+    const results = {
+      discoveredIdeas: [],
+      generatedArticles: [],
+      failedIdeas: [],
+      skippedIdeas: [],
+    }
+
+    try {
+      // STAGE 1: Discover Ideas
+      this.updateProgress(onProgress, 'Discovering new content ideas...', 5)
+
+      const existingIdeas = await this.getExistingIdeas(userId)
+      const existingTitles = existingIdeas.map(i => i.title)
+
+      const discoveredIdeas = await this.ideaDiscovery.discoverIdeas({
+        sources,
+        customTopic,
+        existingTopics: existingTitles,
+        niche,
+      })
+
+      // Filter out duplicates using similarity check
+      const uniqueIdeas = this.ideaDiscovery.filterDuplicates(
+        discoveredIdeas,
+        existingTitles,
+        0.7 // 70% similarity threshold
+      )
+
+      results.discoveredIdeas = uniqueIdeas.slice(0, maxIdeas)
+      results.skippedIdeas = discoveredIdeas.filter(
+        i => !uniqueIdeas.includes(i)
+      )
+
+      this.updateProgress(
+        onProgress,
+        `Found ${results.discoveredIdeas.length} unique ideas`,
+        15
+      )
+
+      // STAGE 2: Save Ideas to Database
+      const savedIdeas = []
+      for (const idea of results.discoveredIdeas) {
+        try {
+          const savedIdea = await this.saveIdea(idea, userId)
+          savedIdeas.push(savedIdea)
+        } catch (error) {
+          console.error('Failed to save idea:', error)
+        }
+      }
+
+      this.updateProgress(onProgress, `Saved ${savedIdeas.length} ideas`, 20)
+
+      // STAGE 3: Generate Articles (if immediate mode)
+      if (generateImmediately && savedIdeas.length > 0) {
+        const progressPerIdea = 75 / savedIdeas.length
+
+        for (let i = 0; i < savedIdeas.length; i++) {
+          const idea = savedIdeas[i]
+          const baseProgress = 20 + (i * progressPerIdea)
+
+          try {
+            this.updateProgress(
+              onProgress,
+              `Generating article ${i + 1}/${savedIdeas.length}: ${idea.title.substring(0, 40)}...`,
+              baseProgress
+            )
+
+            // Generate the article
+            const articleData = await this.generateArticleComplete(
+              idea,
+              {
+                contentType: idea.content_type || 'guide',
+                targetWordCount: 2000,
+                autoAssignContributor: true,
+                addInternalLinks: true,
+                autoFix: true,
+                maxFixAttempts: 3,
+                qualityThreshold: 85,
+              },
+              (progress) => {
+                const scaledProgress = baseProgress + (progress.percentage / 100 * progressPerIdea)
+                this.updateProgress(onProgress, progress.message, scaledProgress)
+              }
+            )
+
+            // Save article
+            const savedArticle = await this.saveArticle(articleData, idea.id, userId)
+            results.generatedArticles.push(savedArticle)
+
+            this.updateProgress(
+              onProgress,
+              `✓ Completed article ${i + 1}/${savedIdeas.length}`,
+              baseProgress + progressPerIdea
+            )
+
+          } catch (error) {
+            console.error(`Failed to generate article for idea: ${idea.title}`, error)
+            results.failedIdeas.push({ idea, error: error.message })
+          }
+        }
+      }
+
+      // STAGE 4: Finalize
+      this.updateProgress(onProgress, 'Pipeline complete!', 100)
+
+      if (onComplete) {
+        onComplete(results)
+      }
+
+      return results
+
+    } catch (error) {
+      console.error('Auto pipeline error:', error)
+      throw error
+    } finally {
+      this.isProcessing = false
+      this.currentTask = null
+    }
+  }
+
+  /**
+   * Process a batch of ideas in sequence
+   */
+  async processBatch(ideaIds, userId, onProgress) {
+    if (this.isProcessing) {
+      throw new Error('Already processing')
+    }
+
+    this.isProcessing = true
+    const results = {
+      successful: [],
+      failed: [],
+    }
+
+    try {
+      // Fetch the ideas
+      const { data: ideas, error } = await supabase
+        .from('content_ideas')
+        .select('*')
+        .in('id', ideaIds)
+        .eq('status', 'approved')
+
+      if (error) throw error
+
+      const progressPerIdea = 100 / ideas.length
+
+      for (let i = 0; i < ideas.length; i++) {
+        const idea = ideas[i]
+        const baseProgress = i * progressPerIdea
+
+        try {
+          this.updateProgress(
+            onProgress,
+            `Processing ${i + 1}/${ideas.length}: ${idea.title.substring(0, 40)}...`,
+            baseProgress
+          )
+
+          const articleData = await this.generateArticleComplete(
+            idea,
+            {
+              contentType: idea.content_type || 'guide',
+              targetWordCount: 2000,
+              autoAssignContributor: true,
+              addInternalLinks: true,
+              autoFix: true,
+            },
+            (progress) => {
+              const scaled = baseProgress + (progress.percentage / 100 * progressPerIdea)
+              this.updateProgress(onProgress, progress.message, scaled)
+            }
+          )
+
+          const savedArticle = await this.saveArticle(articleData, idea.id, userId)
+          results.successful.push(savedArticle)
+
+        } catch (error) {
+          console.error(`Batch processing failed for: ${idea.title}`, error)
+          results.failed.push({ idea, error: error.message })
+        }
+      }
+
+      return results
+
+    } finally {
+      this.isProcessing = false
+    }
+  }
+
+  /**
+   * Add ideas to the processing queue
+   */
+  async queueIdeas(ideaIds, userId) {
+    for (const ideaId of ideaIds) {
+      // Add to generation_queue table
+      await supabase
+        .from('generation_queue')
+        .insert({
+          idea_id: ideaId,
+          user_id: userId,
+          status: 'pending',
+          priority: 5,
+        })
+    }
+  }
+
+  /**
+   * Process the next item in the queue
+   */
+  async processNextInQueue(userId, onProgress) {
+    // Get next pending item
+    const { data: queueItem, error } = await supabase
+      .from('generation_queue')
+      .select('*, content_ideas(*)')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    if (error || !queueItem) {
+      return null
+    }
+
+    // Mark as processing
+    await supabase
+      .from('generation_queue')
+      .update({ status: 'processing', started_at: new Date().toISOString() })
+      .eq('id', queueItem.id)
+
+    try {
+      const idea = queueItem.content_ideas
+      const articleData = await this.generateArticleComplete(idea, {
+        contentType: idea.content_type || 'guide',
+        autoFix: true,
+      }, onProgress)
+
+      const savedArticle = await this.saveArticle(articleData, idea.id, userId)
+
+      // Mark as completed
+      await supabase
+        .from('generation_queue')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          article_id: savedArticle.id,
+        })
+        .eq('id', queueItem.id)
+
+      return savedArticle
+
+    } catch (error) {
+      // Mark as failed
+      await supabase
+        .from('generation_queue')
+        .update({
+          status: 'failed',
+          error_message: error.message,
+        })
+        .eq('id', queueItem.id)
+
+      throw error
+    }
+  }
+
+  /**
+   * Get existing ideas for duplicate checking
+   */
+  async getExistingIdeas(userId) {
+    const { data, error } = await supabase
+      .from('content_ideas')
+      .select('title, description')
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('Error fetching existing ideas:', error)
+      return []
+    }
+
+    return data || []
+  }
+
+  /**
+   * Save a discovered idea to the database
+   */
+  async saveIdea(idea, userId) {
+    const { data, error } = await supabase
+      .from('content_ideas')
+      .insert({
+        title: idea.title,
+        description: idea.description,
+        content_type: idea.content_type,
+        target_keywords: idea.target_keywords,
+        search_intent: idea.search_intent,
+        source: idea.source,
+        trending_reason: idea.trending_reason,
+        status: 'approved', // Auto-approve discovered ideas
+        user_id: userId,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  /**
+   * Get pipeline status
+   */
+  getStatus() {
+    return {
+      isProcessing: this.isProcessing,
+      currentTask: this.currentTask,
+      queueLength: this.processingQueue.length,
+    }
+  }
+
+  /**
+   * Stop the pipeline
+   */
+  stop() {
+    this.isProcessing = false
+    this.currentTask = null
   }
 }
 

@@ -41,3 +41,6 @@ coverage
 
 # Production
 build
+
+# Local Netlify folder
+.netlify
