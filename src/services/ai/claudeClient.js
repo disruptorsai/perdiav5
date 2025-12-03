@@ -12,7 +12,7 @@ class ClaudeClient {
       apiKey: this.apiKey,
       dangerouslyAllowBrowser: true, // Note: In production, use Edge Functions
     })
-    this.model = 'claude-3-5-sonnet-20250122'
+    this.model = 'claude-sonnet-4-20250514'
   }
 
   /**

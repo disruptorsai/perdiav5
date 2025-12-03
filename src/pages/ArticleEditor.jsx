@@ -21,8 +21,8 @@ import {
   FileText,
   Globe
 } from 'lucide-react'
-import ReactQuill from 'react-quill'
-import 'react-quill/dist/quill.snow.css'
+// Note: ReactQuill is incompatible with React 19 (findDOMNode removed)
+// Using a simple textarea for now until a React 19 compatible editor is found
 
 // UI Components
 import { Button } from '@/components/ui/button'
@@ -111,28 +111,6 @@ function ArticleEditorContent() {
       setFaqs(article.faqs || [])
     }
   }, [article])
-
-  // Quill editor configuration
-  const quillModules = useMemo(() => ({
-    toolbar: [
-      [{ 'header': [2, 3, 4, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['blockquote', 'code-block'],
-      ['link', 'image'],
-      [{ 'align': [] }],
-      ['clean']
-    ],
-  }), [])
-
-  const quillFormats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet',
-    'blockquote', 'code-block',
-    'link', 'image',
-    'align'
-  ]
 
   // Calculate word count
   const wordCount = useMemo(() => {
@@ -568,19 +546,18 @@ function ArticleEditorContent() {
 
                 {/* Content Editor */}
                 <div>
-                  <Label className="mb-2">Content</Label>
+                  <Label className="mb-2">Content (HTML)</Label>
                   <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
-                    <ReactQuill
-                      theme="snow"
+                    <Textarea
                       value={content}
-                      onChange={setContent}
-                      modules={quillModules}
-                      formats={quillFormats}
-                      className="bg-white"
-                      style={{ minHeight: '400px' }}
-                      placeholder="Write your article content here..."
+                      onChange={(e) => setContent(e.target.value)}
+                      className="min-h-[400px] font-mono text-sm border-0 rounded-none resize-y"
+                      placeholder="Write your article content here (HTML supported)..."
                     />
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Supports HTML formatting. Word count: {content ? content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0}
+                  </p>
                 </div>
               </div>
             </div>

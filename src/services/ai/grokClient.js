@@ -12,6 +12,39 @@ class GrokClient {
   }
 
   /**
+   * Strip markdown code blocks from response
+   * Handles ```json ... ``` and ``` ... ``` wrappers
+   */
+  stripMarkdownCodeBlocks(text) {
+    if (!text) return text
+
+    // Remove ```json or ```JSON or just ``` at the start
+    let cleaned = text.trim()
+
+    // Match opening code fence with optional language specifier
+    const openFenceMatch = cleaned.match(/^```(?:json|JSON)?\s*\n?/)
+    if (openFenceMatch) {
+      cleaned = cleaned.slice(openFenceMatch[0].length)
+    }
+
+    // Match closing code fence
+    const closeFenceMatch = cleaned.match(/\n?```\s*$/)
+    if (closeFenceMatch) {
+      cleaned = cleaned.slice(0, -closeFenceMatch[0].length)
+    }
+
+    return cleaned.trim()
+  }
+
+  /**
+   * Safely parse JSON from AI response, handling markdown wrappers
+   */
+  parseJsonResponse(response) {
+    const cleaned = this.stripMarkdownCodeBlocks(response)
+    return JSON.parse(cleaned)
+  }
+
+  /**
    * Make a request to the Grok API
    */
   async request(messages, options = {}) {
@@ -181,8 +214,8 @@ class GrokClient {
         max_tokens: 4000,
       })
 
-      // Parse JSON response
-      const parsedResponse = JSON.parse(response)
+      // Parse JSON response (handles markdown code blocks)
+      const parsedResponse = this.parseJsonResponse(response)
       return parsedResponse
 
     } catch (error) {
@@ -323,7 +356,7 @@ Generate the ideas now:`
         }
       ])
 
-      const parsedResponse = JSON.parse(response)
+      const parsedResponse = this.parseJsonResponse(response)
       return parsedResponse.ideas
 
     } catch (error) {
@@ -428,7 +461,7 @@ FORMAT AS JSON:
         }
       ])
 
-      return JSON.parse(response)
+      return this.parseJsonResponse(response)
 
     } catch (error) {
       console.error('Grok metadata generation error:', error)

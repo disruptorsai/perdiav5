@@ -119,7 +119,22 @@ Generate exactly 10 unique ideas. Be creative but practical. Focus on topics peo
       // Parse and validate the response
       let ideas = []
       try {
-        const parsed = typeof response === 'string' ? JSON.parse(response) : response
+        // Strip markdown code blocks if present
+        let cleanResponse = response
+        if (typeof response === 'string') {
+          cleanResponse = response.trim()
+          // Remove ```json or ``` wrappers
+          const openMatch = cleanResponse.match(/^```(?:json|JSON)?\s*\n?/)
+          if (openMatch) {
+            cleanResponse = cleanResponse.slice(openMatch[0].length)
+          }
+          const closeMatch = cleanResponse.match(/\n?```\s*$/)
+          if (closeMatch) {
+            cleanResponse = cleanResponse.slice(0, -closeMatch[0].length)
+          }
+          cleanResponse = cleanResponse.trim()
+        }
+        const parsed = typeof cleanResponse === 'string' ? JSON.parse(cleanResponse) : cleanResponse
         ideas = parsed.ideas || parsed || []
       } catch (parseError) {
         // Try to extract JSON from the response

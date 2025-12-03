@@ -16,12 +16,11 @@ export function useContributors(filters = {}) {
         .select('*')
         .order('name', { ascending: true })
 
-      if (filters.isActive !== undefined) {
-        query = query.eq('is_active', filters.isActive)
-      }
+      // Note: is_active column doesn't exist in current schema
+      // Contributors are managed via seeds and are always available
 
       if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%`)
+        query = query.or(`name.ilike.%${filters.search}%,bio.ilike.%${filters.search}%`)
       }
 
       const { data, error } = await query
@@ -34,10 +33,10 @@ export function useContributors(filters = {}) {
 }
 
 /**
- * Fetch only active contributors
+ * Fetch all contributors (active filter not supported in current schema)
  */
 export function useActiveContributors() {
-  return useContributors({ isActive: true })
+  return useContributors({})
 }
 
 /**
