@@ -20,12 +20,14 @@ class GenerationService {
     this.processingQueue = []
     this.currentTask = null
 
-    // Humanization settings
+    // Humanization settings - optimized for maximum AI detection bypass
     this.humanizationProvider = 'stealthgpt' // 'stealthgpt' or 'claude'
     this.stealthGptSettings = {
-      tone: 'College',
-      mode: 'High',
-      detector: 'gptzero',
+      tone: 'College',      // Recommended for professional content
+      mode: 'High',         // Maximum bypass potential
+      detector: 'gptzero',  // Most common AI detector
+      business: true,       // Use 10x more powerful engine
+      doublePassing: false, // Two-pass humanization for extra safety
     }
   }
 
@@ -65,15 +67,25 @@ class GenerationService {
       this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
 
       // STAGE 3: Humanize with StealthGPT (primary) or Claude (fallback)
+      // Uses optimized settings: 150-200 word chunks, iterative rephrasing, business mode
       let humanizedContent
       try {
         if (this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured()) {
-          humanizedContent = await this.stealthGpt.humanizeLongContent(draftData.content, {
+          const stealthOptions = {
             tone: this.stealthGptSettings.tone,
             mode: this.stealthGptSettings.mode,
             detector: this.stealthGptSettings.detector,
-          })
-          console.log('[Generation] Content humanized with StealthGPT')
+            business: this.stealthGptSettings.business, // 10x more powerful engine
+          }
+
+          // Use double-passing for maximum undetectability if enabled
+          if (this.stealthGptSettings.doublePassing) {
+            console.log('[Generation] Using double-pass humanization for maximum bypass')
+            humanizedContent = await this.stealthGpt.humanizeWithDoublePassing(draftData.content, stealthOptions)
+          } else {
+            humanizedContent = await this.stealthGpt.humanizeLongContent(draftData.content, stealthOptions)
+          }
+          console.log('[Generation] Content humanized with StealthGPT (optimized)')
         } else {
           // Fallback to Claude
           humanizedContent = await this.claude.humanize(draftData.content, {
@@ -1058,7 +1070,7 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
    * @param {Object} settings - StealthGPT configuration
    */
   setStealthGptSettings(settings = {}) {
-    const { tone, mode, detector } = settings
+    const { tone, mode, detector, business, doublePassing } = settings
 
     if (tone && ['Standard', 'HighSchool', 'College', 'PhD'].includes(tone)) {
       this.stealthGptSettings.tone = tone
@@ -1070,6 +1082,14 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
 
     if (detector && ['gptzero', 'turnitin'].includes(detector)) {
       this.stealthGptSettings.detector = detector
+    }
+
+    if (typeof business === 'boolean') {
+      this.stealthGptSettings.business = business
+    }
+
+    if (typeof doublePassing === 'boolean') {
+      this.stealthGptSettings.doublePassing = doublePassing
     }
 
     console.log('[Generation] StealthGPT settings updated:', this.stealthGptSettings)

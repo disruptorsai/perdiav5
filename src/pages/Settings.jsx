@@ -83,6 +83,8 @@ function SettingsContent() {
     stealthgptTone: 'College',
     stealthgptMode: 'High',
     stealthgptDetector: 'gptzero',
+    stealthgptBusiness: true,      // Use 10x more powerful engine
+    stealthgptDoublePassing: false, // Two-pass humanization
   })
 
   const [qualitySettings, setQualitySettings] = useState({
@@ -139,6 +141,8 @@ function SettingsContent() {
         stealthgptTone: getSettingValue('stealthgpt_tone', 'College'),
         stealthgptMode: getSettingValue('stealthgpt_mode', 'High'),
         stealthgptDetector: getSettingValue('stealthgpt_detector', 'gptzero'),
+        stealthgptBusiness: getSettingValue('stealthgpt_business', 'true') === 'true',
+        stealthgptDoublePassing: getSettingValue('stealthgpt_double_passing', 'false') === 'true',
       })
 
       setQualitySettings({
@@ -238,6 +242,8 @@ function SettingsContent() {
         { key: 'stealthgpt_tone', value: humanizationSettings.stealthgptTone, type: 'ai' },
         { key: 'stealthgpt_mode', value: humanizationSettings.stealthgptMode, type: 'ai' },
         { key: 'stealthgpt_detector', value: humanizationSettings.stealthgptDetector, type: 'ai' },
+        { key: 'stealthgpt_business', value: humanizationSettings.stealthgptBusiness.toString(), type: 'ai' },
+        { key: 'stealthgpt_double_passing', value: humanizationSettings.stealthgptDoublePassing.toString(), type: 'ai' },
       ])
       toast.success('Humanization settings saved successfully')
     } catch (error) {
@@ -1014,6 +1020,50 @@ function SettingsContent() {
                         <option value="gptzero">GPTZero - Most common AI detector</option>
                         <option value="turnitin">Turnitin - Academic plagiarism checker</option>
                       </select>
+                    </div>
+
+                    {/* Advanced Settings */}
+                    <div className="pt-4 border-t space-y-4">
+                      <h4 className="font-semibold text-gray-900">Advanced Optimization</h4>
+
+                      <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                        <div className="flex-1">
+                          <Label className="text-base font-medium">Business Mode (10x Engine)</Label>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Use StealthGPT's 10x more powerful model for higher quality and better detection bypass
+                          </p>
+                        </div>
+                        <Switch
+                          checked={humanizationSettings.stealthgptBusiness}
+                          onCheckedChange={(checked) =>
+                            setHumanizationSettings({ ...humanizationSettings, stealthgptBusiness: checked })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="flex-1">
+                          <Label className="text-base font-medium">Double-Pass Humanization</Label>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Process content twice for maximum undetectability (slower but more thorough)
+                          </p>
+                        </div>
+                        <Switch
+                          checked={humanizationSettings.stealthgptDoublePassing}
+                          onCheckedChange={(checked) =>
+                            setHumanizationSettings({ ...humanizationSettings, stealthgptDoublePassing: checked })
+                          }
+                        />
+                      </div>
+
+                      <Alert className="border-blue-200 bg-blue-50">
+                        <AlertCircle className="h-4 w-4 text-blue-600" />
+                        <AlertDescription className="text-blue-800 text-sm">
+                          <strong>Optimization Tips:</strong> Content is split into 150-200 word chunks for best results.
+                          Each chunk is iteratively processed until detection score drops below 25%.
+                          Business mode + High bypass + Double-pass gives maximum protection.
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   </>
                 )}
