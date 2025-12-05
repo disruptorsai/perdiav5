@@ -155,7 +155,7 @@ export function useContributorStats() {
   return {
     total: contributors.length,
     active: contributors.filter(c => c.is_active).length,
-    totalArticles: contributors.reduce((sum, c) => sum + (c.article_count || 0), 0),
+    totalArticles: contributors.reduce((sum, c) => sum + (c.articles_count || c.article_count || 0), 0),
   }
 }
 

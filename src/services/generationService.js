@@ -9,6 +9,8 @@ import ClaudeClient from './ai/claudeClient'
 import StealthGptClient from './ai/stealthGptClient'
 import { supabase } from './supabaseClient'
 import IdeaDiscoveryService from './ideaDiscoveryService'
+import { getCostDataContext } from './costDataService'
+import { matchTopicToMonetization, insertShortcodeInContent } from './shortcodeService'
 
 class GenerationService {
   constructor() {
@@ -48,12 +50,19 @@ class GenerationService {
 
     try {
       // Update progress
+      this.updateProgress(onProgress, 'Fetching cost data from ranking reports...', 5)
+
+      // STAGE 0: Get cost data context for RAG
+      const costContext = await getCostDataContext(idea)
+      console.log(`[Generation] Cost data found: ${costContext.hasData ? costContext.costData.length + ' entries' : 'none'}`)
+
       this.updateProgress(onProgress, 'Generating draft with Grok AI...', 10)
 
-      // STAGE 1: Generate draft with Grok
+      // STAGE 1: Generate draft with Grok (now includes cost data)
       const draftData = await this.grok.generateDraft(idea, {
         contentType,
         targetWordCount,
+        costDataContext: costContext.promptText, // Pass cost data to prompt
       })
 
       this.updateProgress(onProgress, 'Auto-assigning contributor...', 25)
@@ -113,6 +122,35 @@ class GenerationService {
         if (siteArticles.length >= 3) {
           finalContent = await this.addInternalLinksToContent(humanizedContent, siteArticles)
         }
+      }
+
+      this.updateProgress(onProgress, 'Adding monetization shortcodes...', 62)
+
+      // STAGE 4.5: Add monetization shortcodes
+      try {
+        const monetizationMatch = await matchTopicToMonetization(
+          idea.title || draftData.title,
+          costContext.degreeLevel
+        )
+
+        if (monetizationMatch.matched) {
+          console.log(`[Generation] Matched monetization: ${monetizationMatch.category.category} - ${monetizationMatch.category.concentration}`)
+
+          // Insert shortcode after intro
+          finalContent = insertShortcodeInContent(finalContent, monetizationMatch.shortcode, 'after_intro')
+
+          // Add second shortcode for longer articles (1500+ words)
+          const wordCount = finalContent.replace(/<[^>]*>/g, '').split(/\s+/).length
+          if (wordCount > 1500) {
+            finalContent = insertShortcodeInContent(finalContent, monetizationMatch.shortcode, 'mid_content')
+            console.log('[Generation] Added second monetization shortcode for long article')
+          }
+        } else {
+          console.warn('[Generation] Could not match monetization category:', monetizationMatch.error)
+        }
+      } catch (monetizationError) {
+        console.warn('[Generation] Monetization shortcode insertion failed:', monetizationError.message)
+        // Non-blocking - continue without shortcodes
       }
 
       this.updateProgress(onProgress, 'Running quality assurance...', 70)

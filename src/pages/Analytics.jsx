@@ -227,8 +227,8 @@ export default function Analytics() {
   const isLoading = articlesLoading || ideasLoading
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gray-50 p-6 md:p-8 overflow-y-auto">
+      <div className="max-w-7xl mx-auto space-y-8 pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

@@ -15,6 +15,7 @@ import {
   Sparkles,
   FileText,
 } from 'lucide-react'
+import { ProgressModal, useProgressModal } from '../components/ui/progress-modal'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: FileText },
@@ -27,7 +28,9 @@ function ContentIdeas() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState(null)
   const [generatingIdea, setGeneratingIdea] = useState(null)
-  const [generationProgress, setGenerationProgress] = useState({ message: '', percentage: 0 })
+
+  // Progress modal for article generation
+  const progressModal = useProgressModal()
 
   const { data: ideas = [], isLoading } = useContentIdeas({ status: filterStatus })
   const createIdea = useCreateContentIdea()
@@ -78,7 +81,12 @@ function ContentIdeas() {
 
   const handleGenerate = async (idea) => {
     setGeneratingIdea(idea.id)
-    setGenerationProgress({ message: 'Starting generation...', percentage: 0 })
+
+    // Start progress modal
+    progressModal.start(
+      'Generating Article',
+      `Creating "${idea.title.substring(0, 50)}${idea.title.length > 50 ? '...' : ''}"`
+    )
 
     try {
       await generateArticle.mutateAsync({
@@ -91,23 +99,27 @@ function ContentIdeas() {
           autoFix: true,
           maxFixAttempts: 3,
         },
-        onProgress: (progress) => {
-          setGenerationProgress(progress)
+        onProgress: ({ message, percentage }) => {
+          progressModal.updateProgress(percentage)
+          if (message) {
+            progressModal.addStep(message)
+            if (percentage > 10) {
+              progressModal.completeStep(message)
+            }
+          }
         },
       })
 
-      setGenerationProgress({ message: 'Complete!', percentage: 100 })
-
-      // Show success message briefly before clearing
-      setTimeout(() => {
-        setGeneratingIdea(null)
-        setGenerationProgress({ message: '', percentage: 0 })
-      }, 2000)
+      progressModal.addStep('Article saved to database!')
+      progressModal.completeStep('Article saved to database!')
+      progressModal.complete()
 
     } catch (error) {
-      alert('Failed to generate article: ' + error.message)
+      progressModal.addStep(`Error: ${error.message}`)
+      progressModal.errorStep(`Error: ${error.message}`)
+      progressModal.error(error.message)
+    } finally {
       setGeneratingIdea(null)
-      setGenerationProgress({ message: '', percentage: 0 })
     }
   }
 
@@ -120,7 +132,7 @@ function ContentIdeas() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 min-h-screen overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -201,12 +213,8 @@ function ContentIdeas() {
         />
       )}
 
-      {/* Generation Progress Modal */}
-      {generatingIdea && (
-        <GenerationProgressModal
-          progress={generationProgress}
-        />
-      )}
+      {/* Progress Modal for Article Generation */}
+      <ProgressModal {...progressModal.modalProps} />
     </div>
   )
 }
@@ -412,37 +420,6 @@ function CreateIdeaModal({ onClose, onSubmit, isSubmitting }) {
               </button>
             </div>
           </form>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function GenerationProgressModal({ progress }) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-blue-600 mx-auto mb-4 animate-spin" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Generating Article...</h2>
-          <p className="text-sm text-gray-600 mb-6">{progress.message}</p>
-
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-2 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progress.percentage}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-500">{progress.percentage}% complete</p>
-
-          <div className="mt-6 text-xs text-gray-500 space-y-1">
-            <p>• Drafting with Grok AI</p>
-            <p>• Humanizing with Claude AI</p>
-            <p>• Adding internal links</p>
-            <p>• Running quality assurance</p>
-            <p>• Auto-fixing issues (up to 3 attempts)</p>
-          </div>
         </div>
       </div>
     </div>

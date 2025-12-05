@@ -20,6 +20,7 @@ import {
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import GenerationService from '../../services/generationService'
+import { supabase } from '../../services/supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../ui/toast'
 
@@ -100,6 +101,49 @@ export default function AutomationEngine({
     }
   }, [addLog, addToast, onComplete])
 
+  // Load humanization settings from database
+  const loadHumanizationSettings = useCallback(async () => {
+    try {
+      const { data: settings, error } = await supabase
+        .from('system_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', [
+          'humanization_provider',
+          'stealthgpt_tone',
+          'stealthgpt_mode',
+          'stealthgpt_detector',
+          'stealthgpt_business',
+          'stealthgpt_double_passing',
+        ])
+
+      if (error) {
+        console.warn('[AutomationEngine] Could not load humanization settings:', error.message)
+        return
+      }
+
+      const settingsMap = {}
+      settings?.forEach(s => {
+        settingsMap[s.setting_key] = s.setting_value
+      })
+
+      if (settingsMap.humanization_provider) {
+        generationServiceRef.current.setHumanizationProvider(settingsMap.humanization_provider)
+      }
+
+      generationServiceRef.current.setStealthGptSettings({
+        tone: settingsMap.stealthgpt_tone || 'College',
+        mode: settingsMap.stealthgpt_mode || 'High',
+        detector: settingsMap.stealthgpt_detector || 'gptzero',
+        business: settingsMap.stealthgpt_business === 'true',
+        doublePassing: settingsMap.stealthgpt_double_passing === 'true',
+      })
+
+      addLog('StealthGPT humanization settings loaded', 'info')
+    } catch (err) {
+      console.warn('[AutomationEngine] Error loading humanization settings:', err)
+    }
+  }, [addLog])
+
   // Start the automation pipeline
   const startPipeline = useCallback(async () => {
     if (!user) {
@@ -117,6 +161,9 @@ export default function AutomationEngine({
     setLogs([])
     setProgress({ message: 'Starting pipeline...', percentage: 0 })
     addLog('Starting automation pipeline...', 'info')
+
+    // Load humanization settings before starting
+    await loadHumanizationSettings()
 
     try {
       await generationServiceRef.current.runAutoPipeline(
@@ -141,7 +188,7 @@ export default function AutomationEngine({
         variant: 'error',
       })
     }
-  }, [user, settings, handleProgress, handleComplete, addLog, addToast])
+  }, [user, settings, handleProgress, handleComplete, addLog, addToast, loadHumanizationSettings])
 
   // Stop the pipeline
   const stopPipeline = useCallback(() => {

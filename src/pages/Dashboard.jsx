@@ -9,6 +9,7 @@ import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical,
 import SourceSelector from '../components/ideas/SourceSelector'
 import IdeaDiscoveryService from '../services/ideaDiscoveryService'
 import { useToast } from '../components/ui/toast'
+import { ProgressModal, useProgressModal } from '../components/ui/progress-modal'
 import {
   DndContext,
   closestCenter,
@@ -45,6 +46,9 @@ function Dashboard() {
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false)
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [automationMode, setAutomationMode] = useState('manual') // 'manual' | 'semiauto' | 'full_auto'
+
+  // Progress modal for article generation
+  const progressModal = useProgressModal()
 
   // Initialize idea discovery service
   const ideaDiscoveryService = new IdeaDiscoveryService()
@@ -90,6 +94,13 @@ function Dashboard() {
 
   const handleGenerateArticle = async (idea) => {
     setGeneratingIdea(idea.id)
+
+    // Start progress modal
+    progressModal.start(
+      'Generating Article',
+      `Creating "${idea.title.substring(0, 50)}${idea.title.length > 50 ? '...' : ''}"`
+    )
+
     try {
       await generateArticle.mutateAsync({
         idea,
@@ -99,10 +110,36 @@ function Dashboard() {
           autoAssignContributor: true,
           addInternalLinks: true,
         },
+        onProgress: ({ message, percentage }) => {
+          // Update progress modal with current step
+          progressModal.updateProgress(percentage)
+
+          // Add step to the typing list
+          if (message) {
+            progressModal.addStep(message)
+            // Mark previous steps as completed
+            if (percentage > 10) {
+              progressModal.completeStep(message)
+            }
+          }
+        },
       })
+
+      progressModal.addStep('Article saved to database!')
+      progressModal.completeStep('Article saved to database!')
+      progressModal.complete()
+
+      addToast({
+        title: 'Article Generated',
+        description: `"${idea.title}" has been created successfully`,
+        variant: 'success',
+      })
+
     } catch (error) {
       console.error('Generation error:', error)
-      alert('Failed to generate article: ' + error.message)
+      progressModal.addStep(`Error: ${error.message}`)
+      progressModal.errorStep(`Error: ${error.message}`)
+      progressModal.error(error.message)
     } finally {
       setGeneratingIdea(null)
     }
@@ -547,6 +584,9 @@ function Dashboard() {
         existingTopics={allIdeas.map(i => i.title)}
         isLoading={isDiscovering}
       />
+
+      {/* Progress Modal for Article Generation */}
+      <ProgressModal {...progressModal.modalProps} />
       </motion.div>
     </DndContext>
   )

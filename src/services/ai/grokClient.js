@@ -195,9 +195,10 @@ class GrokClient {
       contentType = 'guide',
       targetWordCount = 2000,
       includeOutline = true,
+      costDataContext = null, // Cost data from ranking reports for RAG
     } = options
 
-    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount)
+    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount, costDataContext)
 
     try {
       const response = await this.request([
@@ -228,8 +229,14 @@ class GrokClient {
    * Build prompt for article draft generation
    * IMPORTANT: Includes GetEducated-specific content rules
    */
-  buildDraftPrompt(idea, contentType, targetWordCount) {
+  buildDraftPrompt(idea, contentType, targetWordCount, costDataContext = null) {
+    let costDataSection = ''
+    if (costDataContext) {
+      costDataSection = `\n\n${costDataContext}\n`
+    }
+
     return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
+${costDataSection}
 
 CONTENT IDEA:
 Title: ${idea.title}

@@ -6,8 +6,56 @@ import GenerationService from '../services/generationService'
 const generationService = new GenerationService()
 
 /**
+ * Load humanization settings from database and apply to GenerationService
+ */
+async function loadHumanizationSettings() {
+  try {
+    const { data: settings, error } = await supabase
+      .from('system_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', [
+        'humanization_provider',
+        'stealthgpt_tone',
+        'stealthgpt_mode',
+        'stealthgpt_detector',
+        'stealthgpt_business',
+        'stealthgpt_double_passing',
+      ])
+
+    if (error) {
+      console.warn('[Generation] Could not load humanization settings:', error.message)
+      return
+    }
+
+    // Convert array to object
+    const settingsMap = {}
+    settings?.forEach(s => {
+      settingsMap[s.setting_key] = s.setting_value
+    })
+
+    // Apply provider setting
+    if (settingsMap.humanization_provider) {
+      generationService.setHumanizationProvider(settingsMap.humanization_provider)
+    }
+
+    // Apply StealthGPT settings
+    generationService.setStealthGptSettings({
+      tone: settingsMap.stealthgpt_tone || 'College',
+      mode: settingsMap.stealthgpt_mode || 'High',
+      detector: settingsMap.stealthgpt_detector || 'gptzero',
+      business: settingsMap.stealthgpt_business === 'true',
+      doublePassing: settingsMap.stealthgpt_double_passing === 'true',
+    })
+
+    console.log('[Generation] Humanization settings loaded from database')
+  } catch (err) {
+    console.warn('[Generation] Error loading humanization settings:', err)
+  }
+}
+
+/**
  * Generate complete article from content idea with full pipeline
- * Includes: Grok draft → Claude humanize → Internal linking → Quality QA → Auto-fix loop → Save
+ * Includes: Grok draft → StealthGPT humanize → Internal linking → Quality QA → Auto-fix loop → Save
  */
 export function useGenerateArticle() {
   const { user } = useAuth()
@@ -15,6 +63,9 @@ export function useGenerateArticle() {
 
   return useMutation({
     mutationFn: async ({ idea, options, onProgress }) => {
+      // Load latest humanization settings before generation
+      await loadHumanizationSettings()
+
       // Generate complete article with full pipeline
       const articleData = await generationService.generateArticleComplete(
         idea,
@@ -127,11 +178,14 @@ export function useReviseArticle() {
 }
 
 /**
- * Humanize content using Claude
+ * Humanize content using StealthGPT (primary) or Claude (fallback)
  */
 export function useHumanizeContent() {
   return useMutation({
     mutationFn: async ({ content, contributorStyle, contributorName }) => {
+      // Load latest humanization settings before processing
+      await loadHumanizationSettings()
+
       const humanizedContent = await generationService.humanizeContent(
         content,
         {
