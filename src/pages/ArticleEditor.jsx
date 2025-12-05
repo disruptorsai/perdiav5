@@ -566,16 +566,16 @@ function ArticleEditorContent() {
 
         {/* Sidebar */}
         {showSidebar && (
-          <div className="w-80 border-l border-gray-200 bg-white fixed right-0 top-[57px] bottom-0 flex flex-col">
-            <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col">
-              <TabsList className="w-full border-b rounded-none h-auto p-1 bg-gray-50">
+          <div className="w-80 border-l border-gray-200 bg-white fixed right-0 top-[57px] bottom-0 flex flex-col overflow-hidden">
+            <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col min-h-0">
+              <TabsList className="w-full border-b rounded-none h-auto p-1 bg-gray-50 flex-shrink-0">
                 <TabsTrigger value="quality" className="flex-1 text-xs py-2">Quality</TabsTrigger>
                 <TabsTrigger value="seo" className="flex-1 text-xs py-2">SEO</TabsTrigger>
                 <TabsTrigger value="links" className="flex-1 text-xs py-2">Links</TabsTrigger>
                 <TabsTrigger value="tools" className="flex-1 text-xs py-2">Tools</TabsTrigger>
               </TabsList>
 
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="p-4 space-y-4">
                   {/* Quality Tab */}
                   <TabsContent value="quality" className="mt-0 space-y-4">

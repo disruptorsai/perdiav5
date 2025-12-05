@@ -695,7 +695,7 @@ export default function ArticleReview() {
                     </p>
                   </div>
                 ) : (
-                  <ScrollArea className="h-96">
+                  <ScrollArea className="max-h-[calc(100vh-400px)] min-h-[200px]">
                     <div className="space-y-3 pr-4">
                       {revisions.map((revision) => {
                         const isHighlighted = highlightedCommentId === revision.id
