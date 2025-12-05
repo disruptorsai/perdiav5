@@ -139,34 +139,60 @@ class ClaudeClient {
 
   /**
    * Build prompt for humanization
+   * IMPORTANT: Includes GetEducated-specific content rules
    */
   buildHumanizationPrompt(content, contributorProfile, perplexity, burstiness) {
     let styleInstructions = ''
 
     if (contributorProfile) {
       const style = contributorProfile.writing_style_profile || {}
+      const displayName = contributorProfile.display_name || contributorProfile.name
       styleInstructions = `
-WRITER PERSONA:
-Name: ${contributorProfile.name}
+WRITER PERSONA (GetEducated Author):
+Real Name: ${contributorProfile.name}
+Display Name: ${displayName}
 Tone: ${style.tone || 'professional'}
 Complexity: ${style.complexity_level || 'intermediate'}
 Sentence Length: ${style.sentence_length_preference || 'medium'}
+Style Notes: ${style.style_notes || 'Professional education content writer'}
 `
     }
 
-    return `You are a highly skilled human writer. Your task is to rewrite the following AI-generated content to make it completely undetectable as AI-written. The content must read as if it was written by a real human with personality, expertise, and natural writing patterns.
+    return `You are a highly skilled human writer working for GetEducated.com, an online education resource. Your task is to rewrite the following AI-generated content to make it completely undetectable as AI-written while maintaining GetEducated's content standards.
 
 ${styleInstructions}
 
 ORIGINAL CONTENT:
 ${content}
 
+=== GETEDUCATED CONTENT RULES (MUST PRESERVE) ===
+
+1. LINKING RULES:
+   - All school mentions should link to GetEducated school pages (geteducated.com/online-schools/...)
+   - All degree mentions should link to GetEducated degree database (geteducated.com/online-degrees/...)
+   - NEVER create links to .edu school websites
+   - External links ONLY to BLS, government sites, nonprofit education orgs
+   - NEVER link to competitors (onlineu.com, usnews.com, etc.)
+
+2. COST DATA:
+   - Preserve all cost data exactly as written (sourced from GetEducated ranking reports)
+   - Keep "in-state" and "out-of-state" cost distinctions
+   - Maintain references to GetEducated's ranking methodology
+
+3. STRUCTURE:
+   - Keep "GetEducated's Picks" callout boxes
+   - Preserve article navigation sections
+   - Maintain FAQ sections with all questions/answers
+   - Keep "How we researched this" attribution
+
+=== END GETEDUCATED RULES ===
+
 CRITICAL HUMANIZATION TECHNIQUES:
 
 1. **Perplexity (Unpredictability)**: ${perplexity}
    - Use unexpected word choices and phrasings
    - Avoid predictable transitions
-   - Include occasional colloquialisms or industry-specific terms
+   - Include occasional education industry terms
    - Vary vocabulary richly
 
 2. **Burstiness (Sentence Variation)**: ${burstiness}
@@ -176,10 +202,10 @@ CRITICAL HUMANIZATION TECHNIQUES:
    - Vary sentence structures significantly
 
 3. **Voice & Personality**:
-   - Add subtle personal touches ("I've found that...", "In my experience...")
-   - Include minor imperfections (starting sentences with "And" or "But")
+   - Write as an education expert helping prospective students
+   - Add empathy for readers' education and career goals
+   - Include minor stylistic imperfections (starting sentences with "And" or "But")
    - Use rhetorical questions sparingly
-   - Show emotion where appropriate
 
 4. **Natural Writing Patterns**:
    - Avoid overly perfect grammar (humans make small stylistic choices)
@@ -200,13 +226,15 @@ CRITICAL HUMANIZATION TECHNIQUES:
    - "Leverage"
    - "Robust"
    - "Seamless"
+   - "Navigate the landscape"
+   - "Embark on a journey"
 
 6. **Content Quality**:
-   - Keep all factual information accurate
+   - Keep all factual information accurate (especially costs and accreditation)
    - Maintain the same structure and headings
-   - Preserve HTML formatting
+   - Preserve HTML formatting and all links
    - Keep the same SEO focus
-   - Ensure the content remains valuable and informative
+   - Ensure the content remains valuable for online education seekers
 
 OUTPUT ONLY THE REWRITTEN HTML CONTENT. DO NOT include explanations, meta-commentary, or anything other than the pure HTML article content.`
   }

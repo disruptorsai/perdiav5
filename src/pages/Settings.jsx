@@ -8,7 +8,11 @@ import {
   Save,
   Bot,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  GraduationCap,
+  Link2,
+  Users,
+  AlertTriangle
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,10 +24,11 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useSystemSettings, useBulkUpdateSettings } from '@/hooks/useSystemSettings'
 import { useToast, ToastProvider } from '@/components/ui/toast'
+import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
 
 function SettingsContent() {
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState('automation')
+  const [activeTab, setActiveTab] = useState('geteducated')
   const [isSaving, setIsSaving] = useState(false)
 
   const { data: settings = [], isLoading } = useSystemSettings()
@@ -56,10 +61,28 @@ function SettingsContent() {
     weeklyLimit: '100',
   })
 
+  // GetEducated-specific settings
+  const [getEducatedSettings, setGetEducatedSettings] = useState({
+    approvedAuthorsOnly: true,
+    blockEduLinks: true,
+    blockCompetitorLinks: true,
+    requireRankingCostData: true,
+    autoPublishEnabled: false,
+    autoPublishDays: '5',
+    blockHighRiskPublish: true,
+  })
+
   const [aiSettings, setAiSettings] = useState({
     defaultModel: 'grok-beta',
     temperature: '0.7',
     maxTokens: '4000',
+  })
+
+  const [humanizationSettings, setHumanizationSettings] = useState({
+    provider: 'stealthgpt',
+    stealthgptTone: 'College',
+    stealthgptMode: 'High',
+    stealthgptDetector: 'gptzero',
   })
 
   const [qualitySettings, setQualitySettings] = useState({
@@ -111,6 +134,13 @@ function SettingsContent() {
         maxTokens: getSettingValue('max_tokens', '4000'),
       })
 
+      setHumanizationSettings({
+        provider: getSettingValue('humanization_provider', 'stealthgpt'),
+        stealthgptTone: getSettingValue('stealthgpt_tone', 'College'),
+        stealthgptMode: getSettingValue('stealthgpt_mode', 'High'),
+        stealthgptDetector: getSettingValue('stealthgpt_detector', 'gptzero'),
+      })
+
       setQualitySettings({
         minWordCount: getSettingValue('min_word_count', '800'),
         minInternalLinks: getSettingValue('min_internal_links', '3'),
@@ -129,6 +159,17 @@ function SettingsContent() {
         minHeadingCount: getSettingValue('min_heading_count', '3'),
         checkGrammar: getSettingValue('check_grammar', 'true') === 'true',
         checkPlagiarism: getSettingValue('check_plagiarism', 'false') === 'true',
+      })
+
+      // Load GetEducated settings
+      setGetEducatedSettings({
+        approvedAuthorsOnly: getSettingValue('approved_authors_only', 'true') === 'true',
+        blockEduLinks: getSettingValue('block_edu_links', 'true') === 'true',
+        blockCompetitorLinks: getSettingValue('block_competitor_links', 'true') === 'true',
+        requireRankingCostData: getSettingValue('require_ranking_cost_data', 'true') === 'true',
+        autoPublishEnabled: getSettingValue('auto_publish_enabled', 'false') === 'true',
+        autoPublishDays: getSettingValue('auto_publish_days', '5'),
+        blockHighRiskPublish: getSettingValue('block_high_risk_publish', 'true') === 'true',
       })
     }
   }, [settings])
@@ -189,6 +230,23 @@ function SettingsContent() {
     }
   }
 
+  const handleSaveHumanization = async () => {
+    setIsSaving(true)
+    try {
+      await bulkUpdateSettings.mutateAsync([
+        { key: 'humanization_provider', value: humanizationSettings.provider, type: 'ai' },
+        { key: 'stealthgpt_tone', value: humanizationSettings.stealthgptTone, type: 'ai' },
+        { key: 'stealthgpt_mode', value: humanizationSettings.stealthgptMode, type: 'ai' },
+        { key: 'stealthgpt_detector', value: humanizationSettings.stealthgptDetector, type: 'ai' },
+      ])
+      toast.success('Humanization settings saved successfully')
+    } catch (error) {
+      toast.error('Failed to save humanization settings')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleSaveQuality = async () => {
     setIsSaving(true)
     try {
@@ -219,6 +277,26 @@ function SettingsContent() {
     }
   }
 
+  const handleSaveGetEducated = async () => {
+    setIsSaving(true)
+    try {
+      await bulkUpdateSettings.mutateAsync([
+        { key: 'approved_authors_only', value: getEducatedSettings.approvedAuthorsOnly.toString(), type: 'geteducated' },
+        { key: 'block_edu_links', value: getEducatedSettings.blockEduLinks.toString(), type: 'geteducated' },
+        { key: 'block_competitor_links', value: getEducatedSettings.blockCompetitorLinks.toString(), type: 'geteducated' },
+        { key: 'require_ranking_cost_data', value: getEducatedSettings.requireRankingCostData.toString(), type: 'geteducated' },
+        { key: 'auto_publish_enabled', value: getEducatedSettings.autoPublishEnabled.toString(), type: 'geteducated' },
+        { key: 'auto_publish_days', value: getEducatedSettings.autoPublishDays, type: 'geteducated' },
+        { key: 'block_high_risk_publish', value: getEducatedSettings.blockHighRiskPublish.toString(), type: 'geteducated' },
+      ])
+      toast.success('GetEducated settings saved successfully')
+    } catch (error) {
+      toast.error('Failed to save GetEducated settings')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 md:p-8 flex items-center justify-center">
@@ -241,7 +319,11 @@ function SettingsContent() {
 
         {/* Settings Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-white shadow-lg border-none">
+          <TabsList className="bg-white shadow-lg border-none flex-wrap">
+            <TabsTrigger value="geteducated">
+              <GraduationCap className="w-4 h-4 mr-2" />
+              GetEducated
+            </TabsTrigger>
             <TabsTrigger value="automation">
               <Bot className="w-4 h-4 mr-2" />
               Automation
@@ -259,6 +341,200 @@ function SettingsContent() {
               Quality Rules
             </TabsTrigger>
           </TabsList>
+
+          {/* GetEducated Settings Tab */}
+          <TabsContent value="geteducated" className="space-y-6 mt-6">
+            {/* Client Info */}
+            <Alert className="border-blue-200 bg-blue-50">
+              <GraduationCap className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Client:</strong> GetEducated.com | <strong>Stakeholders:</strong> Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+              </AlertDescription>
+            </Alert>
+
+            {/* Approved Authors */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Approved Authors
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Only these 4 authors can be attributed on GetEducated content:
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {APPROVED_AUTHORS.map(author => (
+                    <div key={author} className="p-3 bg-green-50 rounded-lg border border-green-200">
+                      <p className="font-medium text-gray-900">{author}</p>
+                      <p className="text-xs text-gray-600">Display: {AUTHOR_DISPLAY_NAMES[author]}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Enforce Approved Authors Only</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Block article generation with non-approved authors
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.approvedAuthorsOnly}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, approvedAuthorsOnly: checked })
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Link Compliance */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="w-5 h-5" />
+                  Link Compliance Rules
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Block .edu Links</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Prevent direct links to school .edu websites (use GetEducated pages instead)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.blockEduLinks}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, blockEduLinks: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Block Competitor Links</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Block links to onlineu.com, usnews.com, affordablecollegesonline.com, etc.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.blockCompetitorLinks}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, blockCompetitorLinks: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Require Ranking Report Cost Data</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      All cost/tuition data must come from GetEducated ranking reports only
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.requireRankingCostData}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, requireRankingCostData: checked })
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Auto-Publish Settings */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Auto-Publish Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Enable Auto-Publish</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Automatically publish articles after the review deadline
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.autoPublishEnabled}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, autoPublishEnabled: checked })
+                    }
+                  />
+                </div>
+
+                {getEducatedSettings.autoPublishEnabled && (
+                  <div className="space-y-2">
+                    <Label>Auto-Publish After (Days)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={getEducatedSettings.autoPublishDays}
+                      onChange={(e) =>
+                        setGetEducatedSettings({ ...getEducatedSettings, autoPublishDays: e.target.value })
+                      }
+                    />
+                    <p className="text-xs text-gray-600">
+                      Articles in "ready_to_publish" status for {getEducatedSettings.autoPublishDays} days without human review will be auto-published
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">Block High-Risk Auto-Publish</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Prevent auto-publish for HIGH or CRITICAL risk articles (require manual review)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={getEducatedSettings.blockHighRiskPublish}
+                    onCheckedChange={(checked) =>
+                      setGetEducatedSettings({ ...getEducatedSettings, blockHighRiskPublish: checked })
+                    }
+                  />
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={handleSaveGetEducated}
+                    disabled={isSaving}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? 'Saving...' : 'Save GetEducated Settings'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* GetEducated Resources */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle>Key Resources</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <a href="https://www.geteducated.com/online-college-ratings-and-rankings/" target="_blank" rel="noopener noreferrer" className="block p-2 hover:bg-gray-50 rounded">
+                    Ranking Reports (cost data source)
+                  </a>
+                  <a href="https://www.geteducated.com/online-degrees/" target="_blank" rel="noopener noreferrer" className="block p-2 hover:bg-gray-50 rounded">
+                    Degree Database
+                  </a>
+                  <a href="https://www.geteducated.com/online-schools/" target="_blank" rel="noopener noreferrer" className="block p-2 hover:bg-gray-50 rounded">
+                    School Database
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Automation Settings Tab */}
           <TabsContent value="automation" className="space-y-6 mt-6">
@@ -660,6 +936,96 @@ function SettingsContent() {
                   >
                     <Save className="w-4 h-4" />
                     {isSaving ? 'Saving...' : 'Save AI Settings'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* StealthGPT Humanization Settings */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Content Humanization (AI Detection Bypass)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Alert variant="info">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    StealthGPT processes AI-generated content to make it undetectable by AI detection tools like GPTZero and Turnitin.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="space-y-2">
+                  <Label>Humanization Provider</Label>
+                  <select
+                    value={humanizationSettings.provider}
+                    onChange={(e) => setHumanizationSettings({ ...humanizationSettings, provider: e.target.value })}
+                    className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="stealthgpt">StealthGPT - Specialized AI Detection Bypass</option>
+                    <option value="claude">Claude - Natural Humanization with Contributor Voice</option>
+                  </select>
+                  <p className="text-xs text-gray-600">
+                    StealthGPT is optimized for bypassing AI detection. Claude applies contributor writing styles.
+                  </p>
+                </div>
+
+                {humanizationSettings.provider === 'stealthgpt' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Writing Tone</Label>
+                      <select
+                        value={humanizationSettings.stealthgptTone}
+                        onChange={(e) => setHumanizationSettings({ ...humanizationSettings, stealthgptTone: e.target.value })}
+                        className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="Standard">Standard - General purpose writing</option>
+                        <option value="HighSchool">High School - Simpler vocabulary and structure</option>
+                        <option value="College">College - Academic but accessible (Recommended)</option>
+                        <option value="PhD">PhD - Advanced academic writing</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Bypass Mode</Label>
+                      <select
+                        value={humanizationSettings.stealthgptMode}
+                        onChange={(e) => setHumanizationSettings({ ...humanizationSettings, stealthgptMode: e.target.value })}
+                        className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="Low">Low - Light humanization, best for SEO content</option>
+                        <option value="Medium">Medium - Balanced bypass for general use</option>
+                        <option value="High">High - Maximum undetectability (Recommended)</option>
+                      </select>
+                      <p className="text-xs text-gray-600">
+                        Higher modes introduce more variation to evade detection but may slightly alter meaning.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Optimize For</Label>
+                      <select
+                        value={humanizationSettings.stealthgptDetector}
+                        onChange={(e) => setHumanizationSettings({ ...humanizationSettings, stealthgptDetector: e.target.value })}
+                        className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="gptzero">GPTZero - Most common AI detector</option>
+                        <option value="turnitin">Turnitin - Academic plagiarism checker</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={handleSaveHumanization}
+                    disabled={isSaving}
+                    className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? 'Saving...' : 'Save Humanization Settings'}
                   </Button>
                 </div>
               </CardContent>

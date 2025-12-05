@@ -226,9 +226,10 @@ class GrokClient {
 
   /**
    * Build prompt for article draft generation
+   * IMPORTANT: Includes GetEducated-specific content rules
    */
   buildDraftPrompt(idea, contentType, targetWordCount) {
-    return `Generate a comprehensive ${contentType} article based on this content idea.
+    return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
 
 CONTENT IDEA:
 Title: ${idea.title}
@@ -239,16 +240,60 @@ ${idea.seed_topics ? `Topics to cover: ${idea.seed_topics.join(', ')}` : ''}
 REQUIREMENTS:
 - Target word count: ${targetWordCount} words
 - Content type: ${contentType}
-- Include an engaging introduction that hooks the reader
+- Include an engaging introduction that hooks prospective online students
 - Use clear headings and subheadings (H2, H3)
-- Write in a conversational, natural tone
+- Write in a conversational, natural tone that empathizes with readers' education goals
 - Include specific examples and actionable insights
 - Vary sentence length (short punchy sentences mixed with longer explanatory ones)
-- Avoid generic phrases like "In conclusion", "It's important to note"
-- Make it valuable and informative
+- Make it valuable and informative for people considering online education
+
+=== CRITICAL GETEDUCATED CONTENT RULES ===
+
+1. COST DATA:
+   - ALL cost/tuition information MUST reference GetEducated ranking reports
+   - Format cost mentions as "According to GetEducated's ranking reports, [school] costs $X including all fees"
+   - Include BOTH in-state and out-of-state costs when available
+   - NEVER invent or estimate costs - only use data from ranking reports
+
+2. SCHOOL/DEGREE REFERENCES:
+   - When mentioning specific schools, indicate they should link to GetEducated school pages
+   - When mentioning degree types, indicate they should link to GetEducated degree database
+   - NEVER suggest linking directly to school .edu websites
+   - Emphasize schools/programs that are "Sponsored Listings" when relevant
+
+3. EXTERNAL SOURCES:
+   - For salary/job outlook data, reference Bureau of Labor Statistics (BLS)
+   - For education statistics, reference NCES, Department of Education
+   - Accreditation info should reference official accreditation bodies (AACSB, ABET, etc.)
+   - NEVER reference competitor sites (onlineu.com, usnews.com, affordablecollegesonline.com)
+
+4. CONTENT FOCUS:
+   - All content must be relevant to ONLINE students
+   - Emphasize affordability, flexibility, and career outcomes
+   - Discuss accreditation requirements where relevant
+   - Help readers make informed decisions about their education
+
+5. STRUCTURE REQUIREMENTS:
+   - Include "GetEducated's Picks" callout suggestions where appropriate (3 featured programs)
+   - Include article navigation suggestions (anchor links to major sections)
+   - Minimum 3 FAQ items relevant to the topic
+   - Include a "How we researched this" note mentioning GetEducated's methodology
+
+=== END GETEDUCATED RULES ===
 
 STRUCTURE:
 ${this.getStructureForContentType(contentType)}
+
+BANNED PHRASES (never use these):
+- "In today's digital age"
+- "In conclusion"
+- "It's important to note that"
+- "Delve into"
+- "Dive deep"
+- "At the end of the day"
+- "Game changer"
+- "Revolutionary"
+- "Cutting-edge"
 
 FORMAT YOUR RESPONSE AS JSON:
 {

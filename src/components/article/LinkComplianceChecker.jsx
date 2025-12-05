@@ -1,120 +1,195 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useSettingsMap } from '@/hooks/useSystemSettings'
+import { validateContent, BLOCKED_COMPETITORS, ALLOWED_EXTERNAL_DOMAINS } from '@/services/validation/linkValidator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Link2, ExternalLink, CheckCircle2, AlertTriangle, Globe, Home, RefreshCw } from 'lucide-react'
+import {
+  Link2,
+  ExternalLink,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Globe,
+  Home,
+  Shield,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react'
 
 /**
  * Link Compliance Checker Component
  * Analyzes internal and external links in content
+ * CRITICAL: Enforces GetEducated linking rules:
+ * - No .edu links (use GetEducated school pages)
+ * - No competitor links (onlineu.com, usnews.com, etc.)
+ * - External links only to BLS, government, nonprofit sites
  */
 export default function LinkComplianceChecker({ content, onComplianceChange }) {
-  const [linkStats, setLinkStats] = useState({
-    internal: 0,
-    external: 0,
-    total: 0,
-    compliant: true,
-    links: []
-  })
-  const [showDetails, setShowDetails] = useState(false)
+  const [validationResult, setValidationResult] = useState(null)
+  const [showBlockingDetails, setShowBlockingDetails] = useState(false)
+  const [showWarningDetails, setShowWarningDetails] = useState(false)
+  const [showLinkDetails, setShowLinkDetails] = useState(false)
 
-  const { getIntValue } = useSettingsMap()
+  const { getIntValue, getBoolValue } = useSettingsMap()
 
   const minInternalLinks = getIntValue('min_internal_links', 3)
   const minExternalLinks = getIntValue('min_external_links', 1)
+  const blockEduLinks = getBoolValue('block_edu_links', true)
+  const blockCompetitorLinks = getBoolValue('block_competitor_links', true)
 
   useEffect(() => {
     if (!content) {
-      const emptyStats = {
-        internal: 0,
-        external: 0,
-        total: 0,
-        compliant: false,
-        links: []
+      const emptyResult = {
+        isCompliant: false,
+        totalLinks: 0,
+        internalLinks: 0,
+        externalLinks: 0,
+        blockingIssues: [],
+        warnings: [],
+        links: [],
       }
-      setLinkStats(emptyStats)
-      onComplianceChange?.(false, emptyStats)
+      setValidationResult(emptyResult)
+      onComplianceChange?.(false, emptyResult)
       return
     }
 
-    // Extract all links with their details
-    const linkRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi
-    const links = []
-    let match
+    // Use the validation service
+    const result = validateContent(content)
 
-    while ((match = linkRegex.exec(content)) !== null) {
-      const url = match[1]
-      const text = match[2] || 'No anchor text'
+    // Check minimum link requirements
+    const meetsInternalMin = result.internalLinks >= minInternalLinks
+    const meetsExternalMin = result.externalLinks >= minExternalLinks
 
-      // Determine if internal or external
-      const isInternal = url.startsWith('/') ||
-                        url.includes('geteducated.com') ||
-                        url.includes('localhost') ||
-                        url.startsWith('#')
-
-      links.push({
-        url,
-        text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-        type: isInternal ? 'internal' : 'external',
-        isAnchor: url.startsWith('#')
+    // Add minimum link issues if not met
+    if (!meetsInternalMin) {
+      result.warnings.push({
+        url: null,
+        issues: [`Need ${minInternalLinks - result.internalLinks} more internal links (minimum: ${minInternalLinks})`],
+      })
+    }
+    if (!meetsExternalMin) {
+      result.warnings.push({
+        url: null,
+        issues: [`Need ${minExternalLinks - result.externalLinks} more external citations (minimum: ${minExternalLinks})`],
       })
     }
 
-    const internalCount = links.filter(l => l.type === 'internal' && !l.isAnchor).length
-    const externalCount = links.filter(l => l.type === 'external').length
-    const totalCount = links.length
-    const isCompliant = internalCount >= minInternalLinks && externalCount >= minExternalLinks
+    // Overall compliance check
+    const isFullyCompliant = result.isCompliant && meetsInternalMin && meetsExternalMin
 
-    const stats = {
-      internal: internalCount,
-      external: externalCount,
-      total: totalCount,
-      compliant: isCompliant,
-      links
-    }
-
-    setLinkStats(stats)
-    onComplianceChange?.(isCompliant, stats)
+    setValidationResult({ ...result, isFullyCompliant, meetsInternalMin, meetsExternalMin })
+    onComplianceChange?.(isFullyCompliant, result)
   }, [content, minInternalLinks, minExternalLinks, onComplianceChange])
 
-  const recommendation = useMemo(() => {
-    const parts = []
-    if (linkStats.internal < minInternalLinks) {
-      parts.push(`${minInternalLinks - linkStats.internal} more internal link${minInternalLinks - linkStats.internal !== 1 ? 's' : ''}`)
-    }
-    if (linkStats.external < minExternalLinks) {
-      parts.push(`${minExternalLinks - linkStats.external} more external link${minExternalLinks - linkStats.external !== 1 ? 's' : ''}`)
-    }
-    return parts.length > 0 ? `Add ${parts.join(' and ')} for optimal SEO.` : null
-  }, [linkStats, minInternalLinks, minExternalLinks])
+  if (!validationResult) return null
+
+  const {
+    isCompliant,
+    isFullyCompliant,
+    totalLinks,
+    internalLinks,
+    externalLinks,
+    blockingIssues,
+    warnings,
+    links,
+    meetsInternalMin,
+    meetsExternalMin,
+  } = validationResult
+
+  const hasBlockingIssues = blockingIssues.length > 0
+  const hasWarnings = warnings.length > 0
 
   return (
     <Card className="border-none shadow-lg">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Link2 className="w-5 h-5" />
-          Link Analysis
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Link2 className="w-5 h-5" />
+            Link Compliance
+          </CardTitle>
+          {hasBlockingIssues ? (
+            <Badge className="bg-red-100 text-red-700 border-red-200">
+              <XCircle className="w-3 h-3 mr-1" />
+              Blocked
+            </Badge>
+          ) : isFullyCompliant ? (
+            <Badge className="bg-green-100 text-green-700 border-green-200">
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              Compliant
+            </Badge>
+          ) : (
+            <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Review
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Blocking Issues Alert */}
+        {hasBlockingIssues && (
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-600" />
+                <span className="text-sm font-medium text-red-800">
+                  {blockingIssues.length} Blocking Issue{blockingIssues.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowBlockingDetails(!showBlockingDetails)}
+                className="text-red-600 h-6 px-2"
+              >
+                {showBlockingDetails ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-red-600 mt-1">
+              These links must be removed before publishing
+            </p>
+            {showBlockingDetails && (
+              <div className="mt-2 space-y-2">
+                {blockingIssues.map((issue, index) => (
+                  <div key={index} className="p-2 bg-red-100 rounded text-xs">
+                    <p className="font-medium text-red-800 truncate">
+                      {issue.anchorText || issue.url}
+                    </p>
+                    <p className="text-red-600 truncate">{issue.url}</p>
+                    <p className="text-red-700 mt-1">{issue.issues[0]}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Internal Links */}
-        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className={`flex items-center justify-between p-3 rounded-lg border ${
+          meetsInternalMin
+            ? 'bg-blue-50 border-blue-200'
+            : 'bg-yellow-50 border-yellow-200'
+        }`}>
           <div className="flex items-center gap-2">
-            <Home className="w-4 h-4 text-blue-600" />
+            <Home className={`w-4 h-4 ${meetsInternalMin ? 'text-blue-600' : 'text-yellow-600'}`} />
             <span className="text-sm font-medium text-gray-900">Internal Links</span>
           </div>
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className={linkStats.internal >= minInternalLinks
+              className={meetsInternalMin
                 ? "bg-green-50 text-green-700 border-green-200"
                 : "bg-yellow-50 text-yellow-700 border-yellow-200"
               }
             >
-              {linkStats.internal}/{minInternalLinks}
+              {internalLinks}/{minInternalLinks}
             </Badge>
-            {linkStats.internal >= minInternalLinks ? (
+            {meetsInternalMin ? (
               <CheckCircle2 className="w-4 h-4 text-green-600" />
             ) : (
               <AlertTriangle className="w-4 h-4 text-yellow-600" />
@@ -123,22 +198,26 @@ export default function LinkComplianceChecker({ content, onComplianceChange }) {
         </div>
 
         {/* External Links */}
-        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+        <div className={`flex items-center justify-between p-3 rounded-lg border ${
+          meetsExternalMin
+            ? 'bg-purple-50 border-purple-200'
+            : 'bg-yellow-50 border-yellow-200'
+        }`}>
           <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-purple-600" />
+            <Globe className={`w-4 h-4 ${meetsExternalMin ? 'text-purple-600' : 'text-yellow-600'}`} />
             <span className="text-sm font-medium text-gray-900">External Citations</span>
           </div>
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className={linkStats.external >= minExternalLinks
+              className={meetsExternalMin
                 ? "bg-green-50 text-green-700 border-green-200"
                 : "bg-yellow-50 text-yellow-700 border-yellow-200"
               }
             >
-              {linkStats.external}/{minExternalLinks}
+              {externalLinks}/{minExternalLinks}
             </Badge>
-            {linkStats.external >= minExternalLinks ? (
+            {meetsExternalMin ? (
               <CheckCircle2 className="w-4 h-4 text-green-600" />
             ) : (
               <AlertTriangle className="w-4 h-4 text-yellow-600" />
@@ -146,72 +225,123 @@ export default function LinkComplianceChecker({ content, onComplianceChange }) {
           </div>
         </div>
 
-        {/* Total Links Summary */}
-        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-          <span className="text-xs text-gray-600">Total Links Found</span>
-          <Badge variant="secondary" className="text-xs">
-            {linkStats.total}
-          </Badge>
-        </div>
-
-        {/* Recommendation */}
-        {recommendation && (
+        {/* Warnings */}
+        {hasWarnings && !hasBlockingIssues && (
           <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-            <p className="text-xs text-yellow-800">
-              <strong>Recommendation:</strong> {recommendation}
-            </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-800">
+                  {warnings.length} Warning{warnings.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWarningDetails(!showWarningDetails)}
+                className="text-yellow-600 h-6 px-2"
+              >
+                {showWarningDetails ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            {showWarningDetails && (
+              <div className="mt-2 space-y-1">
+                {warnings.map((warning, index) => (
+                  <p key={index} className="text-xs text-yellow-700">
+                    {warning.url ? `• ${warning.url}: ${warning.issues[0]}` : `• ${warning.issues[0]}`}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Compliance Status */}
-        {linkStats.compliant && (
+        {isFullyCompliant && !hasBlockingIssues && (
           <div className="p-3 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
               <p className="text-xs text-green-800 font-medium">
-                Link requirements met!
+                All link requirements met!
               </p>
             </div>
           </div>
         )}
 
-        {/* Show Link Details */}
-        {linkStats.links.length > 0 && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDetails(!showDetails)}
-              className="w-full text-xs"
-            >
-              {showDetails ? 'Hide' : 'Show'} Link Details ({linkStats.total})
-            </Button>
+        {/* GetEducated Rules Reference */}
+        <div className="p-2 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Shield className="w-3 h-3 text-gray-600" />
+            <span className="text-xs font-medium text-gray-700">GetEducated Link Rules</span>
+          </div>
+          <ul className="text-[10px] text-gray-600 space-y-0.5 ml-4">
+            <li>• No .edu links (use GetEducated school pages)</li>
+            <li>• No competitor links (onlineu, usnews, etc.)</li>
+            <li>• External links: BLS, government, nonprofit only</li>
+          </ul>
+        </div>
 
-            {showDetails && (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {linkStats.links.map((link, index) => (
-                  <div
-                    key={index}
-                    className={`p-2 rounded text-xs ${
-                      link.type === 'internal'
-                        ? 'bg-blue-50 border border-blue-100'
-                        : 'bg-purple-50 border border-purple-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      {link.type === 'internal' ? (
-                        <Home className="w-3 h-3 text-blue-600" />
-                      ) : (
-                        <ExternalLink className="w-3 h-3 text-purple-600" />
-                      )}
-                      <span className="font-medium truncate">{link.text}</span>
-                    </div>
-                    <p className="text-gray-500 truncate text-[10px]">{link.url}</p>
-                  </div>
-                ))}
-              </div>
+        {/* Total Links Summary */}
+        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+          <span className="text-xs text-gray-600">Total Links Found</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-xs"
+            onClick={() => setShowLinkDetails(!showLinkDetails)}
+          >
+            {totalLinks} links
+            {showLinkDetails ? (
+              <ChevronUp className="w-3 h-3 ml-1" />
+            ) : (
+              <ChevronDown className="w-3 h-3 ml-1" />
             )}
-          </>
+          </Button>
+        </div>
+
+        {/* Link Details */}
+        {showLinkDetails && links.length > 0 && (
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {links.map((link, index) => (
+              <div
+                key={index}
+                className={`p-2 rounded text-xs ${
+                  link.severity === 'blocking'
+                    ? 'bg-red-50 border border-red-200'
+                    : link.severity === 'warning'
+                    ? 'bg-yellow-50 border border-yellow-200'
+                    : link.type === 'internal'
+                    ? 'bg-blue-50 border border-blue-100'
+                    : 'bg-purple-50 border border-purple-100'
+                }`}
+              >
+                <div className="flex items-center gap-1 mb-1">
+                  {link.severity === 'blocking' ? (
+                    <XCircle className="w-3 h-3 text-red-600" />
+                  ) : link.severity === 'warning' ? (
+                    <AlertTriangle className="w-3 h-3 text-yellow-600" />
+                  ) : link.type === 'internal' ? (
+                    <Home className="w-3 h-3 text-blue-600" />
+                  ) : (
+                    <ExternalLink className="w-3 h-3 text-purple-600" />
+                  )}
+                  <span className="font-medium truncate">{link.anchorText || 'No anchor text'}</span>
+                </div>
+                <p className="text-gray-500 truncate text-[10px]">{link.url}</p>
+                {link.issues?.length > 0 && (
+                  <p className={`text-[10px] mt-1 ${
+                    link.severity === 'blocking' ? 'text-red-600' : 'text-yellow-600'
+                  }`}>
+                    {link.issues[0]}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

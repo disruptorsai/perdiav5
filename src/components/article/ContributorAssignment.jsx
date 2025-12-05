@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react'
-import { useActiveContributors } from '@/hooks/useContributors'
+import {
+  useApprovedContributors,
+  isApprovedAuthor,
+  getAuthorDisplayName,
+  APPROVED_AUTHORS
+} from '@/hooks/useContributors'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,12 +18,18 @@ import {
   ChevronUp,
   FileText,
   Star,
-  RefreshCw
+  RefreshCw,
+  Shield,
+  AlertTriangle
 } from 'lucide-react'
 
 /**
  * Contributor Assignment Component
- * Displays and allows selection of article contributors
+ * CRITICAL: Only displays the 4 approved GetEducated authors
+ * - Tony Huffman (Kif)
+ * - Kayleigh Gilbert (Alicia Carrasco)
+ * - Sarah (Daniel Catena)
+ * - Charity (Julia Tell)
  */
 export default function ContributorAssignment({
   article,
@@ -26,7 +37,8 @@ export default function ContributorAssignment({
   onContributorSelect,
   onAutoAssign
 }) {
-  const { data: contributors = [], isLoading } = useActiveContributors()
+  // CRITICAL: Use approved contributors only
+  const { data: contributors = [], isLoading } = useApprovedContributors()
   const [expanded, setExpanded] = useState(false)
   const [isAutoAssigning, setIsAutoAssigning] = useState(false)
 
@@ -164,18 +176,18 @@ export default function ContributorAssignment({
               <Avatar className="w-10 h-10">
                 <AvatarImage src={selectedContributor.avatar_url} />
                 <AvatarFallback className="bg-blue-200 text-blue-700">
-                  {getInitials(selectedContributor.name)}
+                  {getInitials(selectedContributor.display_name || selectedContributor.name)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-sm text-gray-900 truncate">
-                    {selectedContributor.name}
+                    {selectedContributor.display_name || selectedContributor.name}
                   </p>
                   <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
                 </div>
-                <p className="text-xs text-gray-600 truncate">
-                  {selectedContributor.title}
+                <p className="text-xs text-gray-500 truncate">
+                  ({selectedContributor.name})
                 </p>
                 {selectedContributor.article_count > 0 && (
                   <div className="flex items-center gap-1 mt-1">
@@ -186,6 +198,11 @@ export default function ContributorAssignment({
                   </div>
                 )}
               </div>
+            </div>
+            {/* Approved Author Badge */}
+            <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-blue-200">
+              <Shield className="w-3 h-3 text-green-600" />
+              <span className="text-xs text-green-700">GetEducated Approved Author</span>
             </div>
           </div>
         )}
@@ -200,7 +217,7 @@ export default function ContributorAssignment({
 
             return (
               <button
-                key={contributor.id}
+                key={contributor.id || contributor.name}
                 onClick={() => onContributorSelect?.(contributor.id)}
                 className={`
                   w-full p-3 rounded-lg border text-left transition-all
@@ -216,13 +233,13 @@ export default function ContributorAssignment({
                     <AvatarFallback className={
                       isRecommended ? 'bg-yellow-200 text-yellow-700' : 'bg-gray-200 text-gray-700'
                     }>
-                      {getInitials(contributor.name)}
+                      {getInitials(contributor.display_name || contributor.name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm text-gray-900 truncate">
-                        {contributor.name}
+                        {contributor.display_name || contributor.name}
                       </p>
                       {isRecommended && (
                         <Badge className="bg-yellow-100 text-yellow-700 text-xs px-1.5 py-0">
@@ -231,8 +248,8 @@ export default function ContributorAssignment({
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-gray-600 truncate">
-                      {contributor.title}
+                    <p className="text-xs text-gray-500 truncate">
+                      ({contributor.name})
                     </p>
                     {contributor.expertise_areas?.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
@@ -262,35 +279,23 @@ export default function ContributorAssignment({
           })}
         </div>
 
-        {/* Show More/Less */}
-        {contributors.length > 3 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(!expanded)}
-            className="w-full text-xs"
-          >
-            {expanded ? (
-              <>
-                <ChevronUp className="w-4 h-4 mr-1" />
-                Show Less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="w-4 h-4 mr-1" />
-                Show All ({contributors.length})
-              </>
-            )}
-          </Button>
-        )}
+        {/* GetEducated Authors Info */}
+        <div className="p-2 bg-green-50 rounded-lg border border-green-200">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3 h-3 text-green-600" />
+            <span className="text-xs text-green-700 font-medium">
+              Only approved GetEducated authors shown
+            </span>
+          </div>
+        </div>
 
         {/* No Contributors */}
         {contributors.length === 0 && (
           <div className="text-center py-4">
-            <User className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">No contributors available</p>
+            <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No approved authors available</p>
             <p className="text-xs text-gray-400">
-              Add contributors in Settings
+              Run the GetEducated migration to add approved authors
             </p>
           </div>
         )}

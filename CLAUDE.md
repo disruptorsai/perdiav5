@@ -4,7 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Perdia v5 is an AI-powered content production system built with React 19, Vite, and Supabase. The application orchestrates a two-pass AI generation pipeline (Grok for drafting → Claude for humanization) to produce SEO-optimized articles with automated quality assurance, contributor assignment, and WordPress publishing capabilities.
+Perdia v5 is an AI-powered content production system built with React 19, Vite, and Supabase. The application orchestrates a two-pass AI generation pipeline (Grok for drafting → StealthGPT for humanization) to produce SEO-optimized articles with automated quality assurance, contributor assignment, and WordPress publishing capabilities.
+
+**Primary Client:** GetEducated.com
+**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+
+## CRITICAL CLIENT REQUIREMENTS
+
+**See `docs/v5-updates/` for detailed specifications.** Key rules:
+
+### Approved Authors (MUST ENFORCE)
+Only these 4 authors can be attributed:
+- Tony Huffman
+- Kayleigh Gilbert
+- Sarah
+- Charity
+**NEVER use legacy/other authors.**
+
+### Content Rules
+- Cost data MUST come from GetEducated ranking reports only
+- Links to schools MUST use GetEducated school pages (never .edu)
+- External links ONLY to BLS/government/nonprofit sites
+- NEVER link to competitors (onlineu.com, usnews.com, etc.)
+- All monetization MUST use shortcodes (no raw affiliate URLs)
+
+### Workflow
+- Human review required initially
+- Auto-publish after 5 days if unreviewed (configurable)
+- Start at ~3 articles/day, scale to ~100/week when stable
 
 ## Development Commands
 
@@ -30,6 +57,7 @@ npm run lint
 The application requires environment variables in `.env.local`:
 - `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for database access
 - `VITE_GROK_API_KEY` and `VITE_CLAUDE_API_KEY` for AI generation
+- `VITE_STEALTHGPT_API_KEY` for content humanization (AI detection bypass)
 - `VITE_DATAFORSEO_USERNAME` and `VITE_DATAFORSEO_PASSWORD` for keyword research (optional)
 
 Copy `.env.example` to `.env.local` and fill in credentials before development.
@@ -59,10 +87,12 @@ The generation pipeline is the heart of the application, orchestrated by `src/se
    - Scores contributors based on expertise areas, content types, and topic relevance
    - Uses semantic matching against contributor profiles stored in `article_contributors` table
 
-3. **Stage 3 - Humanization (Claude)**: Anti-AI-detection rewriting via `claudeClient.js`
-   - Applies contributor voice/writing style
-   - Optimizes for perplexity and burstiness metrics
-   - Removes banned phrases and AI-detection patterns
+3. **Stage 3 - Humanization (StealthGPT)**: Anti-AI-detection rewriting via `stealthGptClient.js`
+   - Processes content through StealthGPT API to bypass AI detection tools
+   - Configurable tone (Standard, HighSchool, College, PhD)
+   - Configurable bypass mode (Low, Medium, High)
+   - Optimized for specific detectors (GPTZero, Turnitin)
+   - Falls back to Claude humanization if StealthGPT is unavailable
 
 4. **Stage 4 - Internal Linking**: Intelligent link insertion
    - Fetches relevant articles from `site_articles` catalog (1000+ articles)
@@ -129,11 +159,11 @@ No global state manager (Redux/Zustand) - state is managed through:
 
 ### AI Client Architecture
 
-Both `grokClient.js` and `claudeClient.js` follow a similar pattern:
+All AI clients (`grokClient.js`, `claudeClient.js`, `stealthGptClient.js`) follow a similar pattern:
 - Initialize API client in constructor (apiKey defaults to environment variables)
 - Expose high-level methods (`generateDraft`, `humanize`, `autoFixQualityIssues`)
 - Handle prompt engineering internally via dedicated prompt builder methods
-- Return structured data objects (Grok returns parsed JSON, Claude returns text)
+- Return structured data objects (Grok returns parsed JSON, Claude/StealthGPT return text)
 
 **Grok Client** (`grokClient.js`):
 - Uses xAI's Grok API (model: `grok-beta`)
@@ -141,11 +171,23 @@ Both `grokClient.js` and `claudeClient.js` follow a similar pattern:
 - Primary methods: `generateDraft()`, `generateIdeas()`, `generateMetadata()`
 - Direct fetch-based HTTP client implementation
 
+**StealthGPT Client** (`stealthGptClient.js`):
+- Uses StealthGPT API (https://stealthgpt.ai/api/stealthify)
+- Primary humanization provider for AI detection bypass
+- Primary methods: `humanize()`, `humanizeLongContent()`, `generate()`
+- Configurable options:
+  - `tone`: Standard, HighSchool, College (default), PhD
+  - `mode`: Low, Medium, High (default) - bypass aggressiveness
+  - `detector`: gptzero (default), turnitin - optimize for specific detector
+- Handles long content by splitting on H2/H3 headings for chunked processing
+- Falls back to Claude if API key not configured or request fails
+
 **Claude Client** (`claudeClient.js`):
-- Uses Anthropic SDK (model: `claude-3-5-sonnet-20250122`)
+- Uses Anthropic SDK (model: `claude-sonnet-4-20250514`)
 - Returns raw text content
 - Primary methods: `humanize()`, `autoFixQualityIssues()`, `reviseWithFeedback()`, `extractLearningPatterns()`
 - High temperature (0.9) for humanization, lower (0.7) for fixing/revision
+- Acts as fallback humanizer when StealthGPT is unavailable
 
 When modifying AI prompts:
 - Keep context windows in mind (max_tokens: 4000-4500)
@@ -376,8 +418,25 @@ Minimum score is clamped to 0.
 1. **No automatic mode implementation yet** - Queue processing and autonomous operation not implemented
 2. **No WordPress publishing** - API integration pending (Edge Function defined but not implemented)
 3. **No drag-and-drop Kanban** - Status updates via dropdowns only
-4. **Basic rich text editor** - React Quill integration incomplete
+4. **Basic rich text editor** - React Quill integration incomplete (incompatible with React 19)
 5. **No mobile optimization** - Desktop-first design
 6. **Client-side API keys** - Security risk, needs Edge Functions migration
 
 Refer to README.md "Next Steps" section for planned improvements.
+
+## V5 Updates Documentation
+
+All GetEducated-specific requirements and implementation details are in `docs/v5-updates/`:
+
+- `01-REQUIREMENTS-OVERVIEW.md` - Full requirements from client meetings
+- `02-CLIENT-CONTENT-RULES.md` - Kayleigh's content rules and linking policies
+- `03-MONETIZATION-SPECIFICATION.md` - Shortcode system and monetization logic
+- `04-IMPLEMENTATION-TODO.md` - Prioritized implementation task list
+- `05-MISSING-INFORMATION.md` - Documents still needed from client
+
+## Key URLs for GetEducated Integration
+
+- Ranking Reports: https://www.geteducated.com/online-college-ratings-and-rankings/
+- Degree Database: https://www.geteducated.com/online-degrees/
+- School Database: https://www.geteducated.com/online-schools/
+- Monetization Sheet: https://docs.google.com/spreadsheets/d/1s2A1Nt5OBkCeFG0vPswkh7q7Y1QDogoqlQPQPEAtRTw/

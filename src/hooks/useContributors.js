@@ -3,6 +3,22 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 
 /**
+ * GetEducated approved authors
+ * CRITICAL: Only these 4 people can be attributed as authors on GetEducated content
+ */
+export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+
+/**
+ * Author display name mapping
+ */
+export const AUTHOR_DISPLAY_NAMES = {
+  'Tony Huffman': 'Kif',
+  'Kayleigh Gilbert': 'Alicia Carrasco',
+  'Sarah': 'Daniel Catena',
+  'Charity': 'Julia Tell',
+}
+
+/**
  * Fetch all contributors
  */
 export function useContributors(filters = {}) {
@@ -15,9 +31,6 @@ export function useContributors(filters = {}) {
         .from('article_contributors')
         .select('*')
         .order('name', { ascending: true })
-
-      // Note: is_active column doesn't exist in current schema
-      // Contributors are managed via seeds and are always available
 
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,bio.ilike.%${filters.search}%`)
@@ -33,10 +46,84 @@ export function useContributors(filters = {}) {
 }
 
 /**
- * Fetch all contributors (active filter not supported in current schema)
+ * Fetch only active contributors
  */
 export function useActiveContributors() {
-  return useContributors({})
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['contributors', 'active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('article_contributors')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+  })
+}
+
+/**
+ * Fetch only the 4 approved GetEducated authors
+ * CRITICAL: Use this for all author selection in the GetEducated workflow
+ */
+export function useApprovedContributors() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['contributors', 'approved'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('article_contributors')
+        .select('*')
+        .eq('is_active', true)
+        .in('name', APPROVED_AUTHORS)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+
+      // Ensure we only return approved authors even if DB has others
+      const approved = (data || []).filter(c => APPROVED_AUTHORS.includes(c.name))
+
+      // If no approved authors in DB, return placeholder data
+      if (approved.length === 0) {
+        console.warn('No approved contributors found in database. Using fallback data.')
+        return APPROVED_AUTHORS.map(name => ({
+          id: null,
+          name,
+          display_name: AUTHOR_DISPLAY_NAMES[name],
+          is_active: true,
+          expertise_areas: [],
+          content_types: [],
+        }))
+      }
+
+      return approved
+    },
+    enabled: !!user,
+  })
+}
+
+/**
+ * Check if an author name is approved for GetEducated
+ * @param {string} authorName - The author name to check
+ * @returns {boolean} True if author is approved
+ */
+export function isApprovedAuthor(authorName) {
+  return APPROVED_AUTHORS.includes(authorName)
+}
+
+/**
+ * Get the display name for an author
+ * @param {string} authorName - The real author name
+ * @returns {string} The display name (pen name)
+ */
+export function getAuthorDisplayName(authorName) {
+  return AUTHOR_DISPLAY_NAMES[authorName] || authorName
 }
 
 /**

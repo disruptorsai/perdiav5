@@ -1,11 +1,12 @@
 /**
  * Generation Service
  * Orchestrates the complete two-pass AI generation pipeline with quality checks
- * Pipeline: Grok Draft → Claude Humanize → Quality Check → Auto-Fix Loop → Save
+ * Pipeline: Grok Draft → StealthGPT Humanize → Quality Check → Auto-Fix Loop → Save
  */
 
 import GrokClient from './ai/grokClient'
 import ClaudeClient from './ai/claudeClient'
+import StealthGptClient from './ai/stealthGptClient'
 import { supabase } from './supabaseClient'
 import IdeaDiscoveryService from './ideaDiscoveryService'
 
@@ -13,10 +14,19 @@ class GenerationService {
   constructor() {
     this.grok = new GrokClient()
     this.claude = new ClaudeClient()
+    this.stealthGpt = new StealthGptClient()
     this.ideaDiscovery = new IdeaDiscoveryService()
     this.isProcessing = false
     this.processingQueue = []
     this.currentTask = null
+
+    // Humanization settings
+    this.humanizationProvider = 'stealthgpt' // 'stealthgpt' or 'claude'
+    this.stealthGptSettings = {
+      tone: 'College',
+      mode: 'High',
+      detector: 'gptzero',
+    }
   }
 
   /**
@@ -52,14 +62,35 @@ class GenerationService {
         contributor = await this.assignContributor(idea, contentType)
       }
 
-      this.updateProgress(onProgress, 'Humanizing content with Claude AI...', 40)
+      this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
 
-      // STAGE 3: Humanize with Claude
-      const humanizedContent = await this.claude.humanize(draftData.content, {
-        contributorProfile: contributor,
-        targetPerplexity: 'high',
-        targetBurstiness: 'high',
-      })
+      // STAGE 3: Humanize with StealthGPT (primary) or Claude (fallback)
+      let humanizedContent
+      try {
+        if (this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured()) {
+          humanizedContent = await this.stealthGpt.humanizeLongContent(draftData.content, {
+            tone: this.stealthGptSettings.tone,
+            mode: this.stealthGptSettings.mode,
+            detector: this.stealthGptSettings.detector,
+          })
+          console.log('[Generation] Content humanized with StealthGPT')
+        } else {
+          // Fallback to Claude
+          humanizedContent = await this.claude.humanize(draftData.content, {
+            contributorProfile: contributor,
+            targetPerplexity: 'high',
+            targetBurstiness: 'high',
+          })
+          console.log('[Generation] Content humanized with Claude (fallback)')
+        }
+      } catch (humanizeError) {
+        console.warn('[Generation] StealthGPT humanization failed, falling back to Claude:', humanizeError.message)
+        humanizedContent = await this.claude.humanize(draftData.content, {
+          contributorProfile: contributor,
+          targetPerplexity: 'high',
+          targetBurstiness: 'high',
+        })
+      }
 
       this.updateProgress(onProgress, 'Adding internal links...', 55)
 
@@ -323,22 +354,37 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
   /**
    * Auto-assign contributor based on topic and content type
+   * CRITICAL: Only assigns from the 4 approved GetEducated authors
    */
   async assignContributor(idea, contentType) {
+    // Approved GetEducated authors (CRITICAL - do not modify without client approval)
+    const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+
     try {
       const { data: contributors, error } = await supabase
         .from('article_contributors')
         .select('*')
+        .eq('is_active', true)
 
       if (error) throw error
 
-      // Score each contributor
-      const scoredContributors = contributors.map(contributor => {
+      // Filter to only approved authors
+      const approvedContributors = contributors.filter(c =>
+        APPROVED_AUTHORS.includes(c.name)
+      )
+
+      if (approvedContributors.length === 0) {
+        console.error('No approved contributors found in database!')
+        throw new Error('No approved GetEducated authors available')
+      }
+
+      // Score each contributor based on topic/content type match
+      const scoredContributors = approvedContributors.map(contributor => {
         let score = 0
 
-        // Check expertise areas
+        // Check expertise areas match with idea topics
         const ideaTopics = idea.seed_topics || []
-        const expertiseMatch = contributor.expertise_areas.some(area =>
+        const expertiseMatch = contributor.expertise_areas?.some(area =>
           ideaTopics.some(topic => topic.toLowerCase().includes(area.toLowerCase()))
         )
         if (expertiseMatch) score += 50
@@ -350,21 +396,67 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
         // Check title for keyword matches
         const titleWords = idea.title.toLowerCase().split(' ')
-        const titleMatch = contributor.expertise_areas.some(area =>
+        const titleMatch = contributor.expertise_areas?.some(area =>
           titleWords.some(word => word.includes(area.toLowerCase()))
         )
         if (titleMatch) score += 20
+
+        // Topic-specific author matching for GetEducated
+        const title = idea.title.toLowerCase()
+
+        // Tony Huffman - Rankings, cost analysis, affordability
+        if (contributor.name === 'Tony Huffman') {
+          if (title.includes('ranking') || title.includes('best') || title.includes('top') ||
+              title.includes('affordable') || title.includes('cheapest') || title.includes('cost')) {
+            score += 40
+          }
+        }
+
+        // Kayleigh Gilbert - Healthcare, professional licensure, social work
+        if (contributor.name === 'Kayleigh Gilbert') {
+          if (title.includes('lcsw') || title.includes('nursing') || title.includes('healthcare') ||
+              title.includes('social work') || title.includes('hospitality') || title.includes('licensure')) {
+            score += 40
+          }
+        }
+
+        // Sarah - Technical education, general guides, online learning basics
+        if (contributor.name === 'Sarah') {
+          if (title.includes('technical') || title.includes('online college') || title.includes('what degree') ||
+              title.includes('how to') || title.includes('guide to') || title.includes('beginner')) {
+            score += 40
+          }
+        }
+
+        // Charity - Teaching, education degrees, certification, career change
+        if (contributor.name === 'Charity') {
+          if (title.includes('teaching') || title.includes('teacher') || title.includes('education degree') ||
+              title.includes('mat ') || title.includes('med ') || title.includes('certification') ||
+              title.includes('career change')) {
+            score += 40
+          }
+        }
 
         return { contributor, score }
       })
 
       scoredContributors.sort((a, b) => b.score - a.score)
 
-      return scoredContributors[0].contributor
+      const selectedContributor = scoredContributors[0].contributor
+      console.log(`[Generation] Assigned contributor: ${selectedContributor.name} (${selectedContributor.display_name})`)
+
+      return selectedContributor
 
     } catch (error) {
       console.error('Contributor assignment error:', error)
-      return null
+      // Return first approved author as fallback (Tony Huffman)
+      return {
+        name: 'Tony Huffman',
+        display_name: 'Kif',
+        expertise_areas: ['rankings', 'cost-analysis', 'online-degrees'],
+        content_types: ['ranking', 'analysis', 'comparison'],
+        writing_style_profile: { tone: 'authoritative', complexity_level: 'intermediate' }
+      }
     }
   }
 
@@ -499,14 +591,30 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
   }
 
   /**
-   * Humanize existing content using Claude
+   * Humanize existing content using StealthGPT (primary) or Claude (fallback)
    * @param {string} content - The content to humanize
-   * @param {Object} options - Options including writingStyle and contributorName
+   * @param {Object} options - Options including writingStyle, contributorName, useStealthGpt
    * @returns {string} - Humanized content
    */
   async humanizeContent(content, options = {}) {
-    const { writingStyle, contributorName } = options
+    const { writingStyle, contributorName, useStealthGpt = true } = options
 
+    // Try StealthGPT first if enabled and configured
+    if (useStealthGpt && this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured()) {
+      try {
+        console.log('[Generation] Humanizing with StealthGPT...')
+        const humanizedContent = await this.stealthGpt.humanizeLongContent(content, {
+          tone: this.stealthGptSettings.tone,
+          mode: this.stealthGptSettings.mode,
+          detector: this.stealthGptSettings.detector,
+        })
+        return humanizedContent
+      } catch (error) {
+        console.warn('[Generation] StealthGPT failed, falling back to Claude:', error.message)
+      }
+    }
+
+    // Fallback to Claude
     const prompt = `Humanize this content to sound more natural and engaging.
 
 ${writingStyle ? `WRITING STYLE: ${writingStyle}` : ''}
@@ -920,6 +1028,80 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
   stop() {
     this.isProcessing = false
     this.currentTask = null
+  }
+
+  // ========================================
+  // HUMANIZATION CONFIGURATION
+  // ========================================
+
+  /**
+   * Set the humanization provider
+   * @param {string} provider - 'stealthgpt' or 'claude'
+   */
+  setHumanizationProvider(provider) {
+    if (!['stealthgpt', 'claude'].includes(provider)) {
+      throw new Error('Invalid humanization provider. Use "stealthgpt" or "claude"')
+    }
+    this.humanizationProvider = provider
+    console.log(`[Generation] Humanization provider set to: ${provider}`)
+  }
+
+  /**
+   * Get current humanization provider
+   */
+  getHumanizationProvider() {
+    return this.humanizationProvider
+  }
+
+  /**
+   * Configure StealthGPT settings
+   * @param {Object} settings - StealthGPT configuration
+   */
+  setStealthGptSettings(settings = {}) {
+    const { tone, mode, detector } = settings
+
+    if (tone && ['Standard', 'HighSchool', 'College', 'PhD'].includes(tone)) {
+      this.stealthGptSettings.tone = tone
+    }
+
+    if (mode && ['Low', 'Medium', 'High'].includes(mode)) {
+      this.stealthGptSettings.mode = mode
+    }
+
+    if (detector && ['gptzero', 'turnitin'].includes(detector)) {
+      this.stealthGptSettings.detector = detector
+    }
+
+    console.log('[Generation] StealthGPT settings updated:', this.stealthGptSettings)
+  }
+
+  /**
+   * Get current StealthGPT settings
+   */
+  getStealthGptSettings() {
+    return { ...this.stealthGptSettings }
+  }
+
+  /**
+   * Check if StealthGPT is available
+   */
+  isStealthGptAvailable() {
+    return this.stealthGpt.isConfigured()
+  }
+
+  /**
+   * Get available humanization options for UI
+   */
+  static getHumanizationOptions() {
+    return {
+      providers: [
+        { value: 'stealthgpt', label: 'StealthGPT', description: 'Specialized AI detection bypass' },
+        { value: 'claude', label: 'Claude', description: 'Natural humanization with contributor voice' },
+      ],
+      tones: StealthGptClient.getToneOptions(),
+      modes: StealthGptClient.getModeOptions(),
+      detectors: StealthGptClient.getDetectorOptions(),
+    }
   }
 }
 
