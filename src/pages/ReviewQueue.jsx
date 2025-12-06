@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow, isPast, differenceInDays, differenceInHours } from 'date-fns'
 import { motion } from 'framer-motion'
 import { supabase } from '@/services/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Clock,
   CheckCircle2,
@@ -22,7 +23,12 @@ import {
   MessageSquare,
   FileText,
   Filter,
-  Search
+  Search,
+  AlertTriangle,
+  ShieldAlert,
+  ShieldCheck,
+  Timer,
+  Zap
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
@@ -42,20 +48,150 @@ const STATUS_COLORS = {
   idea: 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
+// Risk level configuration for GetEducated
+const RISK_LEVEL_CONFIG = {
+  LOW: {
+    label: 'Low Risk',
+    icon: ShieldCheck,
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
+    description: 'Safe for auto-publish'
+  },
+  MEDIUM: {
+    label: 'Medium Risk',
+    icon: AlertTriangle,
+    color: 'text-yellow-600',
+    bgColor: 'bg-yellow-50',
+    borderColor: 'border-yellow-200',
+    description: 'Needs review before publish'
+  },
+  HIGH: {
+    label: 'High Risk',
+    icon: ShieldAlert,
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+    description: 'Blocking issues found'
+  },
+  CRITICAL: {
+    label: 'Critical',
+    icon: XCircle,
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
+    description: 'Cannot publish - fix required'
+  }
+}
+
+/**
+ * RiskLevelBadge - Shows risk level with icon and tooltip
+ */
+function RiskLevelBadge({ riskLevel }) {
+  const config = RISK_LEVEL_CONFIG[riskLevel] || RISK_LEVEL_CONFIG.LOW
+  const Icon = config.icon
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className={`${config.bgColor} ${config.color} ${config.borderColor} font-medium gap-1`}
+          >
+            <Icon className="w-3 h-3" />
+            {config.label}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{config.description}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+/**
+ * AutoPublishDeadline - Shows countdown to auto-publish deadline
+ */
+function AutoPublishDeadline({ deadline, humanReviewed }) {
+  if (!deadline) return null
+
+  const deadlineDate = new Date(deadline)
+  const now = new Date()
+  const isOverdue = isPast(deadlineDate)
+  const hoursRemaining = differenceInHours(deadlineDate, now)
+  const daysRemaining = differenceInDays(deadlineDate, now)
+
+  // If human reviewed, show that instead
+  if (humanReviewed) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+        <CheckCircle2 className="w-3 h-3" />
+        Human reviewed
+      </div>
+    )
+  }
+
+  // Determine urgency color
+  let urgencyClass = 'text-gray-600 bg-gray-50 border-gray-200'
+  let icon = <Timer className="w-3 h-3" />
+
+  if (isOverdue) {
+    urgencyClass = 'text-red-600 bg-red-50 border-red-200'
+    icon = <Zap className="w-3 h-3" />
+  } else if (hoursRemaining <= 24) {
+    urgencyClass = 'text-orange-600 bg-orange-50 border-orange-200'
+    icon = <AlertTriangle className="w-3 h-3" />
+  } else if (daysRemaining <= 2) {
+    urgencyClass = 'text-yellow-600 bg-yellow-50 border-yellow-200'
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`flex items-center gap-1.5 text-xs ${urgencyClass} px-2.5 py-1 rounded-md border`}>
+            {icon}
+            {isOverdue
+              ? 'Auto-publish ready'
+              : hoursRemaining <= 24
+                ? `${hoursRemaining}h remaining`
+                : `${daysRemaining}d remaining`
+            }
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {isOverdue
+              ? 'Deadline passed. Will auto-publish on next scheduler run.'
+              : `Auto-publish deadline: ${format(deadlineDate, 'MMM d, yyyy h:mm a')}`
+            }
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formatDistanceToNow(deadlineDate, { addSuffix: true })}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 export default function ReviewQueue() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [selectedStatus, setSelectedStatus] = useState('qa_review')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Fetch articles in review statuses
+  // Fetch articles in review statuses (include new GetEducated fields)
   const { data: articles = [], isLoading } = useQuery({
     queryKey: ['review-articles', selectedStatus],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('articles')
-        .select('*, article_contributors(name)')
+        .select('*, article_contributors(name, display_name)')
         .eq('status', selectedStatus)
+        .order('autopublish_deadline', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -63,6 +199,17 @@ export default function ReviewQueue() {
     },
     enabled: !!user
   })
+
+  // Calculate articles with urgent deadlines
+  const urgentCount = useMemo(() => {
+    const now = new Date()
+    return articles.filter(a => {
+      if (!a.autopublish_deadline || a.human_reviewed) return false
+      const deadline = new Date(a.autopublish_deadline)
+      const hoursRemaining = differenceInHours(deadline, now)
+      return hoursRemaining <= 48 // Less than 48 hours
+    }).length
+  }, [articles])
 
   // Get all revisions for comment counts
   const { data: allRevisions = [] } = useAllRevisions()
@@ -119,6 +266,29 @@ export default function ReviewQueue() {
           <p className="text-gray-600 text-lg">
             Review articles, add comments, and approve for publishing
           </p>
+
+          {/* Urgent Banner */}
+          {urgentCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-orange-900">
+                    {urgentCount} article{urgentCount !== 1 ? 's' : ''} approaching auto-publish deadline
+                  </p>
+                  <p className="text-sm text-orange-700">
+                    Review soon or articles will auto-publish within 48 hours
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Search and Filters */}
@@ -216,7 +386,7 @@ export default function ReviewQueue() {
                       <div className="flex items-start justify-between gap-6">
                         <div className="flex-1 min-w-0">
                           {/* Badges Row */}
-                          <div className="flex items-center gap-3 mb-3 flex-wrap">
+                          <div className="flex items-center gap-2 mb-3 flex-wrap">
                             <Badge
                               variant="outline"
                               className={`${STATUS_COLORS[article.status]} border font-medium`}
@@ -224,7 +394,13 @@ export default function ReviewQueue() {
                               {article.status?.replace(/_/g, ' ')}
                             </Badge>
 
-                            {article.quality_score && (
+                            {/* Risk Level Badge */}
+                            {article.risk_level && (
+                              <RiskLevelBadge riskLevel={article.risk_level} />
+                            )}
+
+                            {/* Quality Score Badge */}
+                            {article.quality_score != null && (
                               <Badge
                                 variant="outline"
                                 className={`${
@@ -239,6 +415,13 @@ export default function ReviewQueue() {
                               </Badge>
                             )}
 
+                            {/* Auto-publish Deadline */}
+                            <AutoPublishDeadline
+                              deadline={article.autopublish_deadline}
+                              humanReviewed={article.human_reviewed}
+                            />
+
+                            {/* Comment Count */}
                             {commentCount > 0 && (
                               <div className="flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
                                 <MessageSquare className="w-3 h-3" />

@@ -1216,6 +1216,241 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
       detectors: StealthGptClient.getDetectorOptions(),
     }
   }
+
+  // ========================================
+  // AI REVISION FEEDBACK INTEGRATION
+  // ========================================
+
+  /**
+   * Fetch past successful AI revisions to learn from
+   * Per spec section 8.4: AI Training & Revision Log
+   * @param {Object} options - Filter options
+   * @returns {Array} Array of revision patterns
+   */
+  async getTrainingPatterns(options = {}) {
+    const {
+      limit = 20,
+      contentType = null,
+      minQualityScore = 80,
+    } = options
+
+    try {
+      // Query revisions that are marked for training inclusion
+      let query = supabase
+        .from('ai_revisions')
+        .select(`
+          id,
+          previous_version,
+          revised_version,
+          comments_snapshot,
+          revision_type,
+          created_at,
+          articles(
+            title,
+            content_type,
+            quality_score,
+            contributor_name
+          )
+        `)
+        .eq('include_in_training', true)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      // Filter by content type if specified
+      if (contentType) {
+        query = query.eq('articles.content_type', contentType)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('[Generation] Error fetching training patterns:', error)
+        return []
+      }
+
+      // Filter by quality score and extract useful patterns
+      const validRevisions = (data || []).filter(r =>
+        r.articles && r.articles.quality_score >= minQualityScore
+      )
+
+      // Extract learning patterns from revisions
+      const patterns = validRevisions.map(r => ({
+        type: r.revision_type,
+        contentType: r.articles.content_type,
+        beforeSnippet: this.extractSnippet(r.previous_version, 200),
+        afterSnippet: this.extractSnippet(r.revised_version, 200),
+        feedback: r.comments_snapshot,
+        contributor: r.articles.contributor_name,
+      }))
+
+      console.log(`[Generation] Loaded ${patterns.length} training patterns`)
+      return patterns
+
+    } catch (error) {
+      console.error('[Generation] Error getting training patterns:', error)
+      return []
+    }
+  }
+
+  /**
+   * Extract a representative snippet from content
+   */
+  extractSnippet(content, maxLength = 200) {
+    if (!content) return ''
+    // Strip HTML and get first N characters
+    const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    return text.substring(0, maxLength) + (text.length > maxLength ? '...' : '')
+  }
+
+  /**
+   * Format training patterns for inclusion in AI prompts
+   * @param {Array} patterns - Array of training patterns
+   * @returns {string} Formatted string for prompt injection
+   */
+  formatPatternsForPrompt(patterns) {
+    if (!patterns || patterns.length === 0) {
+      return ''
+    }
+
+    let formatted = '\n\n=== LEARNED PATTERNS FROM PAST REVISIONS ===\n'
+    formatted += 'The following patterns represent successful revisions. Apply similar improvements:\n\n'
+
+    // Group by revision type for clarity
+    const byType = {}
+    patterns.forEach(p => {
+      const type = p.type || 'general'
+      if (!byType[type]) byType[type] = []
+      byType[type].push(p)
+    })
+
+    for (const [type, typePatterns] of Object.entries(byType)) {
+      formatted += `\n--- ${type.toUpperCase()} IMPROVEMENTS ---\n`
+
+      typePatterns.slice(0, 3).forEach((p, i) => {
+        formatted += `\nExample ${i + 1}:\n`
+        if (p.beforeSnippet) {
+          formatted += `BEFORE: "${p.beforeSnippet}"\n`
+        }
+        if (p.afterSnippet) {
+          formatted += `AFTER: "${p.afterSnippet}"\n`
+        }
+        if (p.feedback && p.feedback.length > 0) {
+          formatted += `FEEDBACK: ${JSON.stringify(p.feedback)}\n`
+        }
+      })
+    }
+
+    formatted += '\n=== END LEARNED PATTERNS ===\n'
+    formatted += '\nApply these improvement patterns where appropriate.\n'
+
+    return formatted
+  }
+
+  /**
+   * Save a revision to the training data
+   * @param {string} articleId - Article ID
+   * @param {string} previousContent - Content before revision
+   * @param {string} revisedContent - Content after revision
+   * @param {Object} options - Additional options
+   */
+  async saveRevisionForTraining(articleId, previousContent, revisedContent, options = {}) {
+    const {
+      commentsSnapshot = [],
+      revisionType = 'quality_fix',
+      modelUsed = 'claude-sonnet-4',
+      includeInTraining = true,
+      userId = null,
+    } = options
+
+    try {
+      const { data, error } = await supabase
+        .from('ai_revisions')
+        .insert({
+          article_id: articleId,
+          previous_version: previousContent,
+          revised_version: revisedContent,
+          comments_snapshot: commentsSnapshot,
+          revision_type: revisionType,
+          model_used: modelUsed,
+          include_in_training: includeInTraining,
+          triggered_by_user: userId,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      console.log(`[Generation] Saved revision for training: ${data.id}`)
+      return data
+
+    } catch (error) {
+      console.error('[Generation] Error saving revision:', error)
+      return null
+    }
+  }
+
+  /**
+   * Enhanced auto-fix with training pattern injection
+   * This version uses past revisions to improve fix quality
+   */
+  async autoFixWithLearning(content, issues, options = {}) {
+    const { articleId, contentType, contributor } = options
+
+    // Fetch relevant training patterns
+    const patterns = await this.getTrainingPatterns({
+      contentType,
+      limit: 10,
+      minQualityScore: 80,
+    })
+
+    const patternContext = this.formatPatternsForPrompt(patterns)
+
+    // Build enhanced prompt with training patterns
+    const issueDescriptions = issues.map(i => `- ${i.type}: ${i.severity}`).join('\n')
+
+    const prompt = `Fix the following quality issues in this article content.
+
+QUALITY ISSUES TO FIX:
+${issueDescriptions}
+
+${patternContext}
+
+CURRENT CONTENT:
+${content}
+
+INSTRUCTIONS:
+1. Fix all listed quality issues
+2. Apply learned patterns from successful revisions
+3. Maintain the article structure and voice
+4. Keep all HTML formatting intact
+5. Do not add unrelated content
+
+OUTPUT ONLY THE FIXED HTML CONTENT.`
+
+    try {
+      const fixedContent = await this.claude.chat([
+        { role: 'user', content: prompt }
+      ], {
+        temperature: 0.7,
+        max_tokens: 4500,
+      })
+
+      // Save this revision for future training
+      if (articleId) {
+        await this.saveRevisionForTraining(articleId, content, fixedContent, {
+          commentsSnapshot: issues,
+          revisionType: 'auto_fix',
+          includeInTraining: true,
+        })
+      }
+
+      return fixedContent
+
+    } catch (error) {
+      console.error('[Generation] Error in autoFixWithLearning:', error)
+      return content // Return original on error
+    }
+  }
 }
 
 export default GenerationService

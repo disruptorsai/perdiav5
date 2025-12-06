@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useArticles, useUpdateArticleStatus } from '../hooks/useArticles'
 import { useContentIdeas, useCreateContentIdea } from '../hooks/useContentIdeas'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import { useSystemSettings } from '../hooks/useSystemSettings'
-import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2 } from 'lucide-react'
+import { differenceInDays, differenceInHours, isPast, subDays } from 'date-fns'
+import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2, TrendingUp, ShieldCheck, AlertTriangle, Timer, DollarSign, BarChart3 } from 'lucide-react'
 import SourceSelector from '../components/ideas/SourceSelector'
 import IdeaDiscoveryService from '../services/ideaDiscoveryService'
 import { useToast } from '../components/ui/toast'
@@ -49,6 +50,75 @@ function Dashboard() {
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
+
+  // GetEducated Metrics Calculations
+  const getEducatedMetrics = useMemo(() => {
+    const now = new Date()
+    const weekAgo = subDays(now, 7)
+
+    // Published this week
+    const publishedThisWeek = articles.filter(a =>
+      a.status === 'published' &&
+      a.published_at &&
+      new Date(a.published_at) > weekAgo
+    ).length
+
+    // Articles ready for auto-publish (deadline passed)
+    const autoPublishReady = articles.filter(a =>
+      a.status === 'ready_to_publish' &&
+      a.autopublish_deadline &&
+      !a.human_reviewed &&
+      isPast(new Date(a.autopublish_deadline))
+    ).length
+
+    // Articles approaching deadline (within 48 hours)
+    const urgentReview = articles.filter(a => {
+      if (!a.autopublish_deadline || a.human_reviewed) return false
+      if (a.status !== 'qa_review' && a.status !== 'ready_to_publish') return false
+      const deadline = new Date(a.autopublish_deadline)
+      const hoursRemaining = differenceInHours(deadline, now)
+      return hoursRemaining > 0 && hoursRemaining <= 48
+    }).length
+
+    // Risk distribution
+    const riskDistribution = {
+      LOW: articles.filter(a => a.risk_level === 'LOW').length,
+      MEDIUM: articles.filter(a => a.risk_level === 'MEDIUM').length,
+      HIGH: articles.filter(a => a.risk_level === 'HIGH').length,
+      CRITICAL: articles.filter(a => a.risk_level === 'CRITICAL').length,
+    }
+
+    // Average quality score
+    const articlesWithQuality = articles.filter(a => a.quality_score != null)
+    const avgQualityScore = articlesWithQuality.length > 0
+      ? Math.round(articlesWithQuality.reduce((sum, a) => sum + a.quality_score, 0) / articlesWithQuality.length)
+      : 0
+
+    // Human reviewed vs auto-publish rate (published articles)
+    const publishedArticles = articles.filter(a => a.status === 'published')
+    const humanReviewedCount = publishedArticles.filter(a => a.human_reviewed).length
+    const autoPublishedCount = publishedArticles.length - humanReviewedCount
+
+    // Average time to review (for human-reviewed articles with reviewed_at)
+    const reviewedArticles = articles.filter(a => a.reviewed_at && a.created_at)
+    const avgReviewDays = reviewedArticles.length > 0
+      ? Math.round(reviewedArticles.reduce((sum, a) => {
+          return sum + differenceInDays(new Date(a.reviewed_at), new Date(a.created_at))
+        }, 0) / reviewedArticles.length)
+      : 0
+
+    return {
+      publishedThisWeek,
+      autoPublishReady,
+      urgentReview,
+      riskDistribution,
+      avgQualityScore,
+      humanReviewedCount,
+      autoPublishedCount,
+      avgReviewDays,
+      totalArticles: articles.length,
+    }
+  }, [articles])
 
   // Initialize idea discovery service
   const ideaDiscoveryService = new IdeaDiscoveryService()
@@ -430,6 +500,157 @@ function Dashboard() {
           )
         })}
       </div>
+
+      {/* GetEducated Metrics Panel */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.3 }}
+        className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-6 mb-8"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-600" />
+            <h2 className="font-bold text-gray-900">GetEducated Metrics</h2>
+          </div>
+          <span className="text-xs text-gray-500">Auto-refreshes with data</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {/* Published This Week */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-white rounded-lg p-4 border border-blue-100"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+              <span className="text-xs text-gray-600">This Week</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{getEducatedMetrics.publishedThisWeek}</p>
+            <p className="text-xs text-gray-500">articles published</p>
+          </motion.div>
+
+          {/* Average Quality Score */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-white rounded-lg p-4 border border-blue-100"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+              <span className="text-xs text-gray-600">Avg Quality</span>
+            </div>
+            <p className={`text-2xl font-bold ${
+              getEducatedMetrics.avgQualityScore >= 85 ? 'text-green-600' :
+              getEducatedMetrics.avgQualityScore >= 70 ? 'text-yellow-600' :
+              'text-red-600'
+            }`}>
+              {getEducatedMetrics.avgQualityScore}%
+            </p>
+            <p className="text-xs text-gray-500">quality score</p>
+          </motion.div>
+
+          {/* Urgent Review */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className={`rounded-lg p-4 border ${
+              getEducatedMetrics.urgentReview > 0
+                ? 'bg-orange-50 border-orange-200'
+                : 'bg-white border-blue-100'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className={`w-4 h-4 ${getEducatedMetrics.urgentReview > 0 ? 'text-orange-600' : 'text-gray-400'}`} />
+              <span className="text-xs text-gray-600">Urgent</span>
+            </div>
+            <p className={`text-2xl font-bold ${getEducatedMetrics.urgentReview > 0 ? 'text-orange-600' : 'text-gray-900'}`}>
+              {getEducatedMetrics.urgentReview}
+            </p>
+            <p className="text-xs text-gray-500">need review in 48h</p>
+          </motion.div>
+
+          {/* Auto-Publish Ready */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className={`rounded-lg p-4 border ${
+              getEducatedMetrics.autoPublishReady > 0
+                ? 'bg-purple-50 border-purple-200'
+                : 'bg-white border-blue-100'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Timer className={`w-4 h-4 ${getEducatedMetrics.autoPublishReady > 0 ? 'text-purple-600' : 'text-gray-400'}`} />
+              <span className="text-xs text-gray-600">Auto-Publish</span>
+            </div>
+            <p className={`text-2xl font-bold ${getEducatedMetrics.autoPublishReady > 0 ? 'text-purple-600' : 'text-gray-900'}`}>
+              {getEducatedMetrics.autoPublishReady}
+            </p>
+            <p className="text-xs text-gray-500">ready to auto-publish</p>
+          </motion.div>
+
+          {/* Avg Review Time */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-white rounded-lg p-4 border border-blue-100"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-indigo-600" />
+              <span className="text-xs text-gray-600">Review Time</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">
+              {getEducatedMetrics.avgReviewDays}d
+            </p>
+            <p className="text-xs text-gray-500">avg days to review</p>
+          </motion.div>
+
+          {/* Risk Distribution Mini Chart */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-white rounded-lg p-4 border border-blue-100"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4 h-4 text-gray-600" />
+              <span className="text-xs text-gray-600">Risk Levels</span>
+            </div>
+            <div className="flex items-center gap-1 h-6">
+              {getEducatedMetrics.riskDistribution.LOW > 0 && (
+                <div
+                  className="bg-green-500 h-full rounded-sm"
+                  style={{ width: `${(getEducatedMetrics.riskDistribution.LOW / getEducatedMetrics.totalArticles) * 100}%`, minWidth: '8px' }}
+                  title={`Low: ${getEducatedMetrics.riskDistribution.LOW}`}
+                />
+              )}
+              {getEducatedMetrics.riskDistribution.MEDIUM > 0 && (
+                <div
+                  className="bg-yellow-500 h-full rounded-sm"
+                  style={{ width: `${(getEducatedMetrics.riskDistribution.MEDIUM / getEducatedMetrics.totalArticles) * 100}%`, minWidth: '8px' }}
+                  title={`Medium: ${getEducatedMetrics.riskDistribution.MEDIUM}`}
+                />
+              )}
+              {getEducatedMetrics.riskDistribution.HIGH > 0 && (
+                <div
+                  className="bg-orange-500 h-full rounded-sm"
+                  style={{ width: `${(getEducatedMetrics.riskDistribution.HIGH / getEducatedMetrics.totalArticles) * 100}%`, minWidth: '8px' }}
+                  title={`High: ${getEducatedMetrics.riskDistribution.HIGH}`}
+                />
+              )}
+              {getEducatedMetrics.riskDistribution.CRITICAL > 0 && (
+                <div
+                  className="bg-red-500 h-full rounded-sm"
+                  style={{ width: `${(getEducatedMetrics.riskDistribution.CRITICAL / getEducatedMetrics.totalArticles) * 100}%`, minWidth: '8px' }}
+                  title={`Critical: ${getEducatedMetrics.riskDistribution.CRITICAL}`}
+                />
+              )}
+              {getEducatedMetrics.totalArticles === 0 && (
+                <div className="bg-gray-200 h-full w-full rounded-sm" />
+              )}
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span className="text-green-600">{getEducatedMetrics.riskDistribution.LOW} low</span>
+              <span className="text-red-600">{getEducatedMetrics.riskDistribution.HIGH + getEducatedMetrics.riskDistribution.CRITICAL} high</span>
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
 
       {/* Kanban Board */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto">

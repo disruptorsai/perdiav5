@@ -60,7 +60,9 @@ import {
   ArticleNavigationGenerator,
   ContentTypeSelector,
   ContributorAssignment,
-  InternalLinkSuggester
+  InternalLinkSuggester,
+  ShortcodeInspector,
+  MonetizationPreview
 } from '@/components/article'
 
 // Status options for workflow
@@ -596,6 +598,7 @@ function ArticleEditorContent() {
                 <TabsTrigger value="quality" className="flex-1 text-xs py-2">Quality</TabsTrigger>
                 <TabsTrigger value="seo" className="flex-1 text-xs py-2">SEO</TabsTrigger>
                 <TabsTrigger value="links" className="flex-1 text-xs py-2">Links</TabsTrigger>
+                <TabsTrigger value="monetize" className="flex-1 text-xs py-2">Monetize</TabsTrigger>
                 <TabsTrigger value="tools" className="flex-1 text-xs py-2">Tools</TabsTrigger>
               </TabsList>
 
@@ -647,11 +650,39 @@ function ArticleEditorContent() {
                       }}
                     />
 
+                    <ShortcodeInspector
+                      content={content}
+                      onRefresh={() => {
+                        // Re-analyze shortcodes by triggering content change
+                        setContent(prev => prev)
+                      }}
+                    />
+
                     <InternalLinkSuggester
                       article={article}
                       content={content}
                       onInsertLink={handleInsertInternalLink}
                     />
+                  </TabsContent>
+
+                  {/* Monetization Tab */}
+                  <TabsContent value="monetize" className="mt-0 space-y-4">
+                    <MonetizationPreview
+                      categoryId={article?.category_id}
+                      concentrationId={article?.concentration_id}
+                      levelCode={article?.degree_level_code}
+                      maxPrograms={5}
+                    />
+
+                    <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-600 space-y-2">
+                      <p className="font-medium">Monetization Tips:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Use <code className="bg-gray-200 px-1 rounded">[degree_table]</code> for program listings</li>
+                        <li>Use <code className="bg-gray-200 px-1 rounded">[degree_offer]</code> for single program highlights</li>
+                        <li>Sponsored listings display first automatically</li>
+                        <li>Links always point to GetEducated pages</li>
+                      </ul>
+                    </div>
                   </TabsContent>
 
                   {/* Tools Tab */}

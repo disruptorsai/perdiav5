@@ -7,3 +7,5 @@ export { default as ArticleNavigationGenerator } from './ArticleNavigationGenera
 export { default as ContentTypeSelector, CONTENT_TYPES } from './ContentTypeSelector'
 export { default as ContributorAssignment } from './ContributorAssignment'
 export { default as InternalLinkSuggester } from './InternalLinkSuggester'
+export { default as ShortcodeInspector } from './ShortcodeInspector'
+export { default as MonetizationPreview } from './MonetizationPreview'
