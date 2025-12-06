@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useSettingsMap } from '@/hooks/useSystemSettings'
 import { validateContent, BLOCKED_COMPETITORS, ALLOWED_EXTERNAL_DOMAINS } from '@/services/validation/linkValidator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,8 +35,9 @@ export default function LinkComplianceChecker({ content, onComplianceChange }) {
 
   const minInternalLinks = getIntValue('min_internal_links', 3)
   const minExternalLinks = getIntValue('min_external_links', 1)
-  const blockEduLinks = getBoolValue('block_edu_links', true)
-  const blockCompetitorLinks = getBoolValue('block_competitor_links', true)
+  // These settings are used by the validateContent service, not directly in this component
+  getBoolValue('block_edu_links', true)
+  getBoolValue('block_competitor_links', true)
 
   useEffect(() => {
     if (!content) {
@@ -85,7 +86,6 @@ export default function LinkComplianceChecker({ content, onComplianceChange }) {
   if (!validationResult) return null
 
   const {
-    isCompliant,
     isFullyCompliant,
     totalLinks,
     internalLinks,

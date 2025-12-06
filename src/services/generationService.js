@@ -10,7 +10,8 @@ import StealthGptClient from './ai/stealthGptClient'
 import { supabase } from './supabaseClient'
 import IdeaDiscoveryService from './ideaDiscoveryService'
 import { getCostDataContext } from './costDataService'
-import { matchTopicToMonetization, insertShortcodeInContent } from './shortcodeService'
+import { insertShortcodeInContent } from './shortcodeService'
+import { MonetizationEngine, monetizationValidator } from './monetizationEngine'
 
 class GenerationService {
   constructor() {
@@ -18,6 +19,7 @@ class GenerationService {
     this.claude = new ClaudeClient()
     this.stealthGpt = new StealthGptClient()
     this.ideaDiscovery = new IdeaDiscoveryService()
+    this.monetizationEngine = new MonetizationEngine()
     this.isProcessing = false
     this.processingQueue = []
     this.currentTask = null
@@ -126,28 +128,61 @@ class GenerationService {
 
       this.updateProgress(onProgress, 'Adding monetization shortcodes...', 62)
 
-      // STAGE 4.5: Add monetization shortcodes
+      // STAGE 4.5: Add monetization shortcodes using new MonetizationEngine
+      let monetizationResult = null
       try {
-        const monetizationMatch = await matchTopicToMonetization(
+        // First, match the topic to a monetization category
+        const monetizationMatch = await this.monetizationEngine.matchTopicToCategory(
           idea.title || draftData.title,
           costContext.degreeLevel
         )
 
         if (monetizationMatch.matched) {
-          console.log(`[Generation] Matched monetization: ${monetizationMatch.category.category} - ${monetizationMatch.category.concentration}`)
+          console.log(`[Generation] Matched monetization: category=${monetizationMatch.categoryId}, concentration=${monetizationMatch.concentrationId}, confidence=${monetizationMatch.confidence}`)
 
-          // Insert shortcode after intro
-          finalContent = insertShortcodeInContent(finalContent, monetizationMatch.shortcode, 'after_intro')
+          // Determine article type for slot configuration
+          const articleType = options.contentType || 'default'
 
-          // Add second shortcode for longer articles (1500+ words)
-          const wordCount = finalContent.replace(/<[^>]*>/g, '').split(/\s+/).length
-          if (wordCount > 1500) {
-            finalContent = insertShortcodeInContent(finalContent, monetizationMatch.shortcode, 'mid_content')
-            console.log('[Generation] Added second monetization shortcode for long article')
+          // Generate full monetization with program selection
+          monetizationResult = await this.monetizationEngine.generateMonetization({
+            articleId: idea.id,
+            categoryId: monetizationMatch.categoryId,
+            concentrationId: monetizationMatch.concentrationId,
+            degreeLevelCode: monetizationMatch.degreeLevelCode,
+            articleType,
+          })
+
+          if (monetizationResult.success && monetizationResult.slots.length > 0) {
+            console.log(`[Generation] Generated ${monetizationResult.slots.length} monetization slots with ${monetizationResult.totalProgramsSelected} programs`)
+
+            // Insert shortcodes at their designated positions
+            for (const slot of monetizationResult.slots) {
+              // Map slot names to insertion positions
+              const positionMap = {
+                'after_intro': 'after_intro',
+                'mid_article': 'mid_content',
+                'near_conclusion': 'pre_conclusion',
+              }
+              const insertPosition = positionMap[slot.name] || 'after_intro'
+
+              finalContent = insertShortcodeInContent(finalContent, slot.shortcode, insertPosition)
+              console.log(`[Generation] Inserted ${slot.type} shortcode at ${slot.name} (${slot.programCount} programs, sponsored: ${slot.hasSponsored})`)
+            }
+          } else {
+            console.warn('[Generation] Monetization generation returned no slots')
           }
         } else {
           console.warn('[Generation] Could not match monetization category:', monetizationMatch.error)
         }
+
+        // Validate monetization compliance (business rules)
+        const validation = await monetizationValidator.validate(monetizationResult, finalContent)
+        if (validation.blockingIssues.length > 0) {
+          console.error('[Generation] Monetization validation blocking issues:', validation.blockingIssues)
+        } else if (validation.warnings.length > 0) {
+          console.warn('[Generation] Monetization validation warnings:', validation.warnings.map(w => w.message))
+        }
+
       } catch (monetizationError) {
         console.warn('[Generation] Monetization shortcode insertion failed:', monetizationError.message)
         // Non-blocking - continue without shortcodes
@@ -405,12 +440,21 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
   /**
    * Auto-assign contributor based on topic and content type
    * CRITICAL: Only assigns from the 4 approved GetEducated authors
+   * Per spec section 8.2.2: Uses default_author_by_article_type table first
    */
   async assignContributor(idea, contentType) {
     // Approved GetEducated authors (CRITICAL - do not modify without client approval)
     const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
 
     try {
+      // First, check if there's a default author for this content type (per spec 8.2.2)
+      const { data: defaultConfig, error: configError } = await supabase
+        .from('default_author_by_article_type')
+        .select('default_author_name')
+        .eq('article_type', contentType)
+        .eq('is_active', true)
+        .single()
+
       const { data: contributors, error } = await supabase
         .from('article_contributors')
         .select('*')
@@ -428,9 +472,20 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
         throw new Error('No approved GetEducated authors available')
       }
 
+      // If we found a default author config, give that author a huge score boost
+      const defaultAuthorName = defaultConfig?.default_author_name || null
+      if (defaultAuthorName) {
+        console.log(`[Generation] Default author for ${contentType}: ${defaultAuthorName}`)
+      }
+
       // Score each contributor based on topic/content type match
       const scoredContributors = approvedContributors.map(contributor => {
         let score = 0
+
+        // FIRST PRIORITY: Default author from config gets massive boost (per spec 8.2.2)
+        if (defaultAuthorName && contributor.name === defaultAuthorName) {
+          score += 100 // This ensures default author wins unless there's a very strong topic match
+        }
 
         // Check expertise areas match with idea topics
         const ideaTopics = idea.seed_topics || []

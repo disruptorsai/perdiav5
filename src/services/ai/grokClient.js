@@ -7,8 +7,8 @@ class GrokClient {
   constructor(apiKey) {
     this.apiKey = apiKey || import.meta.env.VITE_GROK_API_KEY
     this.baseUrl = 'https://api.x.ai/v1'
-    // Try the latest Grok model name - xAI has updated their models
-    this.model = 'grok-2-latest' // Changed from 'grok-beta'
+    // Use Grok 3 - grok-beta was deprecated on 2025-09-15
+    this.model = 'grok-3'
   }
 
   /**

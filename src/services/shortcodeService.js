@@ -2,13 +2,29 @@
  * Shortcode Service for GetEducated
  * Handles monetization shortcode generation, validation, and placement
  *
- * Shortcode format: [ge_monetization category_id="X" concentration_id="Y" level="Z"]
+ * Shortcode formats:
+ * - [ge_monetization category_id="X" concentration_id="Y" level="Z"] - Legacy format
+ * - [degree_table category="X" concentration="Y" level="Z" max="5" sponsored_first="true"] - Block table
+ * - [degree_offer program_id="X" school_id="Y" highlight="true"] - Single program highlight
+ * - [ge_internal_link url="/path"]text[/ge_internal_link] - Internal link
+ * - [ge_external_cited url="https://..."]text[/ge_external_cited] - External citation
  */
 
 import { supabase } from './supabaseClient'
 
 /**
- * Generate a monetization shortcode from parameters
+ * Shortcode type constants
+ */
+export const SHORTCODE_TYPES = {
+  MONETIZATION: 'monetization',      // Legacy ge_monetization
+  DEGREE_TABLE: 'degree_table',      // Block table shortcode
+  DEGREE_OFFER: 'degree_offer',      // Single program highlight
+  INTERNAL_LINK: 'internal_link',    // Internal link shortcode
+  EXTERNAL_CITED: 'external_cited',  // External citation shortcode
+}
+
+/**
+ * Generate a monetization shortcode from parameters (legacy format)
  * @param {Object} params - Shortcode parameters
  * @returns {string} The formatted shortcode
  */
@@ -25,6 +41,61 @@ export function generateShortcode(params) {
     shortcode += ` level="${levelCode}"`
   }
 
+  shortcode += ']'
+
+  return shortcode
+}
+
+/**
+ * Generate a degree_table shortcode (block table format from spec)
+ * @param {Object} params - Shortcode parameters
+ * @returns {string} The formatted shortcode
+ */
+export function generateDegreeTableShortcode(params) {
+  const {
+    categoryId,
+    concentrationId,
+    levelCode,
+    maxPrograms = 5,
+    sponsoredFirst = true,
+  } = params
+
+  if (!categoryId || !concentrationId) {
+    throw new Error('categoryId and concentrationId are required')
+  }
+
+  let shortcode = `[degree_table category="${categoryId}" concentration="${concentrationId}"`
+
+  if (levelCode) {
+    shortcode += ` level="${levelCode}"`
+  }
+
+  shortcode += ` max="${maxPrograms}"`
+  shortcode += ` sponsored_first="${sponsoredFirst}"`
+  shortcode += ']'
+
+  return shortcode
+}
+
+/**
+ * Generate a degree_offer shortcode (single program highlight)
+ * @param {Object} params - Shortcode parameters
+ * @returns {string} The formatted shortcode
+ */
+export function generateDegreeOfferShortcode(params) {
+  const { programId, schoolId, highlight = true } = params
+
+  if (!programId) {
+    throw new Error('programId is required')
+  }
+
+  let shortcode = `[degree_offer program_id="${programId}"`
+
+  if (schoolId) {
+    shortcode += ` school_id="${schoolId}"`
+  }
+
+  shortcode += ` highlight="${highlight}"`
   shortcode += ']'
 
   return shortcode
@@ -48,16 +119,46 @@ export function parseShortcode(shortcode) {
     return result
   }
 
-  // Match ge_monetization shortcode
+  // Match ge_monetization shortcode (legacy)
   const monetizationMatch = shortcode.match(
     /\[ge_monetization\s+category_id="(\d+)"\s+concentration_id="(\d+)"(?:\s+level="(\d+)")?\]/i
   )
 
   if (monetizationMatch) {
-    result.type = 'monetization'
+    result.type = SHORTCODE_TYPES.MONETIZATION
     result.categoryId = parseInt(monetizationMatch[1], 10)
     result.concentrationId = parseInt(monetizationMatch[2], 10)
     result.levelCode = monetizationMatch[3] ? parseInt(monetizationMatch[3], 10) : null
+    result.isValid = true
+    return result
+  }
+
+  // Match degree_table shortcode (new format from spec)
+  const degreeTableMatch = shortcode.match(
+    /\[degree_table\s+category="(\d+)"\s+concentration="(\d+)"(?:\s+level="(\d+)")?(?:\s+max="(\d+)")?(?:\s+sponsored_first="(true|false)")?\]/i
+  )
+
+  if (degreeTableMatch) {
+    result.type = SHORTCODE_TYPES.DEGREE_TABLE
+    result.categoryId = parseInt(degreeTableMatch[1], 10)
+    result.concentrationId = parseInt(degreeTableMatch[2], 10)
+    result.levelCode = degreeTableMatch[3] ? parseInt(degreeTableMatch[3], 10) : null
+    result.maxPrograms = degreeTableMatch[4] ? parseInt(degreeTableMatch[4], 10) : 5
+    result.sponsoredFirst = degreeTableMatch[5] !== 'false'
+    result.isValid = true
+    return result
+  }
+
+  // Match degree_offer shortcode (single program highlight)
+  const degreeOfferMatch = shortcode.match(
+    /\[degree_offer\s+program_id="([^"]+)"(?:\s+school_id="([^"]+)")?(?:\s+highlight="(true|false)")?\]/i
+  )
+
+  if (degreeOfferMatch) {
+    result.type = SHORTCODE_TYPES.DEGREE_OFFER
+    result.programId = degreeOfferMatch[1]
+    result.schoolId = degreeOfferMatch[2] || null
+    result.highlight = degreeOfferMatch[3] !== 'false'
     result.isValid = true
     return result
   }
@@ -68,7 +169,7 @@ export function parseShortcode(shortcode) {
   )
 
   if (internalLinkMatch) {
-    result.type = 'internal_link'
+    result.type = SHORTCODE_TYPES.INTERNAL_LINK
     result.url = internalLinkMatch[1]
     result.anchorText = internalLinkMatch[2]
     result.isValid = true
@@ -81,7 +182,7 @@ export function parseShortcode(shortcode) {
   )
 
   if (externalLinkMatch) {
-    result.type = 'external_cited'
+    result.type = SHORTCODE_TYPES.EXTERNAL_CITED
     result.url = externalLinkMatch[1]
     result.anchorText = externalLinkMatch[2]
     result.isValid = true
@@ -100,11 +201,37 @@ export function extractShortcodes(content) {
   if (!content) return []
 
   const shortcodes = []
-
-  // Find all ge_monetization shortcodes
-  const monetizationRegex = /\[ge_monetization[^\]]+\]/gi
   let match
+
+  // Find all ge_monetization shortcodes (legacy)
+  const monetizationRegex = /\[ge_monetization[^\]]+\]/gi
   while ((match = monetizationRegex.exec(content)) !== null) {
+    const parsed = parseShortcode(match[0])
+    if (parsed.isValid) {
+      shortcodes.push({
+        ...parsed,
+        raw: match[0],
+        position: match.index,
+      })
+    }
+  }
+
+  // Find all degree_table shortcodes (new format)
+  const degreeTableRegex = /\[degree_table[^\]]+\]/gi
+  while ((match = degreeTableRegex.exec(content)) !== null) {
+    const parsed = parseShortcode(match[0])
+    if (parsed.isValid) {
+      shortcodes.push({
+        ...parsed,
+        raw: match[0],
+        position: match.index,
+      })
+    }
+  }
+
+  // Find all degree_offer shortcodes (single program highlight)
+  const degreeOfferRegex = /\[degree_offer[^\]]+\]/gi
+  while ((match = degreeOfferRegex.exec(content)) !== null) {
     const parsed = parseShortcode(match[0])
     if (parsed.isValid) {
       shortcodes.push({
@@ -384,21 +511,60 @@ export function createExternalCitationShortcode(url, anchorText) {
  */
 export function checkMonetizationCompliance(content) {
   const shortcodes = extractShortcodes(content)
-  const monetizationShortcodes = shortcodes.filter(s => s.type === 'monetization')
+
+  // All monetization-related shortcode types
+  const monetizationTypes = [
+    SHORTCODE_TYPES.MONETIZATION,
+    SHORTCODE_TYPES.DEGREE_TABLE,
+    SHORTCODE_TYPES.DEGREE_OFFER,
+  ]
+
+  const monetizationShortcodes = shortcodes.filter(s => monetizationTypes.includes(s.type))
+  const degreeTableCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.DEGREE_TABLE).length
+  const degreeOfferCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.DEGREE_OFFER).length
+  const legacyCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.MONETIZATION).length
 
   return {
     hasMonetization: monetizationShortcodes.length > 0,
     monetizationCount: monetizationShortcodes.length,
     shortcodes: monetizationShortcodes,
     isCompliant: monetizationShortcodes.length >= 1,
+    breakdown: {
+      degreeTable: degreeTableCount,
+      degreeOffer: degreeOfferCount,
+      legacy: legacyCount,
+    },
     recommendation: monetizationShortcodes.length === 0
-      ? 'Add at least one monetization shortcode'
-      : null,
+      ? 'Add at least one monetization shortcode (degree_table or degree_offer recommended)'
+      : legacyCount > 0 && degreeTableCount === 0 && degreeOfferCount === 0
+        ? 'Consider upgrading legacy ge_monetization shortcodes to degree_table or degree_offer format'
+        : null,
   }
 }
 
+/**
+ * Get all monetization shortcode types (for filtering)
+ */
+export function getMonetizationTypes() {
+  return [
+    SHORTCODE_TYPES.MONETIZATION,
+    SHORTCODE_TYPES.DEGREE_TABLE,
+    SHORTCODE_TYPES.DEGREE_OFFER,
+  ]
+}
+
+/**
+ * Check if a shortcode type is a monetization type
+ */
+export function isMonetizationType(type) {
+  return getMonetizationTypes().includes(type)
+}
+
 export default {
+  SHORTCODE_TYPES,
   generateShortcode,
+  generateDegreeTableShortcode,
+  generateDegreeOfferShortcode,
   parseShortcode,
   extractShortcodes,
   validateShortcodeParams,
@@ -407,4 +573,6 @@ export default {
   createInternalLinkShortcode,
   createExternalCitationShortcode,
   checkMonetizationCompliance,
+  getMonetizationTypes,
+  isMonetizationType,
 }

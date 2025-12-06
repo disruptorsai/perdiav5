@@ -1,10 +1,5 @@
 import { useState, useMemo } from 'react'
-import {
-  useApprovedContributors,
-  isApprovedAuthor,
-  getAuthorDisplayName,
-  APPROVED_AUTHORS
-} from '@/hooks/useContributors'
+import { useApprovedContributors } from '@/hooks/useContributors'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +34,7 @@ export default function ContributorAssignment({
 }) {
   // CRITICAL: Use approved contributors only
   const { data: contributors = [], isLoading } = useApprovedContributors()
-  const [expanded, setExpanded] = useState(false)
+  const [expanded] = useState(false) // Note: setExpanded not used yet - expand functionality TBD
   const [isAutoAssigning, setIsAutoAssigning] = useState(false)
 
   const selectedContributor = useMemo(

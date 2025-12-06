@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +10,7 @@ import {
   Clock,
   RefreshCw
 } from 'lucide-react'
-import { getRiskLevelColors, getRiskLevelIcon } from '@/services/validation/riskAssessment'
+import { getRiskLevelColors } from '@/services/validation/riskAssessment'
 import { getAutoPublishCountdown } from '@/hooks/useAutoPublish'
 
 /**
@@ -50,7 +49,7 @@ export function RiskLevelBadge({ riskLevel, size = 'default' }) {
 /**
  * AutoPublishCountdown - Shows time until auto-publish
  */
-export function AutoPublishCountdown({ deadline, riskLevel, size = 'default' }) {
+export function AutoPublishCountdown({ deadline, riskLevel }) {
   const countdown = getAutoPublishCountdown(deadline)
 
   if (!countdown.isSet) {

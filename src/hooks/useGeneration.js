@@ -200,6 +200,58 @@ export function useHumanizeContent() {
 }
 
 /**
+ * Revise content based on feedback comments
+ * Per GetEducated spec section 8.3.3 - Article Review UI Requirements
+ * Bundles article text + comments as context and sends to AI for revision
+ */
+export function useReviseWithFeedback() {
+  return useMutation({
+    mutationFn: async ({ content, title, feedbackItems, contentType, focusKeyword }) => {
+      // Format feedback items for the prompt
+      const feedbackText = feedbackItems
+        .map((item, i) => `${i + 1}. ${item.comment}`)
+        .join('\n')
+
+      const prompt = `You are revising an article based on editorial feedback.
+
+ARTICLE TITLE: ${title}
+CONTENT TYPE: ${contentType || 'guide'}
+FOCUS KEYWORD: ${focusKeyword || 'N/A'}
+
+EDITORIAL FEEDBACK TO ADDRESS:
+${feedbackText}
+
+CURRENT ARTICLE CONTENT:
+${content}
+
+INSTRUCTIONS:
+1. Carefully address ALL the feedback items listed above
+2. Maintain the article's overall structure and tone
+3. Keep all existing HTML formatting intact
+4. Do not remove existing content unless specifically requested
+5. Make changes that directly respond to the feedback
+6. Ensure the article remains coherent and well-organized
+7. Keep the content length similar unless asked to expand/reduce
+
+OUTPUT ONLY THE COMPLETE REVISED HTML CONTENT (no explanations, no commentary).`
+
+      // Use Claude to revise with feedback
+      const revisedContent = await generationService.claude.chat([
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], {
+        temperature: 0.7,
+        max_tokens: 4500,
+      })
+
+      return { content: revisedContent }
+    },
+  })
+}
+
+/**
  * Generate ideas from a topic
  */
 export function useGenerateIdeas() {

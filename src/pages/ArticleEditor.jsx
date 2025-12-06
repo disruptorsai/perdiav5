@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useArticle, useUpdateArticle, useUpdateArticleStatus } from '../hooks/useArticles'
-import { useAutoFixQuality, useHumanizeContent } from '../hooks/useGeneration'
+import { useAutoFixQuality, useHumanizeContent, useReviseWithFeedback } from '../hooks/useGeneration'
 import { useActiveContributors } from '../hooks/useContributors'
+import { useCreateAIRevision } from '../hooks/useAIRevisions'
 import {
   ArrowLeft,
   Save,
@@ -19,7 +20,9 @@ import {
   Copy,
   Check,
   FileText,
-  Globe
+  Globe,
+  MessageSquare,
+  Brain
 } from 'lucide-react'
 // Note: ReactQuill is incompatible with React 19 (findDOMNode removed)
 // Using a simple textarea for now until a React 19 compatible editor is found
@@ -78,6 +81,8 @@ function ArticleEditorContent() {
   const updateStatus = useUpdateArticleStatus()
   const autoFixQuality = useAutoFixQuality()
   const humanizeContent = useHumanizeContent()
+  const reviseWithFeedback = useReviseWithFeedback()
+  const createAIRevision = useCreateAIRevision()
   const { data: contributors = [] } = useActiveContributors()
   const { toast } = useToast()
 
@@ -98,6 +103,9 @@ function ArticleEditorContent() {
   const [qualityData, setQualityData] = useState(null)
   const [copied, setCopied] = useState(false)
   const [isHumanizing, setIsHumanizing] = useState(false)
+  const [isRevising, setIsRevising] = useState(false)
+  const [feedbackComment, setFeedbackComment] = useState('')
+  const [feedbackComments, setFeedbackComments] = useState([]) // Array of comments for AI revision
 
   // Update local state when article loads
   useEffect(() => {
@@ -136,17 +144,9 @@ function ArticleEditorContent() {
           quality_score: qualityData?.score || article?.quality_score
         }
       })
-      toast({
-        title: 'Saved',
-        description: 'Article saved successfully',
-        variant: 'success'
-      })
+      toast.success('Article saved successfully')
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save: ' + error.message,
-        variant: 'destructive'
-      })
+      toast.error('Failed to save: ' + error.message)
     } finally {
       setSaving(false)
     }
@@ -159,17 +159,10 @@ function ArticleEditorContent() {
         articleId,
         status: newStatus
       })
-      toast({
-        title: 'Status Updated',
-        description: `Article moved to ${newStatus.replace('_', ' ')}`
-      })
+      toast.success(`Article moved to ${newStatus.replace('_', ' ')}`)
       refetch()
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update status',
-        variant: 'destructive'
-      })
+      toast.error('Failed to update status')
     }
   }
 
@@ -182,16 +175,9 @@ function ArticleEditorContent() {
         issues,
       })
       setContent(result.content)
-      toast({
-        title: 'Issues Fixed',
-        description: 'Quality issues have been automatically fixed'
-      })
+      toast.success('Quality issues have been automatically fixed')
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Auto-fix failed: ' + error.message,
-        variant: 'destructive'
-      })
+      toast.error('Auto-fix failed: ' + error.message)
     }
   }
 
@@ -206,28 +192,81 @@ function ArticleEditorContent() {
         contributorName: contributor?.name
       })
       setContent(result.content)
-      toast({
-        title: 'Content Humanized',
-        description: 'Content has been rewritten for natural flow'
-      })
+      toast.success('Content has been rewritten for natural flow')
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Humanization failed: ' + error.message,
-        variant: 'destructive'
-      })
+      toast.error('Humanization failed: ' + error.message)
     } finally {
       setIsHumanizing(false)
     }
   }
 
+  // AI Revise handler - per GetEducated spec section 8.3.3
+  // Sends article + comments as context for AI revision and logs for training
+  const handleAIRevise = async () => {
+    if (feedbackComments.length === 0 && !feedbackComment.trim()) {
+      toast.error('Please add at least one feedback comment before requesting AI revision')
+      return
+    }
+
+    setIsRevising(true)
+    const previousContent = content
+    const allComments = feedbackComment.trim()
+      ? [...feedbackComments, { comment: feedbackComment.trim(), timestamp: new Date().toISOString() }]
+      : feedbackComments
+
+    try {
+      // Call AI revision with feedback
+      const result = await reviseWithFeedback.mutateAsync({
+        content,
+        title,
+        feedbackItems: allComments,
+        contentType,
+        focusKeyword,
+      })
+
+      // Update content with revised version
+      setContent(result.content)
+
+      // Log the revision for AI training (per spec section 8.4)
+      await createAIRevision.mutateAsync({
+        articleId,
+        previousVersion: previousContent,
+        revisedVersion: result.content,
+        commentsSnapshot: allComments,
+        revisionType: 'feedback',
+      })
+
+      // Clear feedback after successful revision
+      setFeedbackComments([])
+      setFeedbackComment('')
+
+      toast.success('Article revised based on feedback. Revision logged for AI training.')
+    } catch (error) {
+      toast.error('AI revision failed: ' + error.message)
+    } finally {
+      setIsRevising(false)
+    }
+  }
+
+  // Add feedback comment to list
+  const handleAddFeedbackComment = () => {
+    if (!feedbackComment.trim()) return
+    setFeedbackComments(prev => [
+      ...prev,
+      { comment: feedbackComment.trim(), timestamp: new Date().toISOString() }
+    ])
+    setFeedbackComment('')
+  }
+
+  // Remove feedback comment from list
+  const handleRemoveFeedbackComment = (index) => {
+    setFeedbackComments(prev => prev.filter((_, i) => i !== index))
+  }
+
   // Insert citation handler
   const handleInsertCitation = (citation) => {
     setContent(prev => prev + '\n' + citation)
-    toast({
-      title: 'Citation Added',
-      description: 'BLS citation inserted at end of article'
-    })
+    toast.success('BLS citation inserted at end of article')
   }
 
   // Insert navigation handler
@@ -241,29 +280,20 @@ function ArticleEditorContent() {
     } else {
       setContent(prev => navHtml + '\n' + prev)
     }
-    toast({
-      title: 'Navigation Added',
-      description: 'Table of contents inserted into article'
-    })
+    toast.success('Table of contents inserted into article')
   }
 
   // Schema update handler
   const handleSchemaUpdate = (newFaqs, schema) => {
     setFaqs(newFaqs)
-    toast({
-      title: 'FAQ Updated',
-      description: `${newFaqs.length} FAQ items`
-    })
+    toast.success(`${newFaqs.length} FAQ items updated`)
   }
 
   // Insert internal link handler
   const handleInsertInternalLink = (linkHtml, siteArticle) => {
     // For now, append to clipboard and notify
     navigator.clipboard.writeText(linkHtml)
-    toast({
-      title: 'Link Copied',
-      description: `Link to "${siteArticle.title}" copied to clipboard`
-    })
+    toast.success(`Link to "${siteArticle.title}" copied to clipboard`)
   }
 
   // Copy content handler
@@ -272,10 +302,7 @@ function ArticleEditorContent() {
     await navigator.clipboard.writeText(plainText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-    toast({
-      title: 'Copied',
-      description: 'Article content copied to clipboard'
-    })
+    toast.success('Article content copied to clipboard')
   }
 
   // Auto-assign contributor
@@ -299,10 +326,7 @@ function ArticleEditorContent() {
     const best = scored.sort((a, b) => b.score - a.score)[0]
     if (best) {
       setSelectedContributorId(best.id)
-      toast({
-        title: 'Contributor Assigned',
-        description: `${best.name} selected as best match`
-      })
+      toast.success(`${best.name} selected as best match`)
     }
   }
 
@@ -632,6 +656,71 @@ function ArticleEditorContent() {
 
                   {/* Tools Tab */}
                   <TabsContent value="tools" className="mt-0 space-y-4">
+                    {/* AI Revise with Feedback - per spec section 8.3.3 */}
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-4 h-4 text-blue-600" />
+                        <h3 className="font-medium text-sm text-blue-900">AI Revise with Feedback</h3>
+                      </div>
+                      <p className="text-xs text-blue-700">
+                        Add feedback comments and let AI revise the article. All revisions are logged for training.
+                      </p>
+
+                      {/* Existing comments */}
+                      {feedbackComments.length > 0 && (
+                        <div className="space-y-2">
+                          {feedbackComments.map((comment, index) => (
+                            <div key={index} className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100">
+                              <MessageSquare className="w-3 h-3 text-blue-500 mt-1 flex-shrink-0" />
+                              <p className="text-xs text-gray-700 flex-1">{comment.comment}</p>
+                              <button
+                                onClick={() => handleRemoveFeedbackComment(index)}
+                                className="text-gray-400 hover:text-red-500"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add comment input */}
+                      <div className="space-y-2">
+                        <Textarea
+                          value={feedbackComment}
+                          onChange={(e) => setFeedbackComment(e.target.value)}
+                          placeholder="Add feedback comment (e.g., 'Make the introduction more engaging', 'Add more statistics')"
+                          rows={2}
+                          className="text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleAddFeedbackComment}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!feedbackComment.trim()}
+                          >
+                            <MessageSquare className="w-3 h-3 mr-1" />
+                            Add Comment
+                          </Button>
+                          <Button
+                            onClick={handleAIRevise}
+                            size="sm"
+                            className="flex-1 bg-blue-600 hover:bg-blue-700"
+                            disabled={isRevising || (feedbackComments.length === 0 && !feedbackComment.trim())}
+                          >
+                            {isRevising ? (
+                              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                            ) : (
+                              <Brain className="w-3 h-3 mr-1" />
+                            )}
+                            {isRevising ? 'Revising...' : 'AI Revise'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
                     <BLSCitationHelper
                       onInsertCitation={handleInsertCitation}
                     />

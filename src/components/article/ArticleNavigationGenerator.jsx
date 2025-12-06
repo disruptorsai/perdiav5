@@ -135,7 +135,7 @@ export default function ArticleNavigationGenerator({ content, onNavigationGenera
     let listItems = ''
     let currentH2Index = 0
 
-    includedHeadings.forEach((h, i) => {
+    includedHeadings.forEach((h) => {
       const number = settings.showNumbers ? `${h.level === 2 ? ++currentH2Index : ''}. ` : ''
       const indent = h.level === 3 ? s.subItem : s.item
 
