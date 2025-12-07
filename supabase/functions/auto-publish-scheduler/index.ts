@@ -109,7 +109,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     const supabaseClient = createClient(
       supabaseUrl,
-      supabaseServiceKey || Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      supabaseServiceKey || (Deno.env.get('SUPABASE_ANON_KEY') ?? ''),
       supabaseServiceKey ? undefined : {
         global: {
           headers: { Authorization: authHeader! },

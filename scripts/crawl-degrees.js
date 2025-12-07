@@ -14,8 +14,12 @@
  *   SUPABASE_SERVICE_ROLE_KEY - Service role key for direct DB access
  */
 
+import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import * as cheerio from 'cheerio'
+
+// Load .env.local file
+config({ path: '.env.local' })
 
 // Configuration
 const BASE_URL = 'https://www.geteducated.com'
@@ -23,7 +27,7 @@ const DEGREES_INDEX = '/online-degrees/'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
@@ -213,7 +217,7 @@ async function parseDegreeListingPage(pageUrl, categoryTitle) {
         geteducated_url: geteducatedUrl,
         degree_level: degreeLevel.name,
         degree_level_code: degreeLevel.code,
-        field_of_study: fieldOfStudy,
+        category: fieldOfStudy,
         is_sponsored: isSponsored,
         sponsorship_tier: sponsorshipTier,
         is_active: true,
@@ -244,7 +248,7 @@ async function saveDegree(degree) {
   try {
     // Try to find matching category/concentration
     const subjectMapping = await getSubjectMapping(
-      degree.field_of_study,
+      degree.category,
       degree.program_name
     )
 
@@ -256,15 +260,11 @@ async function saveDegree(degree) {
 
     const { error } = await supabase
       .from('degrees')
-      .upsert(degreeData, {
-        onConflict: 'geteducated_url',
-        ignoreDuplicates: false,
-      })
+      .insert(degreeData)
 
     if (error) {
-      // Try inserting without URL conflict (may have null URL)
+      // Duplicate - skip
       if (error.code === '23505') {
-        // Duplicate - skip
         return false
       }
       console.error(`Error saving degree:`, error)

@@ -24,8 +24,8 @@ import {
   MessageSquare,
   Brain
 } from 'lucide-react'
-// Note: ReactQuill is incompatible with React 19 (findDOMNode removed)
-// Using a simple textarea for now until a React 19 compatible editor is found
+// TipTap editor - React 19 compatible rich text editor
+import { RichTextEditor, getWordCount } from '@/components/ui/rich-text-editor'
 
 // UI Components
 import { Button } from '@/components/ui/button'
@@ -123,11 +123,8 @@ function ArticleEditorContent() {
     }
   }, [article])
 
-  // Calculate word count
-  const wordCount = useMemo(() => {
-    const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    return text.split(' ').filter(w => w.length > 0).length
-  }, [content])
+  // Calculate word count using TipTap helper
+  const wordCount = useMemo(() => getWordCount(content), [content])
 
   // Save handler
   const handleSave = async () => {
@@ -560,19 +557,17 @@ function ArticleEditorContent() {
                   </p>
                 </div>
 
-                {/* Content Editor */}
+                {/* Content Editor - TipTap WYSIWYG */}
                 <div>
-                  <Label className="mb-2">Content (HTML)</Label>
-                  <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
-                    <Textarea
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      className="min-h-[400px] font-mono text-sm border-0 rounded-none resize-y"
-                      placeholder="Write your article content here (HTML supported)..."
-                    />
-                  </div>
+                  <Label className="mb-2">Content</Label>
+                  <RichTextEditor
+                    value={content}
+                    onChange={setContent}
+                    placeholder="Write your article content here..."
+                    minHeight="400px"
+                  />
                   <p className="text-xs text-gray-500 mt-1">
-                    Supports HTML formatting. Word count: {content ? content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0}
+                    Word count: {wordCount} | Use toolbar for formatting
                   </p>
                 </div>
               </div>

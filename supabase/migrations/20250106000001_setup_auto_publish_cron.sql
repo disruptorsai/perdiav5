@@ -49,23 +49,24 @@ COMMENT ON TABLE auto_publish_logs IS 'Audit log for auto-publish scheduler runs
 -- Note: Replace YOUR_PROJECT_REF and YOUR_ANON_KEY with actual values
 -- These should be set as environment variables or via Supabase secrets
 
--- Example cron job schedule (uncomment and customize after deployment):
---
--- Schedule auto-publish to run every 15 minutes:
--- SELECT cron.schedule(
---   'auto-publish-articles',  -- Job name
---   '0,15,30,45 * * * *',     -- Every 15 minutes
---   $$
---   SELECT net.http_post(
---     url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/auto-publish-scheduler',
---     headers := jsonb_build_object(
---       'Authorization', 'Bearer ' || current_setting('app.settings.supabase_anon_key', true),
---       'Content-Type', 'application/json'
---     ),
---     body := '{}'::jsonb
---   ) as request_id;
---   $$
--- );
+-- Schedule auto-publish to run every 15 minutes
+-- Project ref: nvffvcjtrgxnunncdafz (perdiav5)
+SELECT cron.schedule(
+  'auto-publish-articles',  -- Job name
+  '0,15,30,45 * * * *',     -- Every 15 minutes (at :00, :15, :30, :45)
+  $$
+  SELECT net.http_post(
+    url := 'https://nvffvcjtrgxnunncdafz.supabase.co/functions/v1/auto-publish-scheduler',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json'
+    ),
+    body := jsonb_build_object(
+      'scheduled', true,
+      'timestamp', now()
+    )
+  ) as request_id;
+  $$
+);
 
 -- To list scheduled jobs:
 -- SELECT * FROM cron.job;

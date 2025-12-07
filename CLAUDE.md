@@ -495,7 +495,7 @@ Minimum score is clamped to 0.
 - Ranking report crawler
 
 **Known Issues:**
-- ReactQuill incompatible with React 19 - needs replacement (TipTap recommended)
+- TipTap editor used for rich text editing (React 19 compatible, replaced ReactQuill)
 - Client-side API keys - security risk, needs Edge Functions migration
 - Desktop-first design - no mobile optimization
 

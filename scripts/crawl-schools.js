@@ -14,8 +14,12 @@
  *   SUPABASE_SERVICE_ROLE_KEY - Service role key for direct DB access
  */
 
+import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import * as cheerio from 'cheerio'
+
+// Load .env.local file
+config({ path: '.env.local' })
 
 // Configuration
 const BASE_URL = 'https://www.geteducated.com'
@@ -23,7 +27,7 @@ const SCHOOLS_INDEX = '/online-schools/'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
@@ -171,16 +175,23 @@ async function parseSchoolPage(schoolUrl, schoolTitle) {
   // Try to find state/location
   const locationText = $('.location, .school-location, address').text().trim()
   const stateMatch = locationText.match(/\b([A-Z]{2})\b/)
-  const state = stateMatch ? stateMatch[1] : null
+  const locationState = stateMatch ? stateMatch[1] : null
+
+  // Generate slug from school name
+  const schoolSlug = schoolName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'unknown'
 
   return {
     school_name: schoolName,
+    school_slug: schoolSlug,
     geteducated_url: schoolUrl,
     is_sponsored: isSponsored,
     is_paid_client: isPaidClient,
     has_logo: hasLogo,
     accreditation: accreditation,
-    state: state,
+    location_state: locationState,
     is_active: true,
   }
 }
@@ -193,7 +204,7 @@ async function saveSchool(school) {
     const { error } = await supabase
       .from('schools')
       .upsert(school, {
-        onConflict: 'geteducated_url',
+        onConflict: 'school_slug',
       })
 
     if (error) {

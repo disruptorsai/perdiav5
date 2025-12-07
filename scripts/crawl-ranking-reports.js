@@ -18,8 +18,12 @@
  * and should be updated based on actual page structure.
  */
 
+import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import * as cheerio from 'cheerio'
+
+// Load .env.local file
+config({ path: '.env.local' })
 
 // Configuration
 const BASE_URL = 'https://www.geteducated.com'
@@ -27,7 +31,7 @@ const RANKINGS_INDEX = '/online-college-ratings-and-rankings/'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
@@ -240,13 +244,13 @@ async function saveRankingReport(report) {
 
     const reportId = reportData.id
 
-    // Insert entries
+    // Insert entries (use insert, not upsert since no unique constraint exists)
     let savedCount = 0
     for (const entry of report.entries) {
       const { error: entryError } = await supabase
         .from('ranking_report_entries')
-        .upsert({
-          ranking_report_id: reportId,
+        .insert({
+          report_id: reportId,
           school_name: entry.school_name,
           program_name: entry.program_name,
           total_cost: entry.total_cost,
@@ -257,8 +261,6 @@ async function saveRankingReport(report) {
           is_sponsored: entry.is_sponsored,
           geteducated_school_url: entry.geteducated_school_url,
           degree_level: entry.degree_level,
-        }, {
-          onConflict: 'ranking_report_id,school_name,program_name',
         })
 
       if (entryError) {
