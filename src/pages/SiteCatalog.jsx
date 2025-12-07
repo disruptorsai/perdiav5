@@ -11,6 +11,11 @@ import {
   useBulkImportSiteArticles,
   useToggleSiteArticleStatus,
 } from '@/hooks/useSiteArticles'
+import {
+  useGetEducatedArticles,
+  useGetEducatedCatalogStats,
+  useGetEducatedFilterOptions,
+} from '@/hooks/useGetEducatedCatalog'
 import { useClusters } from '@/hooks/useClusters'
 
 // UI Components
@@ -65,13 +70,20 @@ import {
   Check,
   AlertCircle,
   FolderOpen,
+  BookOpen,
+  GraduationCap,
+  Briefcase,
+  Database,
 } from 'lucide-react'
 
 export default function SiteCatalog() {
   // State
+  const [activeTab, setActiveTab] = useState('geteducated') // 'geteducated' or 'custom'
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCluster, setSelectedCluster] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [contentTypeFilter, setContentTypeFilter] = useState('all')
+  const [degreeLevelFilter, setDegreeLevelFilter] = useState('all')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
@@ -88,12 +100,23 @@ export default function SiteCatalog() {
   // File input ref for CSV import
   const fileInputRef = useRef(null)
 
-  // Hooks
+  // Hooks - Legacy site_articles
   const { data: articles = [], isLoading } = useSiteArticles({
     search: searchQuery || undefined,
   })
   const stats = useSiteArticleStats()
   const { data: clusters = [] } = useClusters()
+
+  // Hooks - GetEducated catalog
+  const { data: geStats, isLoading: geStatsLoading } = useGetEducatedCatalogStats()
+  const geFilters = useGetEducatedFilterOptions()
+  const { data: geArticles = [], isLoading: geLoading } = useGetEducatedArticles({
+    search: searchQuery || undefined,
+    contentType: contentTypeFilter !== 'all' ? contentTypeFilter : undefined,
+    degreeLevel: degreeLevelFilter !== 'all' ? degreeLevelFilter : undefined,
+    hasContent: true,
+    limit: 100,
+  })
   const createMutation = useCreateSiteArticle()
   const updateMutation = useUpdateSiteArticle()
   const deleteMutation = useDeleteSiteArticle()
@@ -263,64 +286,167 @@ export default function SiteCatalog() {
           </p>
         </motion.div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-none shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-50 rounded-xl">
-                  <Globe className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Total Articles</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-50 rounded-xl">
-                  <Eye className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Active</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-yellow-50 rounded-xl">
-                  <EyeOff className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Inactive</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-50 rounded-xl">
-                  <FolderOpen className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Categories</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.categories?.length || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Tab Switcher */}
+        <div className="flex gap-2 border-b pb-2">
+          <Button
+            variant={activeTab === 'geteducated' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('geteducated')}
+            className="gap-2"
+          >
+            <Database className="w-4 h-4" />
+            GetEducated Catalog
+            {geStats && (
+              <Badge variant="secondary" className="ml-1">
+                {geStats.totalArticles?.toLocaleString()}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === 'custom' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('custom')}
+            className="gap-2"
+          >
+            <Globe className="w-4 h-4" />
+            Custom Articles
+            <Badge variant="secondary" className="ml-1">{stats.total}</Badge>
+          </Button>
         </div>
+
+        {/* Stats Cards - GetEducated */}
+        {activeTab === 'geteducated' && (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-50 rounded-xl">
+                    <Database className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Total URLs</p>
+                    <p className="text-2xl font-bold text-gray-900">{geStats?.totalArticles?.toLocaleString() || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-50 rounded-xl">
+                    <BookOpen className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Enriched</p>
+                    <p className="text-2xl font-bold text-gray-900">{geStats?.enrichedArticles?.toLocaleString() || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 rounded-xl">
+                    <GraduationCap className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Degree Levels</p>
+                    <p className="text-2xl font-bold text-gray-900">{Object.keys(geStats?.degreeLevels || {}).length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-orange-50 rounded-xl">
+                    <Briefcase className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Subjects</p>
+                    <p className="text-2xl font-bold text-gray-900">{Object.keys(geStats?.subjectAreas || {}).length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-teal-50 rounded-xl">
+                    <FileText className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Enrichment</p>
+                    <p className="text-2xl font-bold text-gray-900">{geStats?.enrichmentProgress || 0}%</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Stats Cards - Custom */}
+        {activeTab === 'custom' && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-50 rounded-xl">
+                    <Globe className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Total Articles</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-50 rounded-xl">
+                    <Eye className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Active</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-yellow-50 rounded-xl">
+                    <EyeOff className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Inactive</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 rounded-xl">
+                    <FolderOpen className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Categories</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.categories?.length || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Toolbar */}
         <Card className="border-none shadow-sm">
@@ -337,53 +463,202 @@ export default function SiteCatalog() {
                 />
               </div>
 
-              {/* Cluster Filter */}
-              <Select value={selectedCluster} onValueChange={setSelectedCluster}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="All Clusters" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Clusters</SelectItem>
-                  {clusters.map(cluster => (
-                    <SelectItem key={cluster.id} value={cluster.id}>
-                      {cluster.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* GetEducated Filters */}
+              {activeTab === 'geteducated' && (
+                <>
+                  <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Content Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {geFilters.contentTypes.map(type => (
+                        <SelectItem key={type} value={type}>
+                          {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
+                  <Select value={degreeLevelFilter} onValueChange={setDegreeLevelFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Degree Level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Levels</SelectItem>
+                      {geFilters.degreeLevels.map(level => (
+                        <SelectItem key={level} value={level}>
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
 
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
-                  <Plus className="w-4 h-4" />
-                  Add Article
-                </Button>
-                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="gap-2">
-                  <Upload className="w-4 h-4" />
-                  Import
-                </Button>
-                <Button variant="outline" onClick={handleExport} className="gap-2">
-                  <Download className="w-4 h-4" />
-                  Export
-                </Button>
-              </div>
+              {/* Custom Catalog Filters */}
+              {activeTab === 'custom' && (
+                <>
+                  <Select value={selectedCluster} onValueChange={setSelectedCluster}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Clusters" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Clusters</SelectItem>
+                      {clusters.map(cluster => (
+                        <SelectItem key={cluster.id} value={cluster.id}>
+                          {cluster.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Actions - Only for custom catalog */}
+                  <div className="flex gap-2">
+                    <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Add Article
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="gap-2">
+                      <Upload className="w-4 h-4" />
+                      Import
+                    </Button>
+                    <Button variant="outline" onClick={handleExport} className="gap-2">
+                      <Download className="w-4 h-4" />
+                      Export
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Articles Table */}
+        {/* GetEducated Articles Table */}
+        {activeTab === 'geteducated' && (
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-0">
+              {geLoading ? (
+                <div className="p-6 space-y-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4">
+                      <Skeleton className="h-12 w-12 rounded" />
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-3/4 mb-2" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : geArticles.length === 0 ? (
+                <div className="p-12 text-center">
+                  <Database className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    No articles found
+                  </h3>
+                  <p className="text-gray-500 mb-4">
+                    Try adjusting your filters or run the enrichment script
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left p-4 font-medium text-gray-600">Article</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Type</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Level</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Subject</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Words</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Linked</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      <AnimatePresence>
+                        {geArticles.map((article, index) => (
+                          <motion.tr
+                            key={article.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ delay: index * 0.02 }}
+                            className="hover:bg-gray-50"
+                          >
+                            <td className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                                  <BookOpen className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div className="min-w-0">
+                                  <a
+                                    href={article.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium text-gray-900 hover:text-blue-600 line-clamp-1 flex items-center gap-1"
+                                  >
+                                    {article.title}
+                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                  </a>
+                                  <p className="text-sm text-gray-500 line-clamp-1">{article.slug}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge variant="secondary" className="text-xs">
+                                {article.content_type || 'other'}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              {article.degree_level ? (
+                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                  {article.degree_level}
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {article.subject_area ? (
+                                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
+                                  {article.subject_area.replace('_', ' ')}
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <span className="text-gray-900">{article.word_count?.toLocaleString() || '-'}</span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <Link2 className="w-4 h-4 text-gray-400" />
+                                <span className="text-gray-900">{article.times_linked_to || 0}</span>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </AnimatePresence>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Custom Articles Table */}
+        {activeTab === 'custom' && (
         <Card className="border-none shadow-sm">
           <CardContent className="p-0">
             {isLoading ? (
@@ -532,9 +807,15 @@ export default function SiteCatalog() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Results Count */}
-        {!isLoading && filteredArticles.length > 0 && (
+        {activeTab === 'geteducated' && !geLoading && geArticles.length > 0 && (
+          <p className="text-sm text-gray-500 text-center">
+            Showing {geArticles.length} of {geStats?.enrichedArticles?.toLocaleString() || 0} enriched articles
+          </p>
+        )}
+        {activeTab === 'custom' && !isLoading && filteredArticles.length > 0 && (
           <p className="text-sm text-gray-500 text-center">
             Showing {filteredArticles.length} of {articles.length} articles
           </p>

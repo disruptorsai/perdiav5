@@ -567,21 +567,102 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
   /**
    * Get relevant site articles for internal linking
+   * Now uses the GetEducated catalog (geteducated_articles) for richer data
+   * Falls back to legacy site_articles if GetEducated catalog is empty
    */
-  async getRelevantSiteArticles(articleTitle, limit = 30) {
+  async getRelevantSiteArticles(articleTitle, limit = 30, options = {}) {
+    const { subjectArea, degreeLevel, excludeUrls = [] } = options
+
     try {
-      const { data: articles, error } = await supabase
+      // Extract topics from article title for matching
+      const titleWords = articleTitle.toLowerCase().split(' ').filter(w => w.length > 3)
+
+      // First, try to use the SQL function for intelligent matching
+      const { data: rpcData, error: rpcError } = await supabase.rpc('find_relevant_ge_articles', {
+        search_topics: titleWords,
+        search_subject: subjectArea || null,
+        search_degree_level: degreeLevel || null,
+        exclude_urls: excludeUrls,
+        result_limit: limit,
+      })
+
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        console.log(`[Generation] Found ${rpcData.length} relevant articles via SQL function`)
+        return rpcData.slice(0, 5).map(a => ({
+          id: a.id,
+          url: a.url,
+          title: a.title,
+          excerpt: a.excerpt,
+          topics: a.topics,
+        }))
+      }
+
+      // Fallback: Direct query to geteducated_articles
+      const { data: geArticles, error: geError } = await supabase
+        .from('geteducated_articles')
+        .select('id, url, title, excerpt, topics, content_type, degree_level, subject_area, times_linked_to')
+        .not('content_text', 'is', null) // Only enriched articles
+        .order('times_linked_to', { ascending: true }) // Prefer less-linked articles
+        .limit(limit * 2)
+
+      if (!geError && geArticles && geArticles.length > 0) {
+        // Score articles by relevance
+        const scoredArticles = geArticles
+          .filter(a => !excludeUrls.includes(a.url))
+          .map(article => {
+            let score = 0
+
+            const articleTitleWords = article.title.toLowerCase().split(' ')
+            const commonWords = titleWords.filter(word =>
+              articleTitleWords.some(aw => aw.includes(word))
+            )
+            score += commonWords.length * 10
+
+            // Topic matching (stronger signal)
+            if (article.topics && article.topics.length > 0) {
+              const topicMatches = article.topics.filter(topic =>
+                titleWords.some(word => topic.toLowerCase().includes(word))
+              )
+              score += topicMatches.length * 15
+            }
+
+            // Subject area bonus
+            if (subjectArea && article.subject_area === subjectArea) {
+              score += 20
+            }
+
+            // Degree level bonus
+            if (degreeLevel && article.degree_level === degreeLevel) {
+              score += 15
+            }
+
+            return { article, score }
+          })
+
+        scoredArticles.sort((a, b) => b.score - a.score)
+
+        const results = scoredArticles
+          .filter(a => a.score > 0)
+          .slice(0, 5)
+          .map(a => a.article)
+
+        if (results.length > 0) {
+          console.log(`[Generation] Found ${results.length} relevant articles from GetEducated catalog`)
+          return results
+        }
+      }
+
+      // Final fallback: Legacy site_articles table
+      console.log('[Generation] Falling back to legacy site_articles table')
+      const { data: legacyArticles, error: legacyError } = await supabase
         .from('site_articles')
         .select('*')
         .order('times_linked_to', { ascending: true })
         .limit(limit)
 
-      if (error) throw error
+      if (legacyError) throw legacyError
 
-      // Score articles by relevance
-      const titleWords = articleTitle.toLowerCase().split(' ').filter(w => w.length > 3)
-
-      const scoredArticles = articles.map(article => {
+      const scoredLegacy = (legacyArticles || []).map(article => {
         let score = 0
 
         const articleTitleWords = article.title.toLowerCase().split(' ')
@@ -600,9 +681,9 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
         return { article, score }
       })
 
-      scoredArticles.sort((a, b) => b.score - a.score)
+      scoredLegacy.sort((a, b) => b.score - a.score)
 
-      return scoredArticles
+      return scoredLegacy
         .filter(a => a.score > 0)
         .slice(0, 5)
         .map(a => a.article)
@@ -610,6 +691,33 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
     } catch (error) {
       console.error('Error fetching site articles:', error)
       return []
+    }
+  }
+
+  /**
+   * Increment link count for articles that were linked to
+   * Updates the GetEducated catalog tracking
+   */
+  async incrementArticleLinkCounts(articleUrls) {
+    for (const url of articleUrls) {
+      try {
+        // Try the SQL function first
+        await supabase.rpc('increment_article_link_count', { article_url: url })
+      } catch (error) {
+        // Fallback to manual increment
+        const { data } = await supabase
+          .from('geteducated_articles')
+          .select('id, times_linked_to')
+          .eq('url', url)
+          .single()
+
+        if (data) {
+          await supabase
+            .from('geteducated_articles')
+            .update({ times_linked_to: (data.times_linked_to || 0) + 1 })
+            .eq('id', data.id)
+        }
+      }
     }
   }
 

@@ -91,6 +91,12 @@ export async function publishArticle(article, options = {}) {
         console.error('Failed to update article status:', updateError)
         // Don't fail the whole operation, just log it
       }
+
+      // Sync to GetEducated site catalog for internal linking
+      const publishedUrl = webhookResponse.url || webhookResponse.published_url
+      if (publishedUrl) {
+        await syncToGetEducatedCatalog(article, publishedUrl)
+      }
     }
 
     return {
@@ -264,11 +270,119 @@ export async function retryPublish(articleId, options = {}) {
   return publishArticle(article, options)
 }
 
+/**
+ * Sync published article to GetEducated site catalog
+ * This adds the article to the geteducated_articles table for internal linking
+ * @param {Object} article - The article that was published
+ * @param {string} publishedUrl - The URL where the article was published
+ */
+async function syncToGetEducatedCatalog(article, publishedUrl) {
+  try {
+    // Strip HTML for text content
+    const textContent = (article.content || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const wordCount = textContent.split(' ').filter(w => w.length > 0).length
+
+    // Generate slug from URL
+    const slug = publishedUrl
+      .replace('https://www.geteducated.com/', '')
+      .replace(/\/$/, '')
+
+    // Determine content type, degree level, subject area from article metadata or title
+    const title = (article.title || '').toLowerCase()
+    let contentType = 'guide'
+    let degreeLevel = null
+    let subjectArea = null
+
+    // Content type detection
+    if (title.includes('ranking') || title.includes('best') || title.includes('top') || title.includes('cheapest')) {
+      contentType = 'ranking'
+    } else if (title.includes('career') || title.includes('job') || title.includes('salary')) {
+      contentType = 'career'
+    } else if (title.includes('how to')) {
+      contentType = 'how_to'
+    }
+
+    // Degree level detection
+    if (title.includes('doctorate') || title.includes('phd') || title.includes('dnp') || title.includes('edd')) {
+      degreeLevel = 'doctorate'
+    } else if (title.includes('master') || title.includes('mba') || title.includes('msn')) {
+      degreeLevel = 'masters'
+    } else if (title.includes('bachelor') || title.includes('bsn')) {
+      degreeLevel = 'bachelors'
+    } else if (title.includes('associate')) {
+      degreeLevel = 'associate'
+    }
+
+    // Subject area detection
+    const subjectMap = {
+      nursing: ['nursing', 'nurse', 'bsn', 'msn', 'dnp', 'rn'],
+      business: ['business', 'mba', 'management', 'accounting', 'finance', 'marketing'],
+      education: ['education', 'teaching', 'teacher', 'med', 'edd'],
+      technology: ['technology', 'computer', 'cybersecurity', 'data science', 'software'],
+      healthcare: ['healthcare', 'health', 'medical', 'public health'],
+      psychology: ['psychology', 'counseling', 'mental health'],
+      social_work: ['social work', 'msw'],
+    }
+
+    for (const [subject, keywords] of Object.entries(subjectMap)) {
+      if (keywords.some(kw => title.includes(kw))) {
+        subjectArea = subject
+        break
+      }
+    }
+
+    // Extract topics from focus keyword and title
+    const topics = []
+    if (article.focus_keyword) {
+      topics.push(article.focus_keyword)
+    }
+    if (degreeLevel) topics.push(degreeLevel)
+    if (subjectArea) topics.push(subjectArea.replace('_', ' '))
+
+    // Upsert to GetEducated catalog
+    const { error } = await supabase
+      .from('geteducated_articles')
+      .upsert({
+        url: publishedUrl,
+        slug,
+        title: article.title,
+        meta_description: article.meta_description || article.excerpt,
+        excerpt: article.excerpt || textContent.substring(0, 300),
+        content_html: article.content,
+        content_text: textContent,
+        word_count: wordCount,
+        content_type: contentType,
+        degree_level: degreeLevel,
+        subject_area: subjectArea,
+        topics: topics.length > 0 ? topics : null,
+        primary_topic: topics[0] || null,
+        author_name: article.contributor_name || null,
+        published_at: new Date().toISOString(),
+        scraped_at: new Date().toISOString(),
+        needs_rewrite: false,
+        times_linked_to: 0,
+      }, { onConflict: 'url' })
+
+    if (error) {
+      console.error('[PublishService] Failed to sync to GetEducated catalog:', error.message)
+    } else {
+      console.log('[PublishService] Article synced to GetEducated catalog:', publishedUrl)
+    }
+  } catch (error) {
+    // Non-blocking - log but don't fail the publish
+    console.error('[PublishService] Error syncing to GetEducated catalog:', error)
+  }
+}
+
 export default {
   publishArticle,
   buildWebhookPayload,
   bulkPublish,
   checkPublishEligibility,
   retryPublish,
+  syncToGetEducatedCatalog,
   WEBHOOK_URL,
 }
