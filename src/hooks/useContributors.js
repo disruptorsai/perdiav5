@@ -3,19 +3,63 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 
 /**
- * GetEducated approved authors
+ * GetEducated approved authors - REAL NAMES for PUBLIC BYLINES
  * CRITICAL: Only these 4 people can be attributed as authors on GetEducated content
+ * IMPORTANT: PUBLIC bylines use REAL NAMES, not aliases
  */
 export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
 
 /**
- * Author display name mapping
+ * Internal style proxy mapping - for AI voice matching ONLY
+ * CRITICAL: These are INTERNAL style proxies - NEVER use as public bylines
+ * Public byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
+ * Style proxy = For AI voice matching only (Kif, Alicia, Danny, Julia)
  */
-export const AUTHOR_DISPLAY_NAMES = {
+export const AUTHOR_STYLE_PROXIES = {
   'Tony Huffman': 'Kif',
-  'Kayleigh Gilbert': 'Alicia Carrasco',
-  'Sarah': 'Daniel Catena',
-  'Charity': 'Julia Tell',
+  'Kayleigh Gilbert': 'Alicia',
+  'Sarah': 'Danny',
+  'Charity': 'Julia',
+}
+
+/**
+ * BLOCKED bylines - NEVER allow these as public author names
+ * These are internal aliases or legacy names that should never be published
+ */
+export const BLOCKED_BYLINES = [
+  'Julia Tell',
+  'Kif Richmann',
+  'Alicia Carrasco',
+  'Daniel Catena',
+  'Kif',
+  'Alicia',
+  'Danny',
+  'Julia',
+  'Admin',
+  'GetEducated',
+  'Editorial Team',
+]
+
+/**
+ * Author-to-content-type mapping for automatic assignment
+ */
+export const AUTHOR_CONTENT_MAPPING = {
+  'Tony Huffman': {
+    specialties: ['rankings', 'affordability', 'data-analysis', 'landing-pages', 'best-buy-list'],
+    keywords: ['ranking', 'cheapest', 'affordable', 'cost', 'best buy', 'tuition'],
+  },
+  'Kayleigh Gilbert': {
+    specialties: ['professional-programs', 'healthcare', 'social-work', 'best-of-guides', 'hospitality'],
+    keywords: ['lcsw', 'msw', 'nursing', 'healthcare', 'hospitality', 'professional', 'licensure'],
+  },
+  'Sarah': {
+    specialties: ['technical-education', 'degree-overviews', 'career-pathways', 'general-guides'],
+    keywords: ['technical', 'career', 'degrees online', 'what degrees', 'overview', 'guide'],
+  },
+  'Charity': {
+    specialties: ['teaching-degrees', 'education-careers', 'degree-comparisons', 'certification'],
+    keywords: ['teaching', 'teacher', 'mat', 'med', 'education', 'certification', 'fast-track'],
+  },
 }
 
 /**
@@ -95,9 +139,10 @@ export function useApprovedContributors() {
         return APPROVED_AUTHORS.map(name => ({
           id: null,
           name,
-          display_name: AUTHOR_DISPLAY_NAMES[name],
+          display_name: name,  // PUBLIC BYLINE = Real name (not alias)
+          style_proxy: AUTHOR_STYLE_PROXIES[name],  // INTERNAL ONLY
           is_active: true,
-          expertise_areas: [],
+          expertise_areas: AUTHOR_CONTENT_MAPPING[name]?.specialties || [],
           content_types: [],
         }))
       }
@@ -118,12 +163,98 @@ export function isApprovedAuthor(authorName) {
 }
 
 /**
- * Get the display name for an author
- * @param {string} authorName - The real author name
- * @returns {string} The display name (pen name)
+ * Check if a byline is blocked (alias names that should never be published)
+ * @param {string} byline - The byline to check
+ * @returns {boolean} True if byline is blocked
  */
-export function getAuthorDisplayName(authorName) {
-  return AUTHOR_DISPLAY_NAMES[authorName] || authorName
+export function isBlockedByline(byline) {
+  return BLOCKED_BYLINES.includes(byline)
+}
+
+/**
+ * Validate a byline for publication
+ * @param {string} byline - The byline to validate
+ * @returns {{ valid: boolean, error?: string }} Validation result
+ */
+export function validateByline(byline) {
+  if (!byline) {
+    return { valid: false, error: 'Byline is required' }
+  }
+
+  if (isBlockedByline(byline)) {
+    return {
+      valid: false,
+      error: `"${byline}" is an internal alias and cannot be used as a public byline. Use the real author name instead.`
+    }
+  }
+
+  if (!isApprovedAuthor(byline)) {
+    return {
+      valid: false,
+      error: `"${byline}" is not an approved author. Only ${APPROVED_AUTHORS.join(', ')} can be used as bylines.`
+    }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Get the style proxy for an author (INTERNAL USE ONLY - for AI voice matching)
+ * CRITICAL: The style proxy should NEVER be published as a public byline
+ * @param {string} authorName - The real author name
+ * @returns {string} The internal style proxy name
+ */
+export function getAuthorStyleProxy(authorName) {
+  return AUTHOR_STYLE_PROXIES[authorName] || null
+}
+
+/**
+ * Get the public byline for an author (the REAL name to publish)
+ * CRITICAL: This returns the REAL NAME which should be used for all public bylines
+ * @param {string} authorName - The author identifier
+ * @returns {string} The public byline (real name)
+ */
+export function getPublicByline(authorName) {
+  // If it's already an approved author name, return it
+  if (APPROVED_AUTHORS.includes(authorName)) {
+    return authorName
+  }
+
+  // If someone accidentally passes a style proxy, find the real name
+  const realName = Object.entries(AUTHOR_STYLE_PROXIES).find(([, proxy]) => proxy === authorName)?.[0]
+  if (realName) {
+    console.warn(`Style proxy "${authorName}" passed to getPublicByline. Converting to real name "${realName}".`)
+    return realName
+  }
+
+  // Unknown - return as-is but log warning
+  console.warn(`Unknown author "${authorName}" - not in approved list`)
+  return authorName
+}
+
+/**
+ * Recommend an author based on content topic/type
+ * @param {string} topic - The article topic or title
+ * @param {string} contentType - The content type (ranking, guide, etc.)
+ * @returns {string|null} Recommended author name or null
+ */
+export function recommendAuthor(topic, contentType) {
+  const topicLower = (topic || '').toLowerCase()
+  const typeLower = (contentType || '').toLowerCase()
+
+  for (const [author, mapping] of Object.entries(AUTHOR_CONTENT_MAPPING)) {
+    // Check content type specialties
+    if (mapping.specialties.some(s => typeLower.includes(s))) {
+      return author
+    }
+
+    // Check topic keywords
+    if (mapping.keywords.some(k => topicLower.includes(k))) {
+      return author
+    }
+  }
+
+  return null
 }
 
 /**
@@ -288,7 +419,8 @@ export function useContributorStats() {
   return {
     total: contributors.length,
     active: contributors.filter(c => c.is_active).length,
-    totalArticles: contributors.reduce((sum, c) => sum + (c.articles_count || c.article_count || 0), 0),
+    // article_contributors table uses 'articles_count' (see initial_schema.sql line 24)
+    totalArticles: contributors.reduce((sum, c) => sum + (c.articles_count || 0), 0),
   }
 }
 
@@ -307,7 +439,7 @@ export function useCreateContributor() {
           ...contributorData,
           user_id: user?.id,
           is_active: true,
-          article_count: 0,
+          articles_count: 0, // Column name is 'articles_count' per initial_schema.sql
         })
         .select()
         .single()
@@ -401,7 +533,7 @@ export function useIncrementContributorArticleCount() {
     mutationFn: async (contributorId) => {
       const { data: current, error: fetchError } = await supabase
         .from('article_contributors')
-        .select('article_count')
+        .select('articles_count')
         .eq('id', contributorId)
         .single()
 
@@ -409,7 +541,7 @@ export function useIncrementContributorArticleCount() {
 
       const { data, error } = await supabase
         .from('article_contributors')
-        .update({ article_count: (current.article_count || 0) + 1 })
+        .update({ articles_count: (current.articles_count || 0) + 1 })
         .eq('id', contributorId)
         .select()
         .single()

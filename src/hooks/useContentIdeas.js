@@ -3,7 +3,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 
 /**
- * Fetch all content ideas for the current user
+ * Fetch all content ideas (shared workspace - all users see all ideas)
  */
 export function useContentIdeas(filters = {}) {
   const { user } = useAuth()
@@ -14,7 +14,6 @@ export function useContentIdeas(filters = {}) {
       let query = supabase
         .from('content_ideas')
         .select('*, clusters(*)')
-        .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
 
       // Apply filters

@@ -140,21 +140,41 @@ class ClaudeClient {
   /**
    * Build prompt for humanization
    * IMPORTANT: Includes GetEducated-specific content rules
+   * CRITICAL: display_name is the PUBLIC byline (real name), style_proxy is INTERNAL only
    */
   buildHumanizationPrompt(content, contributorProfile, perplexity, burstiness) {
     let styleInstructions = ''
 
     if (contributorProfile) {
       const style = contributorProfile.writing_style_profile || {}
-      const displayName = contributorProfile.display_name || contributorProfile.name
+      // CRITICAL: Use display_name (real name) for public byline, NEVER use style_proxy
+      const publicByline = contributorProfile.display_name || contributorProfile.name
+      const styleProxy = contributorProfile.style_proxy || ''
+
+      // Build comprehensive style instructions from enhanced profile fields
       styleInstructions = `
-WRITER PERSONA (GetEducated Author):
-Real Name: ${contributorProfile.name}
-Display Name: ${displayName}
-Tone: ${style.tone || 'professional'}
-Complexity: ${style.complexity_level || 'intermediate'}
-Sentence Length: ${style.sentence_length_preference || 'medium'}
-Style Notes: ${style.style_notes || 'Professional education content writer'}
+=== GETEDUCATED AUTHOR PROFILE ===
+Public Byline (REAL NAME): ${publicByline}
+Internal Style Proxy: ${styleProxy} (for voice matching only - NEVER publish this name)
+
+VOICE & TONE:
+${contributorProfile.voice_description || style.style_notes || 'Professional education content writer'}
+
+WRITING GUIDELINES:
+${contributorProfile.writing_guidelines || `
+- Tone: ${style.tone || 'professional'}
+- Complexity: ${style.complexity_level || 'intermediate'}
+- Sentence Length: ${style.sentence_length_preference || 'medium'}`}
+
+SIGNATURE PHRASES TO USE:
+${contributorProfile.signature_phrases?.map(p => `- "${p}"`).join('\n') || '- N/A'}
+
+PHRASES TO AVOID:
+${contributorProfile.phrases_to_avoid?.map(p => `- "${p}"`).join('\n') || '- N/A'}
+
+INTRO STYLE: ${contributorProfile.intro_style || 'Professional opening'}
+CONCLUSION STYLE: ${contributorProfile.conclusion_style || 'Clear summary with next steps'}
+=== END AUTHOR PROFILE ===
 `
     }
 

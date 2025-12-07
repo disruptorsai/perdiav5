@@ -11,7 +11,7 @@ export function useSystemSettings() {
       const { data, error } = await supabase
         .from('system_settings')
         .select('*')
-        .order('setting_key')
+        .order('key')
 
       if (error) throw error
       return data || []
@@ -22,10 +22,10 @@ export function useSystemSettings() {
 /**
  * Get a single setting value with a default fallback
  */
-export function useSettingValue(key, defaultValue = '') {
+export function useSettingValue(settingKey, defaultValue = '') {
   const { data: settings = [] } = useSystemSettings()
-  const setting = settings.find(s => s.setting_key === key)
-  return setting?.setting_value ?? defaultValue
+  const setting = settings.find(s => s.key === settingKey)
+  return setting?.value ?? defaultValue
 }
 
 /**
@@ -35,7 +35,7 @@ export function useSettingsMap() {
   const { data: settings = [], isLoading, error } = useSystemSettings()
 
   const settingsMap = settings.reduce((acc, setting) => {
-    acc[setting.setting_key] = setting.setting_value
+    acc[setting.key] = setting.value
     return acc
   }, {})
 
@@ -79,19 +79,19 @@ export function useUpdateSetting() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ key, value, type = 'workflow', description = '' }) => {
+    mutationFn: async ({ key, value, category = 'workflow', description = '' }) => {
       // First, try to find existing setting
       const { data: existing } = await supabase
         .from('system_settings')
         .select('id')
-        .eq('setting_key', key)
+        .eq('key', key)
         .single()
 
       if (existing) {
         // Update existing
         const { data, error } = await supabase
           .from('system_settings')
-          .update({ setting_value: value })
+          .update({ value })
           .eq('id', existing.id)
           .select()
           .single()
@@ -103,11 +103,10 @@ export function useUpdateSetting() {
         const { data, error } = await supabase
           .from('system_settings')
           .insert({
-            setting_key: key,
-            setting_value: value,
-            setting_type: type,
+            key,
+            value,
+            category,
             description,
-            editable_by: 'admin',
           })
           .select()
           .single()
@@ -130,20 +129,20 @@ export function useBulkUpdateSettings() {
 
   return useMutation({
     mutationFn: async (settings) => {
-      // settings is an array of { key, value, type?, description? }
+      // settings is an array of { key, value, category?, description? }
       const results = []
 
       for (const setting of settings) {
         const { data: existing } = await supabase
           .from('system_settings')
           .select('id')
-          .eq('setting_key', setting.key)
+          .eq('key', setting.key)
           .single()
 
         if (existing) {
           const { data, error } = await supabase
             .from('system_settings')
-            .update({ setting_value: setting.value })
+            .update({ value: setting.value })
             .eq('id', existing.id)
             .select()
             .single()
@@ -154,11 +153,10 @@ export function useBulkUpdateSettings() {
           const { data, error } = await supabase
             .from('system_settings')
             .insert({
-              setting_key: setting.key,
-              setting_value: setting.value,
-              setting_type: setting.type || 'workflow',
+              key: setting.key,
+              value: setting.value,
+              category: setting.category || 'workflow',
               description: setting.description || '',
-              editable_by: 'admin',
             })
             .select()
             .single()
@@ -183,11 +181,11 @@ export function useDeleteSetting() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (key) => {
+    mutationFn: async (settingKey) => {
       const { error } = await supabase
         .from('system_settings')
         .delete()
-        .eq('setting_key', key)
+        .eq('key', settingKey)
 
       if (error) throw error
     },

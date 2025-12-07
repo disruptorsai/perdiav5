@@ -35,9 +35,9 @@ function SettingsContent() {
   const bulkUpdateSettings = useBulkUpdateSettings()
 
   // Helper to get setting value
-  const getSettingValue = (key, defaultValue = '') => {
-    const setting = settings.find(s => s.setting_key === key)
-    return setting?.setting_value ?? defaultValue
+  const getSettingValue = (settingKey, defaultValue = '') => {
+    const setting = settings.find(s => s.key === settingKey)
+    return setting?.value ?? defaultValue
   }
 
   // State for all settings

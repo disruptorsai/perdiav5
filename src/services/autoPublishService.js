@@ -32,8 +32,8 @@ export async function getAutoPublishSettings() {
   const { data, error } = await supabase
     .from('system_settings')
     .select('*')
-    .in('setting_key', [
-      'auto_publish_enabled',
+    .in('key', [
+      'enable_auto_publish',
       'auto_publish_days',
       'block_high_risk_publish',
       'quality_threshold_publish',
@@ -47,20 +47,20 @@ export async function getAutoPublishSettings() {
   const settings = { ...DEFAULT_SETTINGS }
 
   for (const setting of data || []) {
-    switch (setting.setting_key) {
-      case 'auto_publish_enabled':
-        settings.enabled = setting.setting_value === 'true' || setting.setting_value === true
+    switch (setting.key) {
+      case 'enable_auto_publish':
+        settings.enabled = setting.value === 'true' || setting.value === true
         break
       case 'auto_publish_days':
-        settings.daysUntilAutoPublish = parseInt(setting.setting_value, 10) || 5
+        settings.daysUntilAutoPublish = parseInt(setting.value, 10) || 5
         break
       case 'block_high_risk_publish':
-        settings.maxRiskLevel = (setting.setting_value === 'true' || setting.setting_value === true)
+        settings.maxRiskLevel = (setting.value === 'true' || setting.value === true)
           ? 'LOW'
           : 'MEDIUM'
         break
       case 'quality_threshold_publish':
-        settings.minQualityScore = parseInt(setting.setting_value, 10) || 80
+        settings.minQualityScore = parseInt(setting.value, 10) || 80
         break
     }
   }

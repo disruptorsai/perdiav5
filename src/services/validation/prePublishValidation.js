@@ -13,6 +13,7 @@
 import { validateContent, canPublish as checkLinkPublish } from './linkValidator'
 import { assessRisk, checkAutoPublishEligibility } from './riskAssessment'
 import { APPROVED_AUTHORS } from '../../hooks/useContributors'
+import { extractShortcodes, validateShortcodeParams, checkMonetizationCompliance, SHORTCODE_TYPES } from '../shortcodeService'
 
 /**
  * Validation result structure
@@ -29,6 +30,7 @@ const createValidationResult = () => ({
     risk: { passed: false, message: '' },
     quality: { passed: false, message: '' },
     content: { passed: false, message: '' },
+    shortcodes: { passed: false, message: '' },
   }
 })
 
@@ -174,6 +176,64 @@ export function validateForPublish(article, options = {}) {
     })
   }
 
+  // 6. Shortcode Validation
+  if (article.content) {
+    const monetizationCheck = checkMonetizationCompliance(article.content)
+    const shortcodes = extractShortcodes(article.content)
+
+    // Check for monetization shortcodes (not strictly required, but recommended)
+    if (!monetizationCheck.hasMonetization) {
+      result.checks.shortcodes.passed = false
+      result.checks.shortcodes.message = 'No monetization shortcodes found'
+      result.warnings.push({
+        type: 'missing_shortcode',
+        message: 'Article has no monetization shortcodes. Consider adding degree_table or degree_offer shortcodes.',
+      })
+    } else {
+      // Validate each shortcode's parameters
+      const shortcodeIssues = []
+      const monetizationTypes = [SHORTCODE_TYPES.MONETIZATION, SHORTCODE_TYPES.DEGREE_TABLE, SHORTCODE_TYPES.DEGREE_OFFER]
+
+      for (const shortcode of shortcodes) {
+        if (monetizationTypes.includes(shortcode.type) && shortcode.categoryId && shortcode.concentrationId) {
+          // Note: validateShortcodeParams is async, but we're doing sync validation here
+          // For full async validation, use validateForPublishAsync
+          if (shortcode.categoryId <= 0 || shortcode.concentrationId <= 0) {
+            shortcodeIssues.push(`Invalid shortcode parameters: category=${shortcode.categoryId}, concentration=${shortcode.concentrationId}`)
+          }
+          if (shortcode.levelCode !== null && shortcode.levelCode !== undefined && shortcode.levelCode <= 0) {
+            shortcodeIssues.push(`Invalid level code: ${shortcode.levelCode}`)
+          }
+        }
+      }
+
+      if (shortcodeIssues.length > 0) {
+        result.checks.shortcodes.passed = false
+        result.checks.shortcodes.message = shortcodeIssues.join('; ')
+        shortcodeIssues.forEach(issue => {
+          result.warnings.push({
+            type: 'invalid_shortcode',
+            message: issue,
+          })
+        })
+      } else {
+        result.checks.shortcodes.passed = true
+        result.checks.shortcodes.message = `${monetizationCheck.monetizationCount} shortcode(s) found`
+
+        // Add recommendation if using legacy format
+        if (monetizationCheck.recommendation) {
+          result.warnings.push({
+            type: 'shortcode_recommendation',
+            message: monetizationCheck.recommendation,
+          })
+        }
+      }
+    }
+  } else {
+    result.checks.shortcodes.passed = true
+    result.checks.shortcodes.message = 'No content to check'
+  }
+
   // Determine if can publish
   result.canPublish = result.blockingIssues.length === 0
 
@@ -247,8 +307,70 @@ export function canAutoPublish(article, settings = {}) {
   }
 }
 
+/**
+ * Async version of validateForPublish that includes database validation for shortcodes
+ * @param {Object} article - Article to validate
+ * @param {Object} options - Validation options
+ * @returns {Promise<Object>} Complete validation result with database-validated shortcodes
+ */
+export async function validateForPublishAsync(article, options = {}) {
+  // Start with sync validation
+  const result = validateForPublish(article, options)
+
+  // If we have content and shortcodes, do async database validation
+  if (article.content) {
+    const shortcodes = extractShortcodes(article.content)
+    const monetizationTypes = [SHORTCODE_TYPES.MONETIZATION, SHORTCODE_TYPES.DEGREE_TABLE, SHORTCODE_TYPES.DEGREE_OFFER]
+    const monetizationShortcodes = shortcodes.filter(s => monetizationTypes.includes(s.type))
+
+    if (monetizationShortcodes.length > 0) {
+      const dbValidationIssues = []
+
+      for (const shortcode of monetizationShortcodes) {
+        if (shortcode.categoryId && shortcode.concentrationId) {
+          try {
+            const validation = await validateShortcodeParams({
+              categoryId: shortcode.categoryId,
+              concentrationId: shortcode.concentrationId,
+              levelCode: shortcode.levelCode,
+            })
+
+            if (!validation.isValid) {
+              dbValidationIssues.push(...validation.errors.map(err => ({
+                shortcode: shortcode.raw,
+                error: err,
+              })))
+            }
+          } catch (err) {
+            // If database validation fails, add warning but don't block
+            console.warn('Shortcode database validation failed:', err)
+          }
+        }
+      }
+
+      if (dbValidationIssues.length > 0) {
+        result.checks.shortcodes.passed = false
+        result.checks.shortcodes.message = `${dbValidationIssues.length} shortcode(s) failed database validation`
+        result.checks.shortcodes.dbValidation = dbValidationIssues
+
+        dbValidationIssues.forEach(issue => {
+          result.warnings.push({
+            type: 'invalid_shortcode_db',
+            message: `${issue.error} in shortcode: ${issue.shortcode.substring(0, 50)}...`,
+          })
+        })
+      } else if (result.checks.shortcodes.passed) {
+        result.checks.shortcodes.message += ' (database validated)'
+      }
+    }
+  }
+
+  return result
+}
+
 export default {
   validateForPublish,
+  validateForPublishAsync,
   getValidationSummary,
   canAutoPublish,
 }

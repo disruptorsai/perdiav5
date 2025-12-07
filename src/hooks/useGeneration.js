@@ -12,8 +12,8 @@ async function loadHumanizationSettings() {
   try {
     const { data: settings, error } = await supabase
       .from('system_settings')
-      .select('setting_key, setting_value')
-      .in('setting_key', [
+      .select('key, value')
+      .in('key', [
         'humanization_provider',
         'stealthgpt_tone',
         'stealthgpt_mode',
@@ -30,7 +30,7 @@ async function loadHumanizationSettings() {
     // Convert array to object
     const settingsMap = {}
     settings?.forEach(s => {
-      settingsMap[s.setting_key] = s.setting_value
+      settingsMap[s.key] = s.value
     })
 
     // Apply provider setting

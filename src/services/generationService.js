@@ -12,7 +12,13 @@ import IdeaDiscoveryService from './ideaDiscoveryService'
 import { getCostDataContext } from './costDataService'
 import { insertShortcodeInContent } from './shortcodeService'
 import { MonetizationEngine, monetizationValidator } from './monetizationEngine'
-import { getAuthorSystemPrompt } from '../hooks/useContributors'
+import {
+  getAuthorSystemPrompt,
+  APPROVED_AUTHORS,
+  BLOCKED_BYLINES,
+  validateByline,
+  recommendAuthor,
+} from '../hooks/useContributors'
 
 class GenerationService {
   constructor() {
@@ -452,10 +458,13 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
    * Auto-assign contributor based on topic and content type
    * CRITICAL: Only assigns from the 4 approved GetEducated authors
    * Per spec section 8.2.2: Uses default_author_by_article_type table first
+   *
+   * PUBLIC BYLINE uses REAL NAME (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
+   * NEVER use style proxy names (Kif, Alicia, Danny, Julia) as public bylines
    */
   async assignContributor(idea, contentType) {
-    // Approved GetEducated authors (CRITICAL - do not modify without client approval)
-    const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+    // APPROVED_AUTHORS is imported from useContributors hook
+    // Contains: ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
 
     try {
       // First, check if there's a default author for this content type (per spec 8.2.2)
@@ -566,9 +575,11 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
     } catch (error) {
       console.error('Contributor assignment error:', error)
       // Return first approved author as fallback (Tony Huffman)
+      // CRITICAL: display_name is the PUBLIC BYLINE (real name), style_proxy is INTERNAL only
       return {
         name: 'Tony Huffman',
-        display_name: 'Kif',
+        display_name: 'Tony Huffman',  // PUBLIC BYLINE = Real name
+        style_proxy: 'Kif',            // INTERNAL only - for AI voice matching
         expertise_areas: ['rankings', 'cost-analysis', 'online-degrees'],
         content_types: ['ranking', 'analysis', 'comparison'],
         writing_style_profile: { tone: 'authoritative', complexity_level: 'intermediate' }

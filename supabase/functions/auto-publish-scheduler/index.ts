@@ -120,9 +120,9 @@ serve(async (req) => {
     // Fetch auto-publish settings
     const { data: settingsData } = await supabaseClient
       .from('system_settings')
-      .select('setting_key, setting_value')
-      .in('setting_key', [
-        'auto_publish_enabled',
+      .select('key, value')
+      .in('key', [
+        'enable_auto_publish',
         'auto_publish_days',
         'block_high_risk_publish',
         'quality_threshold_publish',
@@ -131,17 +131,17 @@ serve(async (req) => {
     const settings = { ...DEFAULT_SETTINGS }
 
     for (const setting of settingsData || []) {
-      switch (setting.setting_key) {
-        case 'auto_publish_enabled':
-          settings.enabled = setting.setting_value === 'true' || setting.setting_value === true
+      switch (setting.key) {
+        case 'enable_auto_publish':
+          settings.enabled = setting.value === 'true' || setting.value === true
           break
         case 'block_high_risk_publish':
-          settings.maxRiskLevel = (setting.setting_value === 'true' || setting.setting_value === true)
+          settings.maxRiskLevel = (setting.value === 'true' || setting.value === true)
             ? 'LOW'
             : 'MEDIUM'
           break
         case 'quality_threshold_publish':
-          settings.minQualityScore = parseInt(setting.setting_value, 10) || 80
+          settings.minQualityScore = parseInt(setting.value, 10) || 80
           break
       }
     }

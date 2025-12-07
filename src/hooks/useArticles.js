@@ -3,7 +3,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 
 /**
- * Fetch all articles for the current user
+ * Fetch all articles (shared workspace - all users see all articles)
  */
 export function useArticles(filters = {}) {
   const { user } = useAuth()
@@ -14,7 +14,6 @@ export function useArticles(filters = {}) {
       let query = supabase
         .from('articles')
         .select('*, article_contributors(*)')
-        .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
 
       // Apply filters

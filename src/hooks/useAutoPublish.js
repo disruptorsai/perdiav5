@@ -26,7 +26,7 @@ export function useAutoPublish() {
 }
 
 /**
- * Get articles that are due for auto-publish
+ * Get articles that are due for auto-publish (shared workspace)
  */
 export function useArticlesDueForAutoPublish() {
   const { user } = useAuth()
@@ -42,7 +42,6 @@ export function useArticlesDueForAutoPublish() {
         .eq('status', 'ready_to_publish')
         .lte('autopublish_deadline', now)
         .in('risk_level', ['LOW', 'MEDIUM']) // Only auto-publish LOW/MEDIUM risk
-        .eq('user_id', user?.id)
         .order('autopublish_deadline', { ascending: true })
 
       if (error) throw error

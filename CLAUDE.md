@@ -14,12 +14,28 @@ Perdia v5 is an AI-powered content production system built with React 19, Vite, 
 **See `docs/v5-updates/` for detailed specifications.** Key rules:
 
 ### Approved Authors (MUST ENFORCE)
-Only these 4 authors can be attributed:
-- Tony Huffman
-- Kayleigh Gilbert
-- Sarah
-- Charity
-**NEVER use legacy/other authors.**
+
+**CRITICAL:** Public bylines use REAL NAMES, not aliases. The style proxy names are for internal AI voice matching only.
+
+| Real Name (PUBLIC BYLINE) | Style Proxy (INTERNAL ONLY) | Contributor Page |
+|---------------------------|----------------------------|------------------|
+| **Tony Huffman** | Kif | [Yes](https://www.geteducated.com/article-contributors/tony-huffman) |
+| **Kayleigh Gilbert** | Alicia | Pending creation |
+| **Sarah** | Danny | Pending creation |
+| **Charity** | Julia | Pending creation |
+
+**NEVER publish these as bylines:**
+- Julia Tell, Kif Richmann, Alicia Carrasco, Daniel Catena (these are style aliases)
+- Admin, GetEducated, Editorial Team
+- Any legacy contributors
+
+**Author-to-Content Mapping:**
+- **Tony Huffman** → Rankings, data analysis, affordability, Best Buy lists
+- **Kayleigh Gilbert** → Professional programs, healthcare/social work, best-of guides
+- **Sarah** → Technical education, degree overviews, career pathways
+- **Charity** → Teaching degrees, education careers, degree comparisons
+
+See `docs/v5-updates/08-AUTHOR-STYLE-SPECIFICATION.md` for detailed style profiles.
 
 ### Content Rules
 - Cost data MUST come from GetEducated ranking reports only
@@ -116,17 +132,31 @@ The generation pipeline is the heart of the application, orchestrated by `src/se
 - Real-time subscriptions for live updates
 
 **Key Tables:**
-- `articles` - Main content storage with status workflow (idea → drafting → refinement → qa_review → ready_to_publish → published)
+- `articles` - Main content storage with status workflow (idea → drafting → refinement → qa_review → ready_to_publish → published). Includes `risk_level`, `autopublish_deadline`, `reviewed_at` fields.
 - `content_ideas` - Article ideas with approval workflow (pending → approved → rejected → completed)
-- `article_contributors` - 9 specialized AI personas with expertise areas, content types, writing styles
-- `site_articles` - Internal linking catalog with link tracking
+- `article_contributors` - 4 approved authors (Tony/Kif, Kayleigh/Alicia, Sarah/Daniel, Charity/Julia) with writing style profiles
+- `geteducated_articles` - GetEducated site catalog for internal linking (1000+ articles)
+- `monetization_categories` - 155 category/concentration pairs for shortcode generation
+- `monetization_levels` - 13 degree levels (Associate, Bachelor, Master, etc.)
+- `subjects` - Subject-CIP code mapping for topic classification
+- `ranking_reports`, `ranking_report_entries` - Cost data from GetEducated rankings
 - `generation_queue` - Automatic mode task queue
 
 **TanStack React Query** (`src/lib/queryClient.js`):
 - Centralized query client configuration with 5-minute staleTime and 30-minute cacheTime
 - Handles caching, refetching, and optimistic updates
-- Custom hooks in `src/hooks/` wrap common queries (useArticles, useContentIdeas, useGeneration)
+- Custom hooks in `src/hooks/` wrap common queries
 - Mutations automatically invalidate relevant queries for cache consistency
+
+**Key Hooks** (`src/hooks/`):
+- `useArticles.js`, `useContentIdeas.js` - Core content CRUD
+- `useContributors.js` - Author management (enforces 4 approved authors)
+- `useGeneration.js` - AI generation pipeline triggers
+- `usePublish.js`, `useAutoPublish.js` - Publishing workflow
+- `usePrePublishValidation.js` - Validation before publish
+- `useMonetization.js`, `useShortcodes.js` - Monetization system
+- `useGetEducatedCatalog.js` - Site article catalog for internal linking
+- `useAIRevisions.js` - AI revision history tracking
 
 ### State Management Pattern
 
@@ -195,14 +225,43 @@ When modifying AI prompts:
 - Validate output structure matches expected schema (especially Grok's JSON responses)
 - Be aware of the "banned phrases" list in Claude's humanization prompt
 
+### Additional Services
+
+Beyond AI clients, the `src/services/` directory contains:
+
+**Validation (`src/services/validation/`):**
+- `linkValidator.js` - Blocks .edu links, competitor URLs, validates external whitelist
+- `riskAssessment.js` - Calculates risk levels (LOW/MEDIUM/HIGH/CRITICAL)
+- `prePublishValidation.js` - Pre-publish checks (author, links, risk, quality)
+
+**Publishing & Workflow:**
+- `publishService.js` - Webhook publishing to n8n (temporary) → WordPress API (future)
+- `autoPublishService.js` - Auto-publish logic for unreviewed articles
+- `articleRevisionService.js` - Article version tracking and AI revision history
+
+**Data Services:**
+- `monetizationEngine.js` - Topic-to-monetization matching
+- `shortcodeService.js` - Shortcode generation and validation
+- `costDataService.js` - Ranking report cost data access
+- `ideaDiscoveryService.js` - Content idea generation
+
 ### Database Migrations
 
-Supabase migrations are in `supabase/migrations/`:
-1. `20250101000000_initial_schema.sql` - Creates all 14 tables
-2. `20250101000001_seed_contributors.sql` - Seeds 9 AI contributor personas
-3. `20250101000002_seed_settings.sql` - Seeds system configuration
+Supabase migrations are in `supabase/migrations/`. Run migrations in order via Supabase SQL Editor when setting up new environments.
 
-Run migrations in order via Supabase SQL Editor when setting up new environments.
+**Core migrations:**
+- `20250101000000_initial_schema.sql` - Base tables (articles, content_ideas, contributors, etc.)
+- `20250101000001_seed_contributors.sql` - Seeds contributor personas
+- `20250101000002_seed_settings.sql` - System configuration
+
+**GetEducated-specific migrations:**
+- `20250103000000_add_monetization_tables.sql` - Monetization categories and levels
+- `20250103000002_update_contributors_geteducated.sql` - Updates contributors to 4 approved authors
+- `20250105000000_create_subjects_table.sql` - Subject-CIP code mapping
+- `20250105000001_create_ranking_reports_tables.sql` - Cost data storage
+- `20250107000000_geteducated_site_catalog.sql` - GetEducated articles catalog
+- `20250108000000_article_versions_system.sql` - Version tracking
+- `20250108000001_enhance_contributor_profiles.sql` - Author profiles with style data
 
 ### Quality Metrics Implementation
 
@@ -413,16 +472,34 @@ Quality score starts at 100 and deducts points:
 
 Minimum score is clamped to 0.
 
-## Known Limitations
+## Known Limitations & Current Status
 
-1. **No automatic mode implementation yet** - Queue processing and autonomous operation not implemented
-2. **No WordPress publishing** - API integration pending (Edge Function defined but not implemented)
-3. **No drag-and-drop Kanban** - Status updates via dropdowns only
-4. **Basic rich text editor** - React Quill integration incomplete (incompatible with React 19)
-5. **No mobile optimization** - Desktop-first design
-6. **Client-side API keys** - Security risk, needs Edge Functions migration
+**Implemented:**
+- Link validation (blocks .edu, competitors)
+- Risk assessment and auto-publish deadline system
+- Pre-publish validation framework
+- Approved authors enforcement
+- Monetization categories/levels tables
+- GetEducated site catalog (`geteducated_articles` table)
+- Subject-CIP mapping
 
-Refer to README.md "Next Steps" section for planned improvements.
+**Partially Implemented:**
+- Internal linking (needs catalog population)
+- Auto-publish scheduler (Edge Function exists, needs cron setup)
+- Webhook publishing to n8n (service exists)
+
+**Not Yet Implemented:**
+- Direct WordPress REST API publishing
+- Shortcode auto-generation from topic matching
+- Cost data RAG for AI prompts
+- Ranking report crawler
+
+**Known Issues:**
+- ReactQuill incompatible with React 19 - needs replacement (TipTap recommended)
+- Client-side API keys - security risk, needs Edge Functions migration
+- Desktop-first design - no mobile optimization
+
+See `docs/v5-updates/07-REMAINING-IMPLEMENTATION.md` for detailed gap analysis.
 
 ## V5 Updates Documentation
 
@@ -433,6 +510,10 @@ All GetEducated-specific requirements and implementation details are in `docs/v5
 - `03-MONETIZATION-SPECIFICATION.md` - Shortcode system and monetization logic
 - `04-IMPLEMENTATION-TODO.md` - Prioritized implementation task list
 - `05-MISSING-INFORMATION.md` - Documents still needed from client
+- `06-AUTHOR-STYLE-GUIDE.md` - Legacy style guide (superseded by 08)
+- `07-REMAINING-IMPLEMENTATION.md` - Gap analysis (~41% complete, detailed status)
+- `08-AUTHOR-STYLE-SPECIFICATION.md` - **CANONICAL** author spec with style proxies and content mapping
+- `09-ARTICLE-STYLE-EXTRACTS.md` - Full article excerpts for AI voice training
 
 ## Key URLs for GetEducated Integration
 

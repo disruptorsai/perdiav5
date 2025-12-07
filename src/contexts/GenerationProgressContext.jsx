@@ -135,8 +135,8 @@ export function GenerationProgressProvider({ children }) {
       // Load humanization settings
       const { data: settings } = await supabase
         .from('system_settings')
-        .select('setting_key, setting_value')
-        .in('setting_key', [
+        .select('key, value')
+        .in('key', [
           'humanization_provider',
           'stealthgpt_tone',
           'stealthgpt_mode',
@@ -147,7 +147,7 @@ export function GenerationProgressProvider({ children }) {
 
       const settingsMap = {}
       settings?.forEach(s => {
-        settingsMap[s.setting_key] = s.setting_value
+        settingsMap[s.key] = s.value
       })
 
       if (settingsMap.humanization_provider) {
@@ -343,8 +343,8 @@ export function GenerationProgressProvider({ children }) {
       // Load humanization settings
       const { data: dbSettings } = await supabase
         .from('system_settings')
-        .select('setting_key, setting_value')
-        .in('setting_key', [
+        .select('key, value')
+        .in('key', [
           'humanization_provider',
           'stealthgpt_tone',
           'stealthgpt_mode',
@@ -355,7 +355,7 @@ export function GenerationProgressProvider({ children }) {
 
       const settingsMap = {}
       dbSettings?.forEach(s => {
-        settingsMap[s.setting_key] = s.setting_value
+        settingsMap[s.key] = s.value
       })
 
       if (settingsMap.humanization_provider) {
