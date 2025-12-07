@@ -311,13 +311,31 @@ export function GenerationProgressProvider({ children }) {
 
   // Start full auto mode
   const startFullAutoMode = useCallback(async (settings = {}) => {
-    if (processingRef.current || !user) return
+    if (processingRef.current) {
+      console.log('[AutoMode] Already processing, ignoring start request')
+      return
+    }
+
+    if (!user) {
+      console.error('[AutoMode] No user found, cannot start')
+      return
+    }
+
+    console.log('[AutoMode] Starting full auto pipeline with settings:', settings)
 
     processingRef.current = true
     shouldStopRef.current = false
     setIsFullAuto(true)
     setIsVisible(true)
+    setIsMinimized(false) // Ensure window is not minimized
     setAutoModeResults(null)
+
+    // Set initial progress immediately so user sees something
+    setAutoModeProgress({
+      stage: 'initializing',
+      percentage: 0,
+      message: 'Initializing pipeline...',
+    })
 
     addLog('Starting full auto pipeline...', 'info')
 
@@ -374,16 +392,25 @@ export function GenerationProgressProvider({ children }) {
         }
       )
     } catch (error) {
-      console.error('Auto pipeline error:', error)
+      console.error('[AutoMode] Pipeline error:', error)
       addLog(`Pipeline error: ${error.message}`, 'error')
+
+      // Show the error in progress so user can see what went wrong
+      setAutoModeProgress({
+        stage: 'error',
+        percentage: 0,
+        message: `Error: ${error.message}`,
+      })
+
+      // Keep the window visible so user can see the error
+      // Don't hide it immediately
     } finally {
+      console.log('[AutoMode] Pipeline finished')
       setIsFullAuto(false)
       processingRef.current = false
-      setAutoModeProgress({
-        stage: null,
-        percentage: 0,
-        message: '',
-      })
+
+      // Only reset progress if we didn't have an error
+      // (error case keeps the error message visible)
 
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['articles'] })

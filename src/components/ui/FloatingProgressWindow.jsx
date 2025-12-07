@@ -120,7 +120,12 @@ export default function FloatingProgressWindow() {
   }, [isDragging, handleDragMove, handleDragEnd])
 
   // Don't render if not visible
-  if (!isVisible) return null
+  if (!isVisible) {
+    console.log('[FloatingProgress] Not visible, not rendering')
+    return null
+  }
+
+  console.log('[FloatingProgress] Rendering, isActive:', isActive, 'isFullAuto:', isFullAuto, 'progress:', progress)
 
   // Determine current mode and progress
   const currentMode = isFullAuto ? 'auto' : 'queue'
@@ -256,7 +261,7 @@ export default function FloatingProgressWindow() {
 
             {/* Main Progress Area */}
             <div className="p-4 space-y-4">
-              {isActive ? (
+              {isActive || progress.stage === 'error' ? (
                 <>
                   {/* Current Item Title */}
                   {progress.title && (
@@ -271,23 +276,31 @@ export default function FloatingProgressWindow() {
                   {/* Stage and Progress */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">
+                      <span className={progress.stage === 'error' ? 'text-red-600' : 'text-gray-600'}>
                         {progress.message || STAGE_LABELS[progress.stage] || 'Processing...'}
                       </span>
                       <span className="font-medium text-gray-900">
-                        {Math.round(progress.percentage)}%
+                        {Math.round(progress.percentage || 0)}%
                       </span>
                     </div>
-                    <Progress value={progress.percentage} className="h-2" />
+                    <Progress value={progress.percentage || 0} className="h-2" />
                   </div>
 
                   {/* Stage Indicator */}
                   {progress.stage && (
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100">
-                        <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                      <div className={`flex items-center justify-center w-6 h-6 rounded-full ${
+                        progress.stage === 'error' ? 'bg-red-100' : 'bg-blue-100'
+                      }`}>
+                        {progress.stage === 'error' ? (
+                          <XCircle className="w-3.5 h-3.5 text-red-600" />
+                        ) : (
+                          <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                        )}
                       </div>
-                      <span className="text-xs text-gray-500 capitalize">
+                      <span className={`text-xs capitalize ${
+                        progress.stage === 'error' ? 'text-red-500' : 'text-gray-500'
+                      }`}>
                         {progress.stage.replace('_', ' ')}
                       </span>
                     </div>
