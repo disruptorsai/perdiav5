@@ -196,15 +196,30 @@ class GrokClient {
       targetWordCount = 2000,
       includeOutline = true,
       costDataContext = null, // Cost data from ranking reports for RAG
+      authorProfile = null, // Comprehensive author profile from useContributors
+      authorName = null,
     } = options
 
-    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount, costDataContext)
+    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount, costDataContext, authorProfile, authorName)
+
+    // Build system prompt with optional author profile
+    let systemPrompt = 'You are an expert content writer who creates high-quality, engaging articles. You write in a natural, conversational style with varied sentence structure.'
+
+    if (authorProfile) {
+      systemPrompt = `You are an expert content writer creating content for GetEducated.com. You are writing as ${authorName || 'a professional author'}.
+
+=== AUTHOR PROFILE & WRITING STYLE ===
+${authorProfile}
+=== END AUTHOR PROFILE ===
+
+Follow the author's voice, style, and guidelines precisely. This will ensure consistency across all articles by this author.`
+    }
 
     try {
       const response = await this.request([
         {
           role: 'system',
-          content: 'You are an expert content writer who creates high-quality, engaging articles. You write in a natural, conversational style with varied sentence structure.'
+          content: systemPrompt
         },
         {
           role: 'user',
@@ -229,14 +244,19 @@ class GrokClient {
    * Build prompt for article draft generation
    * IMPORTANT: Includes GetEducated-specific content rules
    */
-  buildDraftPrompt(idea, contentType, targetWordCount, costDataContext = null) {
+  buildDraftPrompt(idea, contentType, targetWordCount, costDataContext = null, authorProfile = null, authorName = null) {
     let costDataSection = ''
     if (costDataContext) {
       costDataSection = `\n\n${costDataContext}\n`
     }
 
+    let authorSection = ''
+    if (authorName) {
+      authorSection = `\nAUTHOR: This article is being written by ${authorName}. Follow the author profile in the system prompt precisely.\n`
+    }
+
     return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
-${costDataSection}
+${costDataSection}${authorSection}
 
 CONTENT IDEA:
 Title: ${idea.title}

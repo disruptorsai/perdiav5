@@ -23,6 +23,7 @@ import KeywordsAndClusters from './pages/KeywordsAndClusters'
 import Automation from './pages/Automation'
 import Integrations from './pages/Integrations'
 import Contributors from './pages/Contributors'
+import ContributorDetail from './pages/ContributorDetail'
 import AITraining from './pages/AITraining'
 
 // Layout
@@ -81,6 +82,7 @@ function App() {
                     <Route path="automation" element={<Automation />} />
                     <Route path="integrations" element={<Integrations />} />
                     <Route path="contributors" element={<Contributors />} />
+                    <Route path="contributors/:contributorId" element={<ContributorDetail />} />
                     <Route path="ai-training" element={<AITraining />} />
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="settings" element={<Settings />} />

@@ -127,7 +127,7 @@ export function getAuthorDisplayName(authorName) {
 }
 
 /**
- * Fetch a single contributor by ID
+ * Fetch a single contributor by ID with full profile data
  */
 export function useContributor(contributorId) {
   return useQuery({
@@ -144,6 +144,139 @@ export function useContributor(contributorId) {
     },
     enabled: !!contributorId,
   })
+}
+
+/**
+ * Fetch contributor by name
+ */
+export function useContributorByName(name) {
+  return useQuery({
+    queryKey: ['contributor', 'name', name],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('article_contributors')
+        .select('*')
+        .eq('name', name)
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    enabled: !!name,
+  })
+}
+
+/**
+ * Get articles written by a contributor
+ */
+export function useContributorArticles(contributorId, limit = 10) {
+  return useQuery({
+    queryKey: ['contributor', contributorId, 'articles', limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('id, title, status, quality_score, created_at, published_at')
+        .eq('contributor_id', contributorId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!contributorId,
+  })
+}
+
+/**
+ * Build the author system prompt section from contributor profile
+ * This is used by the AI generation pipeline
+ */
+export function buildAuthorPromptSection(contributor) {
+  if (!contributor) return ''
+
+  const sections = []
+
+  // Voice description
+  if (contributor.voice_description) {
+    sections.push(`## Author Voice\n${contributor.voice_description}`)
+  }
+
+  // Writing guidelines
+  if (contributor.writing_guidelines) {
+    sections.push(`## Writing Guidelines\n${contributor.writing_guidelines}`)
+  }
+
+  // Signature phrases to use
+  if (contributor.signature_phrases?.length > 0) {
+    sections.push(`## Signature Phrases to Incorporate\nNaturally use phrases like: ${contributor.signature_phrases.join(', ')}`)
+  }
+
+  // Phrases to avoid
+  if (contributor.phrases_to_avoid?.length > 0) {
+    sections.push(`## Phrases to Avoid\nNEVER use these words/phrases: ${contributor.phrases_to_avoid.join(', ')}`)
+  }
+
+  // Target audience
+  if (contributor.target_audience) {
+    sections.push(`## Target Audience\n${contributor.target_audience}`)
+  }
+
+  // Preferred structure
+  if (contributor.preferred_structure) {
+    sections.push(`## Preferred Article Structure\n${contributor.preferred_structure}`)
+  }
+
+  // Intro style
+  if (contributor.intro_style) {
+    sections.push(`## Introduction Style\n${contributor.intro_style}`)
+  }
+
+  // Conclusion style
+  if (contributor.conclusion_style) {
+    sections.push(`## Conclusion Style\n${contributor.conclusion_style}`)
+  }
+
+  // SEO approach
+  if (contributor.seo_approach) {
+    sections.push(`## SEO Approach\n${contributor.seo_approach}`)
+  }
+
+  // Personality traits
+  if (contributor.personality_traits?.length > 0) {
+    sections.push(`## Personality Traits to Reflect\nYour writing should come across as: ${contributor.personality_traits.join(', ')}`)
+  }
+
+  // Writing style profile (legacy field)
+  if (contributor.writing_style_profile) {
+    const style = contributor.writing_style_profile
+    if (style.tone) sections.push(`## Tone: ${style.tone}`)
+    if (style.style_notes) sections.push(`## Style Notes: ${style.style_notes}`)
+  }
+
+  // Sample excerpts for reference
+  if (contributor.sample_excerpts?.length > 0) {
+    const excerptText = contributor.sample_excerpts
+      .map((e, i) => `Example ${i + 1}:\n"${e.excerpt}"`)
+      .join('\n\n')
+    sections.push(`## Sample Writing Excerpts\nHere are examples of this author's style:\n${excerptText}`)
+  }
+
+  return sections.join('\n\n')
+}
+
+/**
+ * Get the full author prompt - either custom or built from profile
+ */
+export function getAuthorSystemPrompt(contributor) {
+  if (!contributor) return ''
+
+  // If custom system prompt is set, use it exclusively
+  if (contributor.custom_system_prompt) {
+    return contributor.custom_system_prompt
+  }
+
+  // Otherwise build from profile fields
+  return buildAuthorPromptSection(contributor)
 }
 
 /**

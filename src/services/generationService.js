@@ -12,6 +12,7 @@ import IdeaDiscoveryService from './ideaDiscoveryService'
 import { getCostDataContext } from './costDataService'
 import { insertShortcodeInContent } from './shortcodeService'
 import { MonetizationEngine, monetizationValidator } from './monetizationEngine'
+import { getAuthorSystemPrompt } from '../hooks/useContributors'
 
 class GenerationService {
   constructor() {
@@ -58,22 +59,30 @@ class GenerationService {
       const costContext = await getCostDataContext(idea)
       console.log(`[Generation] Cost data found: ${costContext.hasData ? costContext.costData.length + ' entries' : 'none'}`)
 
-      this.updateProgress(onProgress, 'Generating draft with Grok AI...', 10)
+      this.updateProgress(onProgress, 'Auto-assigning contributor...', 10)
 
-      // STAGE 1: Generate draft with Grok (now includes cost data)
-      const draftData = await this.grok.generateDraft(idea, {
-        contentType,
-        targetWordCount,
-        costDataContext: costContext.promptText, // Pass cost data to prompt
-      })
-
-      this.updateProgress(onProgress, 'Auto-assigning contributor...', 25)
-
-      // STAGE 2: Auto-assign contributor
+      // STAGE 1: Auto-assign contributor FIRST so we can use their profile in generation
       let contributor = null
       if (autoAssignContributor) {
         contributor = await this.assignContributor(idea, contentType)
       }
+
+      // Build author system prompt from comprehensive profile
+      const authorPrompt = contributor ? getAuthorSystemPrompt(contributor) : ''
+      if (authorPrompt) {
+        console.log(`[Generation] Using author profile for ${contributor.name} (${authorPrompt.length} chars)`)
+      }
+
+      this.updateProgress(onProgress, 'Generating draft with Grok AI...', 20)
+
+      // STAGE 2: Generate draft with Grok (includes cost data AND author profile)
+      const draftData = await this.grok.generateDraft(idea, {
+        contentType,
+        targetWordCount,
+        costDataContext: costContext.promptText, // Pass cost data to prompt
+        authorProfile: authorPrompt, // Pass comprehensive author profile
+        authorName: contributor?.name,
+      })
 
       this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
 
@@ -98,9 +107,10 @@ class GenerationService {
           }
           console.log('[Generation] Content humanized with StealthGPT (optimized)')
         } else {
-          // Fallback to Claude
+          // Fallback to Claude with comprehensive author profile
           humanizedContent = await this.claude.humanize(draftData.content, {
             contributorProfile: contributor,
+            authorSystemPrompt: authorPrompt,
             targetPerplexity: 'high',
             targetBurstiness: 'high',
           })
@@ -110,6 +120,7 @@ class GenerationService {
         console.warn('[Generation] StealthGPT humanization failed, falling back to Claude:', humanizeError.message)
         humanizedContent = await this.claude.humanize(draftData.content, {
           contributorProfile: contributor,
+          authorSystemPrompt: authorPrompt,
           targetPerplexity: 'high',
           targetBurstiness: 'high',
         })

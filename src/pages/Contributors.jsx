@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   useContributors,
@@ -8,6 +9,8 @@ import {
   useUpdateContributor,
   useDeleteContributor,
   useToggleContributorStatus,
+  APPROVED_AUTHORS,
+  AUTHOR_DISPLAY_NAMES,
 } from '@/hooks/useContributors'
 import { useArticles } from '@/hooks/useArticles'
 
@@ -52,6 +55,9 @@ import {
   Briefcase,
   Tag,
   TrendingUp,
+  CheckCircle2,
+  ExternalLink,
+  Shield,
 } from 'lucide-react'
 
 // Content type options
@@ -65,8 +71,11 @@ const CONTENT_TYPE_OPTIONS = [
 ]
 
 export default function Contributors() {
+  const navigate = useNavigate()
+
   // State
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterActive, setFilterActive] = useState('all') // 'all', 'active', 'inactive'
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
@@ -90,6 +99,17 @@ export default function Contributors() {
   })
   const stats = useContributorStats()
   const { data: articles = [] } = useArticles()
+
+  // Separate approved active authors from others
+  const approvedAuthors = contributors.filter(c => APPROVED_AUTHORS.includes(c.name) && c.is_active)
+  const otherContributors = contributors.filter(c => !APPROVED_AUTHORS.includes(c.name) || !c.is_active)
+
+  // Apply filter
+  const getFilteredContributors = (list) => {
+    if (filterActive === 'active') return list.filter(c => c.is_active)
+    if (filterActive === 'inactive') return list.filter(c => !c.is_active)
+    return list
+  }
 
   // Mutations
   const createMutation = useCreateContributor()
@@ -220,15 +240,29 @@ export default function Contributors() {
           animate={{ opacity: 1, y: 0 }}
         >
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2">
-            Contributors
+            Authors & Contributors
           </h1>
           <p className="text-gray-600 text-lg">
-            Manage AI personas for content generation with unique writing styles
+            Manage author profiles with comprehensive writing styles for AI content generation
           </p>
         </motion.div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="border-none shadow-sm bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-green-100 rounded-xl">
+                  <Shield className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-green-700 font-medium">Approved Authors</p>
+                  <p className="text-2xl font-bold text-green-900">{approvedAuthors.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border-none shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -246,8 +280,8 @@ export default function Contributors() {
           <Card className="border-none shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-50 rounded-xl">
-                  <Eye className="w-6 h-6 text-green-600" />
+                <div className="p-3 bg-amber-50 rounded-xl">
+                  <Eye className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Active</p>
@@ -285,10 +319,35 @@ export default function Contributors() {
                   className="pl-10"
                 />
               </div>
-              <Button onClick={() => { resetForm(); setIsAddDialogOpen(true) }} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Add Contributor
-              </Button>
+              <div className="flex gap-2">
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant={filterActive === 'all' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setFilterActive('all')}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={filterActive === 'active' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setFilterActive('active')}
+                  >
+                    Active
+                  </Button>
+                  <Button
+                    variant={filterActive === 'inactive' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setFilterActive('inactive')}
+                  >
+                    Inactive
+                  </Button>
+                </div>
+                <Button onClick={() => { resetForm(); setIsAddDialogOpen(true) }} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add Contributor
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -324,125 +383,283 @@ export default function Contributors() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {contributors.map((contributor, index) => {
-                const contributorArticles = getContributorArticles(contributor.id)
-                const avgQuality = contributorArticles.length > 0
-                  ? Math.round(contributorArticles.reduce((sum, a) => sum + (a.quality_score || 0), 0) / contributorArticles.length)
-                  : 0
+          <div className="space-y-8">
+            {/* Approved Authors Section */}
+            {getFilteredContributors(approvedAuthors).length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-green-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Approved Authors</h2>
+                  <Badge className="bg-green-100 text-green-800 border-green-200">
+                    Active for Publishing
+                  </Badge>
+                </div>
+                <p className="text-sm text-gray-500">
+                  These are the only authors approved for GetEducated content. Click to view and edit their comprehensive writing profiles.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <AnimatePresence>
+                    {getFilteredContributors(approvedAuthors).map((contributor, index) => {
+                      const contributorArticles = getContributorArticles(contributor.id)
+                      const avgQuality = contributorArticles.length > 0
+                        ? Math.round(contributorArticles.reduce((sum, a) => sum + (a.quality_score || 0), 0) / contributorArticles.length)
+                        : 0
+                      const displayName = AUTHOR_DISPLAY_NAMES[contributor.name]
 
-                return (
-                  <motion.div
-                    key={contributor.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card className={`border-none shadow-sm hover:shadow-md transition-all h-full ${!contributor.is_active ? 'opacity-60' : ''}`}>
-                      <CardContent className="p-6">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                              {contributor.name?.charAt(0) || 'C'}
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-gray-900">{contributor.name}</h3>
-                              <Badge
-                                variant="outline"
-                                className={contributor.is_active
-                                  ? 'bg-green-50 text-green-700 border-green-200'
-                                  : 'bg-gray-100 text-gray-600'
-                                }
-                              >
-                                {contributor.is_active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </div>
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openViewDialog(contributor)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditDialog(contributor)}>
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleToggleStatus(contributor)}>
-                                {contributor.is_active ? (
-                                  <>
-                                    <EyeOff className="w-4 h-4 mr-2" />
-                                    Deactivate
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye className="w-4 h-4 mr-2" />
-                                    Activate
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(contributor.id)}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                      return (
+                        <motion.div
+                          key={contributor.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Card
+                            className="border-2 border-green-200 bg-gradient-to-br from-white to-green-50 shadow-sm hover:shadow-lg hover:border-green-300 transition-all h-full cursor-pointer"
+                            onClick={() => navigate(`/contributors/${contributor.id}`)}
+                          >
+                            <CardContent className="p-6">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="relative">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md">
+                                      {contributor.name?.charAt(0) || 'C'}
+                                    </div>
+                                    <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1">
+                                      <CheckCircle2 className="w-4 h-4 text-white" />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h3 className="font-bold text-gray-900 text-lg">{contributor.name}</h3>
+                                    {displayName && (
+                                      <p className="text-sm text-gray-500">
+                                        Writes as <span className="font-medium text-green-700">{displayName}</span>
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                                        Approved
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/contributors/${contributor.id}`) }}>
+                                      <Pencil className="w-4 h-4 mr-2" />
+                                      Edit Full Profile
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openViewDialog(contributor) }}>
+                                      <Eye className="w-4 h-4 mr-2" />
+                                      Quick View
+                                    </DropdownMenuItem>
+                                    {contributor.author_page_url && (
+                                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.open(contributor.author_page_url, '_blank') }}>
+                                        <ExternalLink className="w-4 h-4 mr-2" />
+                                        View Author Page
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
 
-                        {contributor.bio && (
-                          <p className="text-sm text-gray-500 mb-4 line-clamp-2">
-                            {contributor.bio}
-                          </p>
-                        )}
-
-                        {/* Expertise Areas */}
-                        {contributor.expertise_areas && contributor.expertise_areas.length > 0 && (
-                          <div className="mb-4">
-                            <div className="flex flex-wrap gap-1">
-                              {contributor.expertise_areas.slice(0, 3).map((area, i) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
-                                  {area}
-                                </Badge>
-                              ))}
-                              {contributor.expertise_areas.length > 3 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{contributor.expertise_areas.length - 3}
-                                </Badge>
+                              {contributor.bio && (
+                                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                                  {contributor.bio}
+                                </p>
                               )}
-                            </div>
-                          </div>
-                        )}
 
-                        {/* Stats */}
-                        <div className="flex items-center gap-4 pt-4 border-t text-sm">
-                          <div className="flex items-center gap-1 text-gray-500">
-                            <FileText className="w-4 h-4" />
-                            <span>{contributorArticles.length} articles</span>
-                          </div>
-                          {avgQuality > 0 && (
-                            <div className="flex items-center gap-1 text-gray-500">
-                              <Star className="w-4 h-4 text-yellow-500" />
-                              <span>{avgQuality}% avg quality</span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
+                              {/* Voice preview */}
+                              {contributor.voice_description && (
+                                <div className="mb-4 p-3 bg-white/70 rounded-lg border border-green-100">
+                                  <p className="text-xs text-green-700 font-medium mb-1">Writing Voice</p>
+                                  <p className="text-sm text-gray-600 line-clamp-2">{contributor.voice_description}</p>
+                                </div>
+                              )}
+
+                              {/* Expertise Areas */}
+                              {contributor.expertise_areas && contributor.expertise_areas.length > 0 && (
+                                <div className="mb-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {contributor.expertise_areas.slice(0, 4).map((area, i) => (
+                                      <Badge key={i} variant="secondary" className="text-xs bg-green-100 text-green-800">
+                                        {area}
+                                      </Badge>
+                                    ))}
+                                    {contributor.expertise_areas.length > 4 && (
+                                      <Badge variant="outline" className="text-xs">
+                                        +{contributor.expertise_areas.length - 4}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Stats */}
+                              <div className="flex items-center gap-4 pt-4 border-t border-green-100 text-sm">
+                                <div className="flex items-center gap-1 text-gray-600">
+                                  <FileText className="w-4 h-4" />
+                                  <span>{contributorArticles.length} articles</span>
+                                </div>
+                                {avgQuality > 0 && (
+                                  <div className="flex items-center gap-1 text-gray-600">
+                                    <Star className="w-4 h-4 text-yellow-500" />
+                                    <span>{avgQuality}% avg</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1 text-green-600 ml-auto">
+                                  <Pencil className="w-4 h-4" />
+                                  <span className="text-xs">Click to edit</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
+            {/* Other Contributors Section */}
+            {getFilteredContributors(otherContributors).length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-gray-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Other Contributors</h2>
+                  <Badge variant="outline" className="text-gray-500">
+                    Inactive / Legacy
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <AnimatePresence>
+                    {getFilteredContributors(otherContributors).map((contributor, index) => {
+                      const contributorArticles = getContributorArticles(contributor.id)
+                      const avgQuality = contributorArticles.length > 0
+                        ? Math.round(contributorArticles.reduce((sum, a) => sum + (a.quality_score || 0), 0) / contributorArticles.length)
+                        : 0
+
+                      return (
+                        <motion.div
+                          key={contributor.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Card className={`border-none shadow-sm hover:shadow-md transition-all h-full ${!contributor.is_active ? 'opacity-60' : ''}`}>
+                            <CardContent className="p-6">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-14 h-14 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                                    {contributor.name?.charAt(0) || 'C'}
+                                  </div>
+                                  <div>
+                                    <h3 className="font-bold text-gray-900">{contributor.name}</h3>
+                                    <Badge
+                                      variant="outline"
+                                      className={contributor.is_active
+                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                        : 'bg-gray-100 text-gray-600'
+                                      }
+                                    >
+                                      {contributor.is_active ? 'Active (Not Approved)' : 'Inactive'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => navigate(`/contributors/${contributor.id}`)}>
+                                      <Pencil className="w-4 h-4 mr-2" />
+                                      Edit Profile
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => openViewDialog(contributor)}>
+                                      <Eye className="w-4 h-4 mr-2" />
+                                      View Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleToggleStatus(contributor)}>
+                                      {contributor.is_active ? (
+                                        <>
+                                          <EyeOff className="w-4 h-4 mr-2" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Eye className="w-4 h-4 mr-2" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => handleDelete(contributor.id)}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+
+                              {contributor.bio && (
+                                <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+                                  {contributor.bio}
+                                </p>
+                              )}
+
+                              {/* Expertise Areas */}
+                              {contributor.expertise_areas && contributor.expertise_areas.length > 0 && (
+                                <div className="mb-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {contributor.expertise_areas.slice(0, 3).map((area, i) => (
+                                      <Badge key={i} variant="secondary" className="text-xs">
+                                        {area}
+                                      </Badge>
+                                    ))}
+                                    {contributor.expertise_areas.length > 3 && (
+                                      <Badge variant="outline" className="text-xs">
+                                        +{contributor.expertise_areas.length - 3}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Stats */}
+                              <div className="flex items-center gap-4 pt-4 border-t text-sm">
+                                <div className="flex items-center gap-1 text-gray-500">
+                                  <FileText className="w-4 h-4" />
+                                  <span>{contributorArticles.length} articles</span>
+                                </div>
+                                {avgQuality > 0 && (
+                                  <div className="flex items-center gap-1 text-gray-500">
+                                    <Star className="w-4 h-4 text-yellow-500" />
+                                    <span>{avgQuality}% avg quality</span>
+                                  </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
