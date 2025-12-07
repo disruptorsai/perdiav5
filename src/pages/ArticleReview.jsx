@@ -42,6 +42,7 @@ import {
   Code,
   FileText
 } from 'lucide-react'
+import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 
 // Comment categories and severities
 const COMMENT_CATEGORIES = [
@@ -589,80 +590,15 @@ export default function ArticleReview() {
           <div className="lg:col-span-2">
             <Card className="border-none shadow-sm overflow-hidden">
               {viewMode === 'preview' ? (
-                <>
-                  {/* Article Header */}
-                  <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-8">
-                    <div className="max-w-4xl">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="text-blue-200 text-sm font-medium uppercase tracking-wider">
-                          {article.content_type?.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-blue-300">•</span>
-                        <span className="text-blue-200 text-sm">
-                          {format(new Date(article.created_at), 'MMMM d, yyyy')}
-                        </span>
-                      </div>
-                      <h1 className="text-3xl md:text-4xl font-bold leading-tight mb-4">
-                        {article.title}
-                      </h1>
-                      {article.excerpt && (
-                        <p className="text-xl text-blue-100 leading-relaxed">
-                          {article.excerpt}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Article Body */}
-                  <CardContent className="p-0">
-                    <div className="max-w-4xl mx-auto px-8 py-12">
-                      <div
-                        ref={articleContentRef}
-                        className="prose prose-lg max-w-none select-text"
-                        dangerouslySetInnerHTML={{ __html: getHighlightedContent() }}
-                        onClick={(e) => {
-                          const mark = e.target.closest('mark[data-comment-id]')
-                          if (mark) {
-                            const commentId = mark.getAttribute('data-comment-id')
-                            const comment = revisions.find(r => r.id === commentId)
-                            if (comment) handleCommentClick(comment)
-                          }
-                        }}
-                      />
-                    </div>
-                  </CardContent>
-
-                  {/* Article Footer */}
-                  <div className="border-t bg-gray-50 px-8 py-6">
-                    <div className="max-w-4xl mx-auto">
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <div className="flex items-center gap-4">
-                          <span>{article.word_count?.toLocaleString() || 0} words</span>
-                          {article.article_contributors?.name && (
-                            <>
-                              <span>•</span>
-                              <span>By {article.article_contributors.name}</span>
-                            </>
-                          )}
-                        </div>
-                        {article.quality_score && (
-                          <Badge
-                            variant="outline"
-                            className={
-                              article.quality_score >= 85
-                                ? 'bg-green-50 text-green-700 border-green-300'
-                                : article.quality_score >= 70
-                                  ? 'bg-yellow-50 text-yellow-700 border-yellow-300'
-                                  : 'bg-red-50 text-red-700 border-red-300'
-                            }
-                          >
-                            Quality: {article.quality_score}%
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
+                <GetEducatedPreview
+                  ref={articleContentRef}
+                  article={article}
+                  highlightedContent={getHighlightedContent()}
+                  onMarkClick={(commentId) => {
+                    const comment = revisions.find(r => r.id === commentId)
+                    if (comment) handleCommentClick(comment)
+                  }}
+                />
               ) : (
                 /* HTML Source View */
                 <CardContent className="p-6">

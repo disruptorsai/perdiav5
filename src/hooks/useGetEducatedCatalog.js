@@ -498,3 +498,277 @@ export function useGetEducatedFilterOptions() {
     subjectAreas: stats?.subjectAreas ? Object.keys(stats.subjectAreas) : [],
   }
 }
+
+// ========================================
+// PAGINATION HOOKS
+// ========================================
+
+/**
+ * Fetch GetEducated articles with pagination
+ * @param {Object} options - Pagination and filter options
+ * @param {number} options.page - Current page (1-indexed)
+ * @param {number} options.pageSize - Items per page (default 50)
+ * @param {string} options.search - Search query
+ * @param {string} options.contentType - Filter by content type
+ * @param {string} options.degreeLevel - Filter by degree level
+ * @param {string} options.subjectArea - Filter by subject area
+ * @param {string} options.sortBy - Sort field (default: updated_at)
+ * @param {boolean} options.sortAsc - Sort ascending (default: false)
+ */
+export function useGetEducatedArticlesPaginated(options = {}) {
+  const { user } = useAuth()
+  const {
+    page = 1,
+    pageSize = 50,
+    search,
+    contentType,
+    degreeLevel,
+    subjectArea,
+    sortBy = 'updated_at',
+    sortAsc = false,
+  } = options
+
+  return useQuery({
+    queryKey: ['geteducated-articles-paginated', page, pageSize, search, contentType, degreeLevel, subjectArea, sortBy, sortAsc],
+    queryFn: async () => {
+      // Calculate offset
+      const offset = (page - 1) * pageSize
+
+      // Build query
+      let query = supabase
+        .from('geteducated_articles')
+        .select('*', { count: 'exact' })
+        .order(sortBy, { ascending: sortAsc })
+        .range(offset, offset + pageSize - 1)
+
+      // Apply filters
+      if (contentType && contentType !== 'all') {
+        query = query.eq('content_type', contentType)
+      }
+
+      if (degreeLevel && degreeLevel !== 'all') {
+        query = query.eq('degree_level', degreeLevel)
+      }
+
+      if (subjectArea && subjectArea !== 'all') {
+        query = query.eq('subject_area', subjectArea)
+      }
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,slug.ilike.%${search}%`)
+      }
+
+      const { data, error, count } = await query
+
+      if (error) throw error
+
+      return {
+        articles: data || [],
+        totalCount: count || 0,
+        totalPages: Math.ceil((count || 0) / pageSize),
+        currentPage: page,
+        pageSize,
+      }
+    },
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    keepPreviousData: true,
+  })
+}
+
+// ========================================
+// VERSION HOOKS
+// ========================================
+
+/**
+ * Fetch version history for an article
+ */
+export function useArticleVersions(articleId) {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['article-versions', articleId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('geteducated_article_versions')
+        .select('*')
+        .eq('article_id', articleId)
+        .order('version_number', { ascending: false })
+
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user && !!articleId,
+  })
+}
+
+/**
+ * Restore a previous version
+ */
+export function useRestoreVersion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, versionId }) => {
+      // Get the version to restore
+      const { data: version, error: versionError } = await supabase
+        .from('geteducated_article_versions')
+        .select('*')
+        .eq('id', versionId)
+        .single()
+
+      if (versionError) throw versionError
+
+      // Mark all versions as not current
+      await supabase
+        .from('geteducated_article_versions')
+        .update({ is_current: false })
+        .eq('article_id', articleId)
+
+      // Mark this version as current
+      await supabase
+        .from('geteducated_article_versions')
+        .update({ is_current: true })
+        .eq('id', versionId)
+
+      // Update the main article
+      const { data, error } = await supabase
+        .from('geteducated_articles')
+        .update({
+          current_version_id: versionId,
+          title: version.title,
+          meta_description: version.meta_description,
+          content_html: version.content_html,
+          content_text: version.content_text,
+          word_count: version.word_count,
+          faqs: version.faqs,
+          revision_status: 'revised',
+        })
+        .eq('id', articleId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-articles'] })
+    },
+  })
+}
+
+// ========================================
+// REVISION QUEUE HOOKS
+// ========================================
+
+/**
+ * Fetch revision queue
+ */
+export function useRevisionQueue(status = null) {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['revision-queue', status],
+    queryFn: async () => {
+      let query = supabase
+        .from('geteducated_revision_queue')
+        .select(`
+          *,
+          article:geteducated_articles(id, title, url, word_count, content_type)
+        `)
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (status) {
+        query = query.eq('status', status)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Add article to revision queue
+ */
+export function useQueueRevision() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ articleId, revisionType, instructions, priority = 5, scheduledFor = null }) => {
+      const { data, error } = await supabase
+        .from('geteducated_revision_queue')
+        .insert({
+          article_id: articleId,
+          revision_type: revisionType,
+          instructions,
+          priority,
+          scheduled_for: scheduledFor,
+          status: 'pending',
+          requested_by: user?.email || 'system',
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Update article status
+      await supabase
+        .from('geteducated_articles')
+        .update({ revision_status: 'queued' })
+        .eq('id', articleId)
+
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['revision-queue'] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-articles'] })
+    },
+  })
+}
+
+/**
+ * Cancel a queued revision
+ */
+export function useCancelRevision() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (queueId) => {
+      const { data: queueItem, error: fetchError } = await supabase
+        .from('geteducated_revision_queue')
+        .select('article_id')
+        .eq('id', queueId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      const { error } = await supabase
+        .from('geteducated_revision_queue')
+        .update({ status: 'cancelled' })
+        .eq('id', queueId)
+
+      if (error) throw error
+
+      // Reset article status
+      await supabase
+        .from('geteducated_articles')
+        .update({ revision_status: 'original' })
+        .eq('id', queueItem.article_id)
+
+      return true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['revision-queue'] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-articles'] })
+    },
+  })
+}

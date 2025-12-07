@@ -2,7 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { GenerationProgressProvider } from './contexts/GenerationProgressContext'
 import { ToastProvider } from './components/ui/toast'
+import FloatingProgressWindow from './components/ui/FloatingProgressWindow'
 import { queryClient } from './lib/queryClient'
 
 // Pages
@@ -16,6 +18,7 @@ import Settings from './pages/Settings'
 import ReviewQueue from './pages/ReviewQueue'
 import ArticleReview from './pages/ArticleReview'
 import SiteCatalog from './pages/SiteCatalog'
+import CatalogArticleDetail from './pages/CatalogArticleDetail'
 import KeywordsAndClusters from './pages/KeywordsAndClusters'
 import Automation from './pages/Automation'
 import Integrations from './pages/Integrations'
@@ -48,45 +51,50 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ToastProvider>
-          <BrowserRouter>
-            <AnimatePresence mode="wait">
-              <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
+        <GenerationProgressProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <AnimatePresence mode="wait">
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/login" element={<Login />} />
 
-            {/* Protected Routes */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <MainLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="ideas" element={<ContentIdeas />} />
-              <Route path="editor/:articleId" element={<ArticleEditor />} />
-              <Route path="editor" element={<ArticleEditor />} />
-              <Route path="library" element={<ContentLibrary />} />
-              <Route path="review" element={<ReviewQueue />} />
-              <Route path="review/:articleId" element={<ArticleReview />} />
-              <Route path="catalog" element={<SiteCatalog />} />
-              <Route path="keywords" element={<KeywordsAndClusters />} />
-              <Route path="automation" element={<Automation />} />
-              <Route path="integrations" element={<Integrations />} />
-              <Route path="contributors" element={<Contributors />} />
-              <Route path="ai-training" element={<AITraining />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
+                  {/* Protected Routes */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Dashboard />} />
+                    <Route path="ideas" element={<ContentIdeas />} />
+                    <Route path="editor/:articleId" element={<ArticleEditor />} />
+                    <Route path="editor" element={<ArticleEditor />} />
+                    <Route path="library" element={<ContentLibrary />} />
+                    <Route path="review" element={<ReviewQueue />} />
+                    <Route path="review/:articleId" element={<ArticleReview />} />
+                    <Route path="catalog" element={<SiteCatalog />} />
+                    <Route path="catalog/:articleId" element={<CatalogArticleDetail />} />
+                    <Route path="keywords" element={<KeywordsAndClusters />} />
+                    <Route path="automation" element={<Automation />} />
+                    <Route path="integrations" element={<Integrations />} />
+                    <Route path="contributors" element={<Contributors />} />
+                    <Route path="ai-training" element={<AITraining />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="settings" element={<Settings />} />
+                  </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </AnimatePresence>
-          </BrowserRouter>
-        </ToastProvider>
+                  {/* Fallback */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </AnimatePresence>
+              {/* Global Floating Progress Window - persists across page navigation */}
+              <FloatingProgressWindow />
+            </BrowserRouter>
+          </ToastProvider>
+        </GenerationProgressProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

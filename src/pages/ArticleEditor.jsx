@@ -64,6 +64,7 @@ import {
   ShortcodeInspector,
   MonetizationPreview
 } from '@/components/article'
+import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 
 // Status options for workflow
 const STATUS_OPTIONS = [
@@ -490,29 +491,18 @@ function ArticleEditorContent() {
         {/* Editor Area */}
         <div className={`flex-1 overflow-hidden flex flex-col ${showSidebar ? 'mr-80' : ''}`}>
           {showPreview ? (
-            /* Preview Mode */
-            <ScrollArea className="flex-1 p-6">
-              <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-sm p-8">
-                <h1 className="text-3xl font-bold mb-4">{title}</h1>
-                {article.contributor_name && (
-                  <p className="text-gray-500 mb-6">By {article.contributor_name}</p>
-                )}
-                <div
-                  className="prose prose-lg max-w-none"
-                  dangerouslySetInnerHTML={{ __html: content }}
-                />
-                {faqs.length > 0 && (
-                  <div className="mt-8 border-t pt-8">
-                    <h2 className="text-2xl font-bold mb-4">Frequently Asked Questions</h2>
-                    {faqs.map((faq, i) => (
-                      <div key={i} className="mb-4">
-                        <h3 className="font-semibold">{faq.question}</h3>
-                        <p className="text-gray-600">{faq.answer}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            /* Preview Mode - Shows exactly how article will appear on GetEducated.com */
+            <ScrollArea className="flex-1">
+              <GetEducatedPreview
+                article={{
+                  ...article,
+                  title,
+                  content,
+                  word_count: wordCount,
+                  faqs,
+                  article_contributors: contributors.find(c => c.id === selectedContributorId)
+                }}
+              />
             </ScrollArea>
           ) : (
             /* Edit Mode */

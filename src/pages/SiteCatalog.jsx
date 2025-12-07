@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -12,7 +13,7 @@ import {
   useToggleSiteArticleStatus,
 } from '@/hooks/useSiteArticles'
 import {
-  useGetEducatedArticles,
+  useGetEducatedArticlesPaginated,
   useGetEducatedCatalogStats,
   useGetEducatedFilterOptions,
 } from '@/hooks/useGetEducatedCatalog'
@@ -74,9 +75,15 @@ import {
   GraduationCap,
   Briefcase,
   Database,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react'
 
 export default function SiteCatalog() {
+  const navigate = useNavigate()
+
   // State
   const [activeTab, setActiveTab] = useState('geteducated') // 'geteducated' or 'custom'
   const [searchQuery, setSearchQuery] = useState('')
@@ -84,6 +91,8 @@ export default function SiteCatalog() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [contentTypeFilter, setContentTypeFilter] = useState('all')
   const [degreeLevelFilter, setDegreeLevelFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
@@ -107,16 +116,21 @@ export default function SiteCatalog() {
   const stats = useSiteArticleStats()
   const { data: clusters = [] } = useClusters()
 
-  // Hooks - GetEducated catalog
+  // Hooks - GetEducated catalog with pagination
   const { data: geStats, isLoading: geStatsLoading } = useGetEducatedCatalogStats()
   const geFilters = useGetEducatedFilterOptions()
-  const { data: geArticles = [], isLoading: geLoading } = useGetEducatedArticles({
+  const { data: gePaginatedData, isLoading: geLoading } = useGetEducatedArticlesPaginated({
+    page: currentPage,
+    pageSize,
     search: searchQuery || undefined,
-    contentType: contentTypeFilter !== 'all' ? contentTypeFilter : undefined,
-    degreeLevel: degreeLevelFilter !== 'all' ? degreeLevelFilter : undefined,
-    hasContent: true,
-    limit: 100,
+    contentType: contentTypeFilter,
+    degreeLevel: degreeLevelFilter,
   })
+
+  // Extract pagination data
+  const geArticles = gePaginatedData?.articles || []
+  const totalPages = gePaginatedData?.totalPages || 1
+  const totalCount = gePaginatedData?.totalCount || 0
   const createMutation = useCreateSiteArticle()
   const updateMutation = useUpdateSiteArticle()
   const deleteMutation = useDeleteSiteArticle()
@@ -466,7 +480,7 @@ export default function SiteCatalog() {
               {/* GetEducated Filters */}
               {activeTab === 'geteducated' && (
                 <>
-                  <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
+                  <Select value={contentTypeFilter} onValueChange={(v) => { setContentTypeFilter(v); setCurrentPage(1); }}>
                     <SelectTrigger className="w-[160px]">
                       <SelectValue placeholder="Content Type" />
                     </SelectTrigger>
@@ -480,7 +494,7 @@ export default function SiteCatalog() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={degreeLevelFilter} onValueChange={setDegreeLevelFilter}>
+                  <Select value={degreeLevelFilter} onValueChange={(v) => { setDegreeLevelFilter(v); setCurrentPage(1); }}>
                     <SelectTrigger className="w-[160px]">
                       <SelectValue placeholder="Degree Level" />
                     </SelectTrigger>
@@ -593,7 +607,8 @@ export default function SiteCatalog() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             transition={{ delay: index * 0.02 }}
-                            className="hover:bg-gray-50"
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => navigate(`/catalog/${article.id}`)}
                           >
                             <td className="p-4">
                               <div className="flex items-start gap-3">
@@ -601,15 +616,9 @@ export default function SiteCatalog() {
                                   <BookOpen className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div className="min-w-0">
-                                  <a
-                                    href={article.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-medium text-gray-900 hover:text-blue-600 line-clamp-1 flex items-center gap-1"
-                                  >
+                                  <span className="font-medium text-gray-900 hover:text-blue-600 line-clamp-1 flex items-center gap-1">
                                     {article.title}
-                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                  </a>
+                                  </span>
                                   <p className="text-sm text-gray-500 line-clamp-1">{article.slug}</p>
                                 </div>
                               </div>
@@ -809,12 +818,75 @@ export default function SiteCatalog() {
         </Card>
         )}
 
-        {/* Results Count */}
-        {activeTab === 'geteducated' && !geLoading && geArticles.length > 0 && (
-          <p className="text-sm text-gray-500 text-center">
-            Showing {geArticles.length} of {geStats?.enrichedArticles?.toLocaleString() || 0} enriched articles
-          </p>
+        {/* Pagination Controls */}
+        {activeTab === 'geteducated' && !geLoading && totalPages > 0 && (
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount.toLocaleString()} articles
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Page size selector */}
+                  <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25 / page</SelectItem>
+                      <SelectItem value="50">50 / page</SelectItem>
+                      <SelectItem value="100">100 / page</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Pagination buttons */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+
+                    <span className="px-3 py-1 text-sm font-medium">
+                      Page {currentPage} of {totalPages}
+                    </span>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
+
+        {/* Custom Articles Results Count */}
         {activeTab === 'custom' && !isLoading && filteredArticles.length > 0 && (
           <p className="text-sm text-gray-500 text-center">
             Showing {filteredArticles.length} of {articles.length} articles

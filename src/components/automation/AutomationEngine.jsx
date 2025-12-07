@@ -1,27 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap,
   Play,
-  Pause,
   Square,
   RefreshCw,
   CheckCircle,
-  XCircle,
   Loader2,
   FileText,
   Sparkles,
   TrendingUp,
-  Clock,
-  AlertCircle,
   ChevronRight,
   Settings,
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
-import GenerationService from '../../services/generationService'
-import { supabase } from '../../services/supabaseClient'
-import { useAuth } from '../../contexts/AuthContext'
+import { useGenerationProgress } from '../../contexts/GenerationProgressContext'
 import { useToast } from '../ui/toast'
 
 const PIPELINE_STAGES = [
@@ -36,18 +30,21 @@ const PIPELINE_STAGES = [
 export default function AutomationEngine({
   onComplete,
   defaultSources = ['reddit', 'news', 'trends'],
-  autoStart = false,
 }) {
-  const { user } = useAuth()
   const { addToast } = useToast()
-  const generationServiceRef = useRef(new GenerationService())
 
-  const [isRunning, setIsRunning] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [currentStage, setCurrentStage] = useState(null)
-  const [progress, setProgress] = useState({ message: '', percentage: 0 })
-  const [results, setResults] = useState(null)
-  const [logs, setLogs] = useState([])
+  // Use global generation progress context
+  const {
+    isFullAuto,
+    autoModeProgress,
+    autoModeResults,
+    startFullAutoMode,
+    stopFullAutoMode,
+    activityLog,
+    clearLog,
+    showWindow,
+  } = useGenerationProgress()
+
   const [settings, setSettings] = useState({
     sources: defaultSources,
     maxIdeas: 10,
@@ -55,155 +52,47 @@ export default function AutomationEngine({
     niche: 'higher education, online degrees, career development',
   })
 
-  // Add log entry
-  const addLog = useCallback((message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString()
-    setLogs(prev => [...prev, { timestamp, message, type }])
+  // Determine current stage based on percentage
+  const getCurrentStage = useCallback((percentage) => {
+    if (percentage < 15) return 'discover'
+    if (percentage < 20) return 'filter'
+    if (percentage < 25) return 'save'
+    if (percentage < 95) return 'generate'
+    if (percentage < 100) return 'qa'
+    return 'complete'
   }, [])
 
-  // Handle progress updates
-  const handleProgress = useCallback((progressUpdate) => {
-    setProgress(progressUpdate)
-    addLog(progressUpdate.message)
+  const currentStage = autoModeResults
+    ? 'complete'
+    : isFullAuto
+    ? getCurrentStage(autoModeProgress.percentage)
+    : null
 
-    // Determine current stage based on percentage
-    if (progressUpdate.percentage < 15) {
-      setCurrentStage('discover')
-    } else if (progressUpdate.percentage < 20) {
-      setCurrentStage('filter')
-    } else if (progressUpdate.percentage < 25) {
-      setCurrentStage('save')
-    } else if (progressUpdate.percentage < 95) {
-      setCurrentStage('generate')
-    } else if (progressUpdate.percentage < 100) {
-      setCurrentStage('qa')
-    } else {
-      setCurrentStage('complete')
-    }
-  }, [addLog])
-
-  // Handle completion
-  const handleComplete = useCallback((pipelineResults) => {
-    setResults(pipelineResults)
-    setIsRunning(false)
-    setCurrentStage('complete')
-
-    addLog(`Pipeline complete! Generated ${pipelineResults.generatedArticles.length} articles`, 'success')
-
-    addToast({
-      title: 'Automation Complete',
-      description: `Generated ${pipelineResults.generatedArticles.length} articles from ${pipelineResults.discoveredIdeas.length} ideas`,
-      variant: 'success',
+  // Start the automation pipeline using global context
+  const startPipeline = useCallback(() => {
+    startFullAutoMode({
+      sources: settings.sources,
+      maxIdeas: settings.maxIdeas,
+      generateImmediately: settings.generateImmediately,
+      niche: settings.niche,
     })
+    showWindow() // Show the floating progress window
 
     if (onComplete) {
-      onComplete(pipelineResults)
+      // The context will handle completion, but we can still notify the parent
     }
-  }, [addLog, addToast, onComplete])
-
-  // Load humanization settings from database
-  const loadHumanizationSettings = useCallback(async () => {
-    try {
-      const { data: settings, error } = await supabase
-        .from('system_settings')
-        .select('setting_key, setting_value')
-        .in('setting_key', [
-          'humanization_provider',
-          'stealthgpt_tone',
-          'stealthgpt_mode',
-          'stealthgpt_detector',
-          'stealthgpt_business',
-          'stealthgpt_double_passing',
-        ])
-
-      if (error) {
-        console.warn('[AutomationEngine] Could not load humanization settings:', error.message)
-        return
-      }
-
-      const settingsMap = {}
-      settings?.forEach(s => {
-        settingsMap[s.setting_key] = s.setting_value
-      })
-
-      if (settingsMap.humanization_provider) {
-        generationServiceRef.current.setHumanizationProvider(settingsMap.humanization_provider)
-      }
-
-      generationServiceRef.current.setStealthGptSettings({
-        tone: settingsMap.stealthgpt_tone || 'College',
-        mode: settingsMap.stealthgpt_mode || 'High',
-        detector: settingsMap.stealthgpt_detector || 'gptzero',
-        business: settingsMap.stealthgpt_business === 'true',
-        doublePassing: settingsMap.stealthgpt_double_passing === 'true',
-      })
-
-      addLog('StealthGPT humanization settings loaded', 'info')
-    } catch (err) {
-      console.warn('[AutomationEngine] Error loading humanization settings:', err)
-    }
-  }, [addLog])
-
-  // Start the automation pipeline
-  const startPipeline = useCallback(async () => {
-    if (!user) {
-      addToast({
-        title: 'Authentication Required',
-        description: 'Please log in to run the automation pipeline',
-        variant: 'error',
-      })
-      return
-    }
-
-    setIsRunning(true)
-    setIsPaused(false)
-    setResults(null)
-    setLogs([])
-    setProgress({ message: 'Starting pipeline...', percentage: 0 })
-    addLog('Starting automation pipeline...', 'info')
-
-    // Load humanization settings before starting
-    await loadHumanizationSettings()
-
-    try {
-      await generationServiceRef.current.runAutoPipeline(
-        {
-          sources: settings.sources,
-          maxIdeas: settings.maxIdeas,
-          generateImmediately: settings.generateImmediately,
-          userId: user.id,
-          niche: settings.niche,
-        },
-        handleProgress,
-        handleComplete
-      )
-    } catch (error) {
-      console.error('Pipeline error:', error)
-      addLog(`Pipeline error: ${error.message}`, 'error')
-      setIsRunning(false)
-
-      addToast({
-        title: 'Pipeline Error',
-        description: error.message,
-        variant: 'error',
-      })
-    }
-  }, [user, settings, handleProgress, handleComplete, addLog, addToast, loadHumanizationSettings])
+  }, [settings, startFullAutoMode, showWindow, onComplete])
 
   // Stop the pipeline
   const stopPipeline = useCallback(() => {
-    generationServiceRef.current.stop()
-    setIsRunning(false)
-    setIsPaused(false)
-    addLog('Pipeline stopped by user', 'warning')
-  }, [addLog])
+    stopFullAutoMode()
+  }, [stopFullAutoMode])
 
-  // Auto-start if requested
-  useEffect(() => {
-    if (autoStart && user && !isRunning) {
-      startPipeline()
-    }
-  }, [autoStart, user, isRunning, startPipeline])
+  // Use context values for display
+  const isRunning = isFullAuto
+  const progress = autoModeProgress
+  const results = autoModeResults
+  const logs = activityLog
 
   return (
     <div className="space-y-6">
@@ -324,25 +213,25 @@ export default function AutomationEngine({
             <h4 className="font-medium text-gray-900 mb-4">Pipeline Results</h4>
             <div className="grid grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <p className="text-3xl font-bold text-blue-600">{results.discoveredIdeas.length}</p>
+                <p className="text-3xl font-bold text-blue-600">{results.discoveredIdeas?.length || 0}</p>
                 <p className="text-sm text-blue-700">Ideas Discovered</p>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <p className="text-3xl font-bold text-green-600">{results.generatedArticles.length}</p>
+                <p className="text-3xl font-bold text-green-600">{results.generatedArticles?.length || 0}</p>
                 <p className="text-sm text-green-700">Articles Generated</p>
               </div>
               <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <p className="text-3xl font-bold text-yellow-600">{results.skippedIdeas.length}</p>
+                <p className="text-3xl font-bold text-yellow-600">{results.skippedIdeas?.length || 0}</p>
                 <p className="text-sm text-yellow-700">Duplicates Skipped</p>
               </div>
               <div className="text-center p-4 bg-red-50 rounded-lg">
-                <p className="text-3xl font-bold text-red-600">{results.failedIdeas.length}</p>
+                <p className="text-3xl font-bold text-red-600">{results.failedIdeas?.length || 0}</p>
                 <p className="text-sm text-red-700">Failed</p>
               </div>
             </div>
 
             {/* Generated Articles List */}
-            {results.generatedArticles.length > 0 && (
+            {results.generatedArticles?.length > 0 && (
               <div className="mt-6">
                 <h5 className="font-medium text-gray-700 mb-3">Generated Articles</h5>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -384,7 +273,7 @@ export default function AutomationEngine({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLogs([])}
+              onClick={clearLog}
               className="text-gray-500 hover:text-gray-700"
             >
               Clear

@@ -1,20 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   useGenerationQueue,
   useQueueStats,
-  useAddToQueue,
   useBulkAddToQueue,
-  useUpdateQueueStatus,
   useRemoveFromQueue,
   useClearCompleted,
   useRetryQueueItem,
   useUpdateQueuePriority,
 } from '@/hooks/useAutomation'
 import { useContentIdeas } from '@/hooks/useContentIdeas'
-import { useGenerateArticle } from '@/hooks/useGeneration'
 import { useSettingsMap } from '@/hooks/useSystemSettings'
+import { useGenerationProgress } from '@/contexts/GenerationProgressContext'
 import AutomationEngine from '@/components/automation/AutomationEngine'
 
 // UI Components
@@ -93,14 +91,17 @@ const STAGE_LABELS = {
 
 export default function Automation() {
   // State
-  const [isRunning, setIsRunning] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedIdeas, setSelectedIdeas] = useState([])
-  const [processingId, setProcessingId] = useState(null)
   const [mode, setMode] = useState('queue') // 'queue' | 'auto' - queue for manual queue, auto for full automation
 
-  // Refs for automation control
-  const shouldStopRef = useRef(false)
+  // Global generation progress context
+  const {
+    isProcessing,
+    startQueueProcessing,
+    stopQueueProcessing,
+    showWindow,
+  } = useGenerationProgress()
 
   // Hooks
   const { data: queue = [], isLoading: queueLoading } = useGenerationQueue()
@@ -109,14 +110,11 @@ export default function Automation() {
   const { getValue, getBoolValue } = useSettingsMap()
 
   // Mutations
-  const addToQueueMutation = useAddToQueue()
   const bulkAddMutation = useBulkAddToQueue()
-  const updateStatusMutation = useUpdateQueueStatus()
   const removeFromQueueMutation = useRemoveFromQueue()
   const clearCompletedMutation = useClearCompleted()
   const retryMutation = useRetryQueueItem()
   const updatePriorityMutation = useUpdateQueuePriority()
-  const generateArticleMutation = useGenerateArticle()
 
   // Get automation settings
   const autoModeEnabled = getBoolValue('automation_enabled', false)
@@ -128,101 +126,14 @@ export default function Automation() {
     idea => !queue.some(q => q.content_idea_id === idea.id)
   )
 
-  // Process queue when running
-  useEffect(() => {
-    if (!isRunning || processingId) return
-
-    const pendingItem = queue.find(q => q.status === 'pending')
-    if (!pendingItem) {
-      setIsRunning(false)
-      return
-    }
-
-    if (shouldStopRef.current) {
-      shouldStopRef.current = false
-      setIsRunning(false)
-      return
-    }
-
-    processQueueItem(pendingItem)
-  }, [isRunning, processingId, queue])
-
-  // Process a single queue item
-  const processQueueItem = async (item) => {
-    setProcessingId(item.id)
-
-    try {
-      // Update status to processing
-      await updateStatusMutation.mutateAsync({
-        id: item.id,
-        status: 'processing',
-        progress: 0,
-        stage: 'drafting',
-      })
-
-      // Get the content idea details
-      const idea = item.content_ideas
-
-      // Generate the article with progress updates
-      await generateArticleMutation.mutateAsync({
-        idea: {
-          id: item.content_idea_id,
-          title: idea?.title || 'Untitled',
-          description: idea?.description || '',
-          seed_topics: idea?.seed_topics || [],
-        },
-        options: {
-          contentType: 'guide',
-          targetWordCount: 2000,
-          autoAssignContributor: true,
-          addInternalLinks: true,
-          autoFix: true,
-        },
-        onProgress: async ({ message, percentage }) => {
-          // Map progress message to stage
-          let stage = 'drafting'
-          if (message.includes('humaniz')) stage = 'humanizing'
-          else if (message.includes('link')) stage = 'linking'
-          else if (message.includes('quality')) stage = 'quality_check'
-          else if (message.includes('fix')) stage = 'auto_fix'
-          else if (message.includes('final')) stage = 'saving'
-
-          await updateStatusMutation.mutateAsync({
-            id: item.id,
-            status: 'processing',
-            progress: percentage,
-            stage,
-          })
-        },
-      })
-
-      // Mark as completed
-      await updateStatusMutation.mutateAsync({
-        id: item.id,
-        status: 'completed',
-        progress: 100,
-      })
-
-    } catch (error) {
-      console.error('Queue processing error:', error)
-      await updateStatusMutation.mutateAsync({
-        id: item.id,
-        status: 'failed',
-        error: error.message || 'Unknown error occurred',
-      })
-    } finally {
-      setProcessingId(null)
-    }
-  }
-
-  // Handlers
+  // Handlers - now use global context
   const handleStart = () => {
-    shouldStopRef.current = false
-    setIsRunning(true)
+    startQueueProcessing()
+    showWindow() // Show the floating progress window
   }
 
   const handleStop = () => {
-    shouldStopRef.current = true
+    stopQueueProcessing()
   }
 
   const handleAddToQueue = async () => {
@@ -358,7 +269,7 @@ export default function Automation() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-3"
           >
-            {isRunning ? (
+            {isProcessing ? (
               <Button onClick={handleStop} variant="destructive" className="gap-2">
                 <Square className="w-4 h-4" />
                 Stop
@@ -421,7 +332,7 @@ export default function Automation() {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 rounded-lg">
-                  <Loader2 className={`w-5 h-5 text-blue-600 ${isRunning ? 'animate-spin' : ''}`} />
+                  <Loader2 className={`w-5 h-5 text-blue-600 ${isProcessing ? 'animate-spin' : ''}`} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Processing</p>
@@ -461,18 +372,28 @@ export default function Automation() {
         </div>
 
         {/* Status Banner */}
-        {isRunning && (
+        {isProcessing && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <Card className="border-none shadow-sm bg-blue-50 border-blue-200">
               <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                  <span className="text-blue-800 font-medium">
-                    Automation is running - Processing {stats.pending} pending items
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                    <span className="text-blue-800 font-medium">
+                      Automation is running - Processing {stats.pending} pending items
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-blue-700 hover:text-blue-800 hover:bg-blue-100"
+                    onClick={showWindow}
+                  >
+                    View Progress
+                  </Button>
                 </div>
               </CardContent>
             </Card>
