@@ -9,3 +9,6 @@ export { default as ContributorAssignment } from './ContributorAssignment'
 export { default as InternalLinkSuggester } from './InternalLinkSuggester'
 export { default as ShortcodeInspector } from './ShortcodeInspector'
 export { default as MonetizationPreview } from './MonetizationPreview'
+
+// Commenting system
+export { default as CommentableArticle } from './CommentableArticle'

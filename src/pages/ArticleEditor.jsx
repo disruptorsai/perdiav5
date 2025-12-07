@@ -22,7 +22,9 @@ import {
   FileText,
   Globe,
   MessageSquare,
-  Brain
+  MessageSquarePlus,
+  Brain,
+  Edit3
 } from 'lucide-react'
 // TipTap editor - React 19 compatible rich text editor
 import { RichTextEditor, getWordCount } from '@/components/ui/rich-text-editor'

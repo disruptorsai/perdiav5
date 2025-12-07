@@ -119,17 +119,14 @@ export default function FloatingProgressWindow() {
     }
   }, [isDragging, handleDragMove, handleDragEnd])
 
-  // Don't render if not visible
-  if (!isVisible) {
-    console.log('[FloatingProgress] Not visible, not rendering')
-    return null
-  }
-
-  console.log('[FloatingProgress] Rendering, isActive:', isActive, 'isFullAuto:', isFullAuto, 'progress:', progress)
-
-  // Determine current mode and progress
+  // Determine current mode and progress (define before visibility check for logging)
   const currentMode = isFullAuto ? 'auto' : 'queue'
   const progress = isFullAuto ? autoModeProgress : currentProgress
+
+  // Don't render if not visible
+  if (!isVisible) {
+    return null
+  }
 
   return (
     <AnimatePresence>

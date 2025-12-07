@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { format, subDays, startOfDay, eachDayOfInterval, parseISO } from 'date-fns'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   AreaChart,
   Area,
@@ -74,6 +74,50 @@ const STATUS_COLORS = {
 }
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4']
+
+// Animation configuration
+const CHART_ANIMATION = {
+  duration: 1200,
+  easing: 'ease-out',
+}
+
+// Framer Motion variants for staggered animations
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState('30')
@@ -261,42 +305,59 @@ export default function Analytics() {
         </motion.div>
 
         {/* Key Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            title="Total Articles"
-            value={metrics.total}
-            icon={FileText}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
-            trend={metrics.growth}
-            trendLabel="vs previous period"
-          />
-          <MetricCard
-            title="Published"
-            value={metrics.published}
-            icon={CheckCircle}
-            iconColor="text-green-600"
-            iconBg="bg-green-50"
-            subtitle={`${metrics.readyToPublish} ready to publish`}
-          />
-          <MetricCard
-            title="Avg Quality Score"
-            value={metrics.avgQuality}
-            icon={Target}
-            iconColor="text-purple-600"
-            iconBg="bg-purple-50"
-            suffix="%"
-            trend={metrics.avgQuality >= 85 ? 5 : metrics.avgQuality >= 70 ? 0 : -5}
-          />
-          <MetricCard
-            title="Total Words"
-            value={metrics.totalWords.toLocaleString()}
-            icon={BarChart3}
-            iconColor="text-orange-600"
-            iconBg="bg-orange-50"
-            subtitle={`${metrics.avgWordCount} avg per article`}
-          />
-        </div>
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div variants={itemVariants}>
+            <MetricCard
+              title="Total Articles"
+              value={metrics.total}
+              icon={FileText}
+              iconColor="text-blue-600"
+              iconBg="bg-blue-50"
+              trend={metrics.growth}
+              trendLabel="vs previous period"
+              animate
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <MetricCard
+              title="Published"
+              value={metrics.published}
+              icon={CheckCircle}
+              iconColor="text-green-600"
+              iconBg="bg-green-50"
+              subtitle={`${metrics.readyToPublish} ready to publish`}
+              animate
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <MetricCard
+              title="Avg Quality Score"
+              value={metrics.avgQuality}
+              icon={Target}
+              iconColor="text-purple-600"
+              iconBg="bg-purple-50"
+              suffix="%"
+              trend={metrics.avgQuality >= 85 ? 5 : metrics.avgQuality >= 70 ? 0 : -5}
+              animate
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <MetricCard
+              title="Total Words"
+              value={metrics.totalWords.toLocaleString()}
+              icon={BarChart3}
+              iconColor="text-orange-600"
+              iconBg="bg-orange-50"
+              subtitle={`${metrics.avgWordCount} avg per article`}
+              animate
+            />
+          </motion.div>
+        </motion.div>
 
         {/* Secondary Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -395,6 +456,10 @@ export default function Analytics() {
                         stroke={COLORS.primary}
                         fill="url(#colorArticles)"
                         strokeWidth={2}
+                        isAnimationActive={true}
+                        animationDuration={CHART_ANIMATION.duration}
+                        animationEasing={CHART_ANIMATION.easing}
+                        animationBegin={0}
                       />
                       <Area
                         yAxisId="right"
@@ -404,6 +469,10 @@ export default function Analytics() {
                         stroke={COLORS.secondary}
                         fill="url(#colorWords)"
                         strokeWidth={2}
+                        isAnimationActive={true}
+                        animationDuration={CHART_ANIMATION.duration}
+                        animationEasing={CHART_ANIMATION.easing}
+                        animationBegin={200}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -435,6 +504,10 @@ export default function Analytics() {
                           dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                           labelLine={false}
+                          isAnimationActive={true}
+                          animationDuration={CHART_ANIMATION.duration}
+                          animationEasing={CHART_ANIMATION.easing}
+                          animationBegin={0}
                         >
                           {statusData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
@@ -483,7 +556,15 @@ export default function Analytics() {
                             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                           }}
                         />
-                        <Bar dataKey="articles" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                        <Bar
+                          dataKey="articles"
+                          fill={COLORS.primary}
+                          radius={[0, 4, 4, 0]}
+                          isAnimationActive={true}
+                          animationDuration={CHART_ANIMATION.duration}
+                          animationEasing={CHART_ANIMATION.easing}
+                          animationBegin={0}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -522,8 +603,12 @@ export default function Analytics() {
                         name="Quality Score"
                         stroke={COLORS.success}
                         strokeWidth={3}
-                        dot={{ fill: COLORS.success, strokeWidth: 2 }}
-                        activeDot={{ r: 6 }}
+                        dot={{ fill: COLORS.success, strokeWidth: 2, r: 4 }}
+                        activeDot={{ r: 6, strokeWidth: 2 }}
+                        isAnimationActive={true}
+                        animationDuration={CHART_ANIMATION.duration}
+                        animationEasing={CHART_ANIMATION.easing}
+                        animationBegin={0}
                       />
                       {/* Threshold line */}
                       <Line
@@ -533,6 +618,10 @@ export default function Analytics() {
                         stroke="#9ca3af"
                         strokeDasharray="5 5"
                         dot={false}
+                        isAnimationActive={true}
+                        animationDuration={CHART_ANIMATION.duration}
+                        animationEasing={CHART_ANIMATION.easing}
+                        animationBegin={400}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -563,7 +652,15 @@ export default function Analytics() {
                           boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                         }}
                       />
-                      <Bar dataKey="count" name="Articles" radius={[4, 4, 0, 0]}>
+                      <Bar
+                        dataKey="count"
+                        name="Articles"
+                        radius={[4, 4, 0, 0]}
+                        isAnimationActive={true}
+                        animationDuration={CHART_ANIMATION.duration}
+                        animationEasing={CHART_ANIMATION.easing}
+                        animationBegin={0}
+                      >
                         {qualityDistribution.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
@@ -617,7 +714,16 @@ export default function Analytics() {
                           }}
                         />
                         <Legend />
-                        <Bar dataKey="articles" name="Articles" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                        <Bar
+                          dataKey="articles"
+                          name="Articles"
+                          fill={COLORS.primary}
+                          radius={[0, 4, 4, 0]}
+                          isAnimationActive={true}
+                          animationDuration={CHART_ANIMATION.duration}
+                          animationEasing={CHART_ANIMATION.easing}
+                          animationBegin={0}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -649,7 +755,15 @@ export default function Analytics() {
                             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                           }}
                         />
-                        <Bar dataKey="avgQuality" name="Avg Quality" radius={[4, 4, 0, 0]}>
+                        <Bar
+                          dataKey="avgQuality"
+                          name="Avg Quality"
+                          radius={[4, 4, 0, 0]}
+                          isAnimationActive={true}
+                          animationDuration={CHART_ANIMATION.duration}
+                          animationEasing={CHART_ANIMATION.easing}
+                          animationBegin={0}
+                        >
                           {contributorPerformance.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
@@ -670,6 +784,46 @@ export default function Analytics() {
   )
 }
 
+// Animated number component
+function AnimatedNumber({ value, duration = 1000 }) {
+  const [displayValue, setDisplayValue] = useState(0)
+
+  useEffect(() => {
+    // Parse the value - handle strings with commas
+    const numericValue = typeof value === 'string'
+      ? parseInt(value.replace(/,/g, ''), 10) || 0
+      : value || 0
+
+    if (numericValue === 0) {
+      setDisplayValue(0)
+      return
+    }
+
+    const startTime = Date.now()
+    const startValue = 0
+
+    const animate = () => {
+      const now = Date.now()
+      const progress = Math.min((now - startTime) / duration, 1)
+
+      // Easing function (ease-out cubic)
+      const easeOut = 1 - Math.pow(1 - progress, 3)
+      const current = Math.round(startValue + (numericValue - startValue) * easeOut)
+
+      setDisplayValue(current)
+
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+
+    requestAnimationFrame(animate)
+  }, [value, duration])
+
+  // Format with commas
+  return displayValue.toLocaleString()
+}
+
 // Metric Card Component
 function MetricCard({
   title,
@@ -681,21 +835,40 @@ function MetricCard({
   trendLabel,
   subtitle,
   suffix = '',
+  animate = false,
 }) {
   const isPositive = trend > 0
   const isNeutral = trend === 0
 
+  // Determine if value is a number that can be animated
+  const numericValue = typeof value === 'string'
+    ? parseInt(value.replace(/,/g, ''), 10)
+    : value
+  const canAnimate = animate && !isNaN(numericValue)
+
   return (
-    <Card className="border-none shadow-sm">
+    <Card className="border-none shadow-sm overflow-hidden">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-sm text-gray-500 mb-1">{title}</p>
             <p className="text-3xl font-bold text-gray-900">
-              {value}{suffix}
+              {canAnimate ? (
+                <>
+                  <AnimatedNumber value={numericValue} duration={1200} />
+                  {suffix}
+                </>
+              ) : (
+                <>{value}{suffix}</>
+              )}
             </p>
             {trend !== undefined && (
-              <div className="flex items-center mt-2 text-sm">
+              <motion.div
+                className="flex items-center mt-2 text-sm"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5, duration: 0.3 }}
+              >
                 {isPositive ? (
                   <ArrowUpRight className="w-4 h-4 text-green-600 mr-1" />
                 ) : isNeutral ? (
@@ -709,15 +882,32 @@ function MetricCard({
                 {trendLabel && (
                   <span className="text-gray-400 ml-1">{trendLabel}</span>
                 )}
-              </div>
+              </motion.div>
             )}
             {subtitle && (
-              <p className="text-sm text-gray-500 mt-2">{subtitle}</p>
+              <motion.p
+                className="text-sm text-gray-500 mt-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.3 }}
+              >
+                {subtitle}
+              </motion.p>
             )}
           </div>
-          <div className={`p-3 ${iconBg} rounded-xl`}>
+          <motion.div
+            className={`p-3 ${iconBg} rounded-xl`}
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{
+              type: 'spring',
+              stiffness: 200,
+              damping: 15,
+              delay: 0.2,
+            }}
+          >
             <Icon className={`w-6 h-6 ${iconColor}`} />
-          </div>
+          </motion.div>
         </div>
       </CardContent>
     </Card>
