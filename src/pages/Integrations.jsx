@@ -56,12 +56,8 @@ import {
   RefreshCcw,
   ExternalLink,
   Key,
-  Link2,
-  Zap,
-  AlertCircle,
   Loader2,
   Shield,
-  Server,
   Plug,
   Unplug,
   Eye,
@@ -77,22 +73,6 @@ const INTEGRATION_TYPES = [
     icon: Globe,
     color: 'bg-blue-50 text-blue-600',
     available: true,
-  },
-  {
-    id: 'ghost',
-    name: 'Ghost',
-    description: 'Publish to Ghost CMS',
-    icon: Server,
-    color: 'bg-purple-50 text-purple-600',
-    available: false,
-  },
-  {
-    id: 'webflow',
-    name: 'Webflow',
-    description: 'Publish to Webflow CMS',
-    icon: Zap,
-    color: 'bg-indigo-50 text-indigo-600',
-    available: false,
   },
 ]
 
@@ -247,10 +227,10 @@ export default function Integrations() {
           animate={{ opacity: 1, y: 0 }}
         >
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2">
-            Integrations
+            WordPress
           </h1>
           <p className="text-gray-600 text-lg">
-            Connect your content management systems and publishing platforms
+            Connect your WordPress sites for direct publishing
           </p>
         </motion.div>
 
