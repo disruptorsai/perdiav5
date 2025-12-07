@@ -10,6 +10,17 @@ import { useAuth } from '../contexts/AuthContext'
 export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
 
 /**
+ * Author display names for UI - maps internal name to public display name
+ * For GetEducated, the display name is the same as the real name (no aliases for public bylines)
+ */
+export const AUTHOR_DISPLAY_NAMES = {
+  'Tony Huffman': 'Tony Huffman',
+  'Kayleigh Gilbert': 'Kayleigh Gilbert',
+  'Sarah': 'Sarah',
+  'Charity': 'Charity',
+}
+
+/**
  * Internal style proxy mapping - for AI voice matching ONLY
  * CRITICAL: These are INTERNAL style proxies - NEVER use as public bylines
  * Public byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
