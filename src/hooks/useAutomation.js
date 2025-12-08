@@ -50,14 +50,18 @@ export function useQueueStats() {
  * Add item to generation queue
  */
 export function useAddToQueue() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ contentIdeaId, priority = 0 }) => {
+      if (!user) throw new Error('User not authenticated')
+
       const { data, error } = await supabase
         .from('generation_queue')
         .insert({
           content_idea_id: contentIdeaId,
+          user_id: user.id,
           status: 'pending',
           priority,
           progress_percentage: 0,
@@ -79,12 +83,16 @@ export function useAddToQueue() {
  * Bulk add items to queue
  */
 export function useBulkAddToQueue() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (items) => {
+      if (!user) throw new Error('User not authenticated')
+
       const queueItems = items.map((item, index) => ({
         content_idea_id: item.contentIdeaId,
+        user_id: user.id,
         status: 'pending',
         priority: item.priority || 0,
         progress_percentage: 0,

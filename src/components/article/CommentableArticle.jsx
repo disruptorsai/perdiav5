@@ -640,7 +640,7 @@ Revised content:`
   }
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
+    <div className={cn('grid grid-rows-[auto_1fr] h-full', className)}>
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-gray-50">
         <Button
@@ -672,11 +672,11 @@ Revised content:`
         )}
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 min-h-0">
-        {/* Article content area - using block layout to fix text selection */}
-        <div className="flex-1 overflow-y-auto min-w-0">
-          <article
+      {/* Main content area - using CSS Grid for proper text selection */}
+      <div className="grid grid-cols-[1fr_320px] overflow-hidden">
+        {/* Article content area */}
+        <div className="overflow-y-auto" style={{ display: 'block' }}>
+          <div
             ref={articleRef}
             className="prose prose-sm max-w-none p-6"
             onClick={handleContentClick}
@@ -685,7 +685,7 @@ Revised content:`
         </div>
 
         {/* Comments sidebar */}
-        <div className="w-80 border-l border-gray-200 bg-white flex-shrink-0 overflow-hidden">
+        <div className="border-l border-gray-200 bg-white overflow-hidden">
           <CommentsSidebar
             comments={comments}
             pendingCount={pendingComments.length}
