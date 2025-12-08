@@ -1,15 +1,20 @@
 /**
  * CommentableArticle Component
  *
+ * Uses TipTap in read-only mode for proper text selection handling.
  * Enables editors to:
- * 1. Select text in the article preview
- * 2. Click toolbar button (lights up when text selected) to add feedback
+ * 1. Select text in the article preview (TipTap handles this properly)
+ * 2. Click toolbar button to add feedback
  * 3. See highlighted text color-coded by severity
  * 4. View comment cards in a sidebar
  * 5. Trigger AI revision to process all pending comments
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import {
   MessageSquarePlus,
   Brain,
@@ -69,7 +74,6 @@ function AddCommentDialog({
   const [severity, setSeverity] = useState('minor')
   const [feedback, setFeedback] = useState('')
 
-  // Reset form when dialog opens with new selection
   useEffect(() => {
     if (open) {
       setFeedback('')
@@ -96,7 +100,6 @@ function AddCommentDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Selected text preview */}
           <div>
             <Label className="text-xs text-gray-500 mb-1">Selected Text</Label>
             <div
@@ -112,7 +115,6 @@ function AddCommentDialog({
             </div>
           </div>
 
-          {/* Category and Severity selectors */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="mb-1.5">Category</Label>
@@ -159,7 +161,6 @@ function AddCommentDialog({
             </div>
           </div>
 
-          {/* Feedback input */}
           <div>
             <Label className="mb-1.5">Feedback / Instructions</Label>
             <Textarea
@@ -290,7 +291,6 @@ function CommentsSidebar({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header with AI Revise button */}
       <div className="p-4 border-b border-gray-200 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold flex items-center gap-2">
@@ -321,7 +321,6 @@ function CommentsSidebar({
         )}
       </div>
 
-      {/* Comments list */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-3">
           {comments.length === 0 ? (
@@ -334,7 +333,6 @@ function CommentsSidebar({
             </div>
           ) : (
             <>
-              {/* Pending comments */}
               {pendingComments.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -352,7 +350,6 @@ function CommentsSidebar({
                 </div>
               )}
 
-              {/* Addressed comments */}
               {addressedComments.length > 0 && (
                 <div className="space-y-3 mt-6">
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -378,33 +375,6 @@ function CommentsSidebar({
 }
 
 /**
- * Apply highlights to HTML content based on comments
- */
-function getHighlightedContent(htmlContent, comments) {
-  if (!comments || comments.length === 0) return htmlContent
-
-  let result = htmlContent
-
-  // Sort comments by selected_text length (longer first) to avoid nested replacement issues
-  const sortedComments = [...comments]
-    .filter((c) => c.status === 'pending')
-    .sort((a, b) => b.selected_text.length - a.selected_text.length)
-
-  for (const comment of sortedComments) {
-    const severityConfig = getSeverityConfig(comment.severity)
-    const escapedText = comment.selected_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(`(${escapedText})`, 'gi')
-
-    result = result.replace(
-      regex,
-      `<mark data-comment-id="${comment.id}" style="background-color: ${severityConfig.bgColor}; border-bottom: 2px solid ${severityConfig.color}; cursor: pointer;">$1</mark>`
-    )
-  }
-
-  return result
-}
-
-/**
  * Main CommentableArticle component
  */
 export function CommentableArticle({
@@ -418,7 +388,6 @@ export function CommentableArticle({
   onContentChange,
   className,
 }) {
-  const articleRef = useRef(null)
   const [selectedText, setSelectedText] = useState('')
   const [hasSelection, setHasSelection] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -426,7 +395,6 @@ export function CommentableArticle({
   const [isRevising, setIsRevising] = useState(false)
   const [revisionProgress, setRevisionProgress] = useState('')
 
-  // Toast for user feedback
   const { toast } = useToast()
 
   // Hooks
@@ -438,48 +406,75 @@ export function CommentableArticle({
   const markAddressed = useMarkCommentsAddressed()
   const createAIRevision = useCreateAIRevision()
 
-  // Calculate highlighted content
-  const highlightedContent = useMemo(
-    () => getHighlightedContent(content, comments),
-    [content, comments]
-  )
+  // TipTap editor in read-only mode
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3, 4, 5, 6],
+        },
+      }),
+      Link.configure({
+        openOnClick: true,
+        HTMLAttributes: {
+          class: 'text-blue-600 underline hover:text-blue-800',
+          target: '_blank',
+        },
+      }),
+      Image.configure({
+        HTMLAttributes: {
+          class: 'max-w-full h-auto rounded',
+        },
+      }),
+    ],
+    content: content || '',
+    editable: false, // READ-ONLY MODE
+    onSelectionUpdate: ({ editor }) => {
+      // Get selected text from TipTap's selection
+      const { from, to, empty } = editor.state.selection
 
-  // Track text selection using selectionchange event
-  useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection()
-      const text = selection?.toString().trim()
-
-      // Check if selection is within our article container
-      if (
-        text &&
-        text.length > 0 &&
-        articleRef.current &&
-        selection?.anchorNode &&
-        articleRef.current.contains(selection.anchorNode)
-      ) {
-        setSelectedText(text)
-        setHasSelection(true)
+      if (!empty && from !== to) {
+        const text = editor.state.doc.textBetween(from, to, ' ')
+        if (text.trim()) {
+          setSelectedText(text.trim())
+          setHasSelection(true)
+        } else {
+          setHasSelection(false)
+        }
       } else {
         setHasSelection(false)
-        // Don't clear selectedText here - we need it for the dialog
       }
+    },
+    editorProps: {
+      attributes: {
+        class: cn(
+          'prose prose-sm max-w-none p-6 focus:outline-none min-h-[400px]',
+          'prose-headings:font-bold prose-headings:text-gray-900',
+          'prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg',
+          'prose-p:text-gray-700 prose-p:leading-relaxed',
+          'prose-a:text-blue-600 prose-a:underline',
+          'prose-ul:list-disc prose-ol:list-decimal',
+          'prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:italic',
+        ),
+      },
+    },
+  })
+
+  // Update editor content when prop changes
+  useEffect(() => {
+    if (editor && content && content !== editor.getHTML()) {
+      editor.commands.setContent(content, false)
     }
+  }, [content, editor])
 
-    document.addEventListener('selectionchange', handleSelectionChange)
-    return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [])
-
-  // Handle click on highlighted text to show comment in sidebar
-  const handleContentClick = useCallback((e) => {
-    const mark = e.target.closest('mark[data-comment-id]')
-    if (mark) {
-      const commentId = mark.getAttribute('data-comment-id')
-      setActiveCommentId(commentId)
+  // Cleanup editor
+  useEffect(() => {
+    return () => {
+      editor?.destroy()
     }
-  }, [])
+  }, [editor])
 
-  // Handle adding a comment - opens dialog with current selection
+  // Handle adding a comment
   const handleAddComment = useCallback(() => {
     if (!hasSelection || !selectedText) {
       toast.warning('Please select some text in the article first.')
@@ -501,7 +496,8 @@ export function CommentableArticle({
       setDialogOpen(false)
       setSelectedText('')
       setHasSelection(false)
-      window.getSelection()?.removeAllRanges()
+      // Clear selection in editor
+      editor?.commands.setTextSelection(0)
       toast.success('Your feedback has been saved successfully.', { title: 'Comment added' })
     } catch (error) {
       console.error('Failed to create comment:', error)
@@ -523,13 +519,7 @@ export function CommentableArticle({
   // Handle comment click in sidebar
   const handleCommentClick = (comment) => {
     setActiveCommentId(comment.id)
-    // Try to scroll to the highlighted text
-    const mark = articleRef.current?.querySelector(
-      `mark[data-comment-id="${comment.id}"]`
-    )
-    if (mark) {
-      mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+    // Could implement scroll-to-text functionality here if needed
   }
 
   // Handle AI revision
@@ -540,7 +530,6 @@ export function CommentableArticle({
     setRevisionProgress('Analyzing feedback...')
 
     try {
-      // Build the prompt with all pending comments
       setRevisionProgress('Building prompt...')
       const feedbackItems = pendingComments.map((comment, index) => {
         const categoryConfig = getCategoryConfig(comment.category)
@@ -576,21 +565,18 @@ INSTRUCTIONS:
 
 Revised content:`
 
-      // Call AI to revise
       setRevisionProgress('AI is revising...')
       const claudeClient = new ClaudeClient()
       const revisedContent = await claudeClient.humanize(prompt, {
         temperature: 0.7,
       })
 
-      // Clean up the response
       const cleanedContent = revisedContent
         .replace(/^```html\s*/i, '')
         .replace(/```\s*$/i, '')
         .replace(/^Here is the revised.*?:\s*/i, '')
         .trim()
 
-      // Save AI revision for training with full context
       setRevisionProgress('Saving revision...')
       const revisionData = await createAIRevision.mutateAsync({
         articleId,
@@ -617,14 +603,12 @@ Revised content:`
         promptUsed: prompt,
       })
 
-      // Mark comments as addressed
       await markAddressed.mutateAsync({
         commentIds: pendingComments.map((c) => c.id),
         revisionId: revisionData.id,
         articleId,
       })
 
-      // Update the content
       onContentChange?.(cleanedContent)
       setRevisionProgress('')
 
@@ -640,9 +624,9 @@ Revised content:`
   }
 
   return (
-    <div className={cn('grid grid-rows-[auto_1fr] h-full', className)}>
+    <div className={cn('flex flex-col h-full', className)}>
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
         <Button
           onClick={handleAddComment}
           disabled={!hasSelection}
@@ -672,20 +656,15 @@ Revised content:`
         )}
       </div>
 
-      {/* Main content area - using CSS Grid for proper text selection */}
-      <div className="grid grid-cols-[1fr_320px] overflow-hidden">
-        {/* Article content area */}
-        <div className="overflow-y-auto" style={{ display: 'block' }}>
-          <div
-            ref={articleRef}
-            className="prose prose-sm max-w-none p-6"
-            onClick={handleContentClick}
-            dangerouslySetInnerHTML={{ __html: highlightedContent }}
-          />
+      {/* Main content area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Article content area - TipTap Editor */}
+        <div className="flex-1 overflow-y-auto">
+          <EditorContent editor={editor} />
         </div>
 
         {/* Comments sidebar */}
-        <div className="border-l border-gray-200 bg-white overflow-hidden">
+        <div className="w-80 border-l border-gray-200 bg-white shrink-0 overflow-hidden">
           <CommentsSidebar
             comments={comments}
             pendingCount={pendingComments.length}
