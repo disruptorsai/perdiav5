@@ -4,6 +4,7 @@ import { useArticle, useUpdateArticle, useUpdateArticleStatus } from '../hooks/u
 import { useAutoFixQuality, useHumanizeContent, useReviseWithFeedback } from '../hooks/useGeneration'
 import { useActiveContributors } from '../hooks/useContributors'
 import { useCreateAIRevision } from '../hooks/useAIRevisions'
+import { usePublishArticle, usePublishEligibility } from '../hooks/usePublish'
 import {
   ArrowLeft,
   Save,
@@ -91,6 +92,7 @@ function ArticleEditorContent() {
   const reviseWithFeedback = useReviseWithFeedback()
   const createAIRevision = useCreateAIRevision()
   const { data: contributors = [] } = useActiveContributors()
+  const publishArticle = usePublishArticle()
   const { toast } = useToast()
 
   // Editor state
@@ -104,6 +106,7 @@ function ArticleEditorContent() {
 
   // UI state
   const [saving, setSaving] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [sidebarTab, setSidebarTab] = useState('quality')
   const [showPreview, setShowPreview] = useState(false)
@@ -168,6 +171,54 @@ function ArticleEditorContent() {
       refetch()
     } catch (error) {
       toast.error('Failed to update status')
+    }
+  }
+
+  // Publish to WordPress handler
+  const handlePublish = async (publishStatus = 'draft') => {
+    setIsPublishing(true)
+    try {
+      // Build full article object with current editor state
+      const articleToPublish = {
+        ...article,
+        title,
+        content,
+        meta_description: metaDescription,
+        focus_keyword: focusKeyword,
+        content_type: contentType,
+        contributor_id: selectedContributorId,
+        contributor_name: contributors.find(c => c.id === selectedContributorId)?.name,
+        faqs,
+        word_count: wordCount,
+        quality_score: qualityData?.score || article?.quality_score
+      }
+
+      const result = await publishArticle.mutateAsync({
+        article: articleToPublish,
+        options: {
+          status: publishStatus,
+          validateFirst: true,
+          updateDatabase: true
+        }
+      })
+
+      if (result.success) {
+        toast.success(`Article published to WordPress as ${publishStatus}!`)
+        if (result.webhookResponse?.url) {
+          toast.success(`Published URL: ${result.webhookResponse.url}`)
+        }
+        refetch()
+      } else {
+        if (result.blockingIssues?.length > 0) {
+          toast.error(`Cannot publish: ${result.blockingIssues.map(i => i.message).join(', ')}`)
+        } else {
+          toast.error(`Publish failed: ${result.error}`)
+        }
+      }
+    } catch (error) {
+      toast.error('Publish failed: ' + error.message)
+    } finally {
+      setIsPublishing(false)
     }
   }
 
@@ -488,6 +539,22 @@ function ArticleEditorContent() {
                   <Globe className="w-4 h-4 mr-2" />
                   View Published
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handlePublish('draft')}
+                  disabled={isPublishing || article.status === 'published'}
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Publish as Draft
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handlePublish('publish')}
+                  disabled={isPublishing || article.status === 'published'}
+                  className="text-green-600"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Publish Live
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -506,7 +573,7 @@ function ArticleEditorContent() {
             </Select>
 
             {/* Save Button */}
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving} variant="outline">
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -519,6 +586,27 @@ function ArticleEditorContent() {
                 </>
               )}
             </Button>
+
+            {/* Publish Button - prominent when ready */}
+            {article.status === 'ready_to_publish' && (
+              <Button
+                onClick={() => handlePublish('publish')}
+                disabled={isPublishing}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Publish to WordPress
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>
