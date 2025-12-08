@@ -10,39 +10,64 @@ class DataForSEOClient {
     // Get the Supabase URL for Edge Function calls
     this.supabaseUrl = import.meta.env.VITE_SUPABASE_URL
     this.functionName = 'dataforseo-api'
+    console.log('[DataForSEO] Client initialized with URL:', this.supabaseUrl)
   }
 
   /**
    * Call the DataForSEO Edge Function
    */
   async callEdgeFunction(action, payload) {
-    const { data: { session } } = await supabase.auth.getSession()
+    console.log('[DataForSEO] callEdgeFunction started:', { action, payload })
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      console.error('[DataForSEO] Session error:', sessionError)
+      throw new Error(`Session error: ${sessionError.message}`)
+    }
 
     if (!session) {
+      console.error('[DataForSEO] No session found - user not authenticated')
       throw new Error('User must be authenticated to use DataForSEO')
     }
 
-    const response = await fetch(`${this.supabaseUrl}/functions/v1/${this.functionName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ action, payload }),
-    })
+    console.log('[DataForSEO] Session found, user:', session.user?.email)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Edge Function error: ${errorText}`)
+    const url = `${this.supabaseUrl}/functions/v1/${this.functionName}`
+    console.log('[DataForSEO] Calling Edge Function at:', url)
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action, payload }),
+      })
+
+      console.log('[DataForSEO] Response status:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[DataForSEO] Error response body:', errorText)
+        throw new Error(`Edge Function error (${response.status}): ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('[DataForSEO] Response JSON:', result)
+
+      if (!result.success) {
+        console.error('[DataForSEO] API returned error:', result.error)
+        throw new Error(result.error || 'Unknown error from DataForSEO')
+      }
+
+      console.log('[DataForSEO] Success! Data received:', result.data?.length || 0, 'items')
+      return result.data
+    } catch (fetchError) {
+      console.error('[DataForSEO] Fetch error:', fetchError)
+      throw fetchError
     }
-
-    const result = await response.json()
-
-    if (!result.success) {
-      throw new Error(result.error || 'Unknown error from DataForSEO')
-    }
-
-    return result.data
   }
 
   /**

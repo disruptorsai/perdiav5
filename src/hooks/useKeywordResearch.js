@@ -28,32 +28,44 @@ export function useDataForSEOResearch() {
   const [error, setError] = useState(null)
 
   const research = useCallback(async (seedKeywords, options = {}) => {
+    console.log('[useDataForSEOResearch] Starting research with:', { seedKeywords, options })
     setIsResearching(true)
     setError(null)
 
     try {
+      console.log('[useDataForSEOResearch] Calling dataForSEOClient.getKeywordSuggestions...')
       const suggestions = await dataForSEOClient.getKeywordSuggestions(seedKeywords, {
         limit: options.limit || 50,
         includeSerp: options.includeSerp ?? false,
         ...options,
       })
 
+      console.log('[useDataForSEOResearch] Got suggestions:', suggestions?.length || 0, 'results')
+      console.log('[useDataForSEOResearch] First result sample:', suggestions?.[0])
+
       // Apply filters if provided
       let filteredResults = suggestions
       if (options.filters) {
+        console.log('[useDataForSEOResearch] Applying filters:', options.filters)
         filteredResults = dataForSEOClient.filterKeywords(suggestions, options.filters)
+        console.log('[useDataForSEOResearch] After filtering:', filteredResults?.length || 0, 'results')
       }
 
       // Rank by opportunity score
       const rankedResults = dataForSEOClient.rankKeywords(filteredResults)
+      console.log('[useDataForSEOResearch] Ranked results:', rankedResults?.length || 0)
 
       setResults(rankedResults)
+      console.log('[useDataForSEOResearch] Results set to state successfully')
       return rankedResults
     } catch (err) {
-      console.error('DataForSEO research error:', err)
+      console.error('[useDataForSEOResearch] ERROR:', err)
+      console.error('[useDataForSEOResearch] Error message:', err.message)
+      console.error('[useDataForSEOResearch] Error stack:', err.stack)
       setError(err.message || 'Failed to fetch keyword data')
       throw err
     } finally {
+      console.log('[useDataForSEOResearch] Setting isResearching to false')
       setIsResearching(false)
     }
   }, [])
