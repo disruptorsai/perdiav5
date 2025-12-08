@@ -64,7 +64,9 @@ import {
   ContributorAssignment,
   InternalLinkSuggester,
   ShortcodeInspector,
-  MonetizationPreview
+  MonetizationPreview,
+  CommentableArticle,
+  AITrainingPanel
 } from '@/components/article'
 import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 
@@ -105,6 +107,7 @@ function ArticleEditorContent() {
   const [showSidebar, setShowSidebar] = useState(true)
   const [sidebarTab, setSidebarTab] = useState('quality')
   const [showPreview, setShowPreview] = useState(false)
+  const [commentMode, setCommentMode] = useState(false) // Comment mode for text selection feedback
   const [qualityData, setQualityData] = useState(null)
   const [copied, setCopied] = useState(false)
   const [isHumanizing, setIsHumanizing] = useState(false)
@@ -216,6 +219,9 @@ function ArticleEditorContent() {
       ? [...feedbackComments, { comment: feedbackComment.trim(), timestamp: new Date().toISOString() }]
       : feedbackComments
 
+    // Get contributor info for context
+    const contributor = contributors.find(c => c.id === selectedContributorId)
+
     try {
       // Call AI revision with feedback
       const result = await reviseWithFeedback.mutateAsync({
@@ -229,13 +235,27 @@ function ArticleEditorContent() {
       // Update content with revised version
       setContent(result.content)
 
-      // Log the revision for AI training (per spec section 8.4)
+      // Log the revision for AI training (per spec section 8.4) with full context
       await createAIRevision.mutateAsync({
         articleId,
         previousVersion: previousContent,
         revisedVersion: result.content,
         commentsSnapshot: allComments,
         revisionType: 'feedback',
+        // Enhanced context for RLHF training
+        articleContext: {
+          title,
+          focus_keyword: focusKeyword,
+          content_type: contentType,
+          contributor_name: contributor?.name || null,
+          contributor_style: contributor?.writing_style || null,
+          article_status: article?.status,
+        },
+        // Store the quality delta if available
+        qualityDelta: qualityData ? {
+          before: qualityData.score,
+          after: null, // Will be calculated after content update
+        } : null,
       })
 
       // Clear feedback after successful revision
@@ -399,18 +419,36 @@ function ArticleEditorContent() {
               {wordCount} words
             </Badge>
 
-            {/* Preview Toggle */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              {showPreview ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
-            </Button>
+            {/* Edit/Preview/Comment Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={!showPreview && !commentMode ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none border-0"
+                onClick={() => { setShowPreview(false); setCommentMode(false); }}
+              >
+                <Edit3 className="w-4 h-4 mr-1" />
+                Edit
+              </Button>
+              <Button
+                variant={showPreview ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none border-0 border-l"
+                onClick={() => { setShowPreview(true); setCommentMode(false); }}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                Preview
+              </Button>
+              <Button
+                variant={commentMode ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none border-0 border-l"
+                onClick={() => { setShowPreview(false); setCommentMode(true); }}
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-1" />
+                Comment
+              </Button>
+            </div>
 
             {/* Sidebar Toggle */}
             <Button
@@ -489,7 +527,20 @@ function ArticleEditorContent() {
       <div className="flex-1 overflow-hidden flex">
         {/* Editor Area */}
         <div className={`flex-1 overflow-hidden flex flex-col ${showSidebar ? 'mr-80' : ''}`}>
-          {showPreview ? (
+          {commentMode ? (
+            /* Comment Mode - Text selection feedback with CommentableArticle */
+            <CommentableArticle
+              articleId={articleId}
+              content={content}
+              title={title}
+              focusKeyword={focusKeyword}
+              contentType={contentType}
+              contributorName={contributors.find(c => c.id === selectedContributorId)?.name}
+              contributorStyle={contributors.find(c => c.id === selectedContributorId)?.writing_style}
+              onContentChange={setContent}
+              className="flex-1"
+            />
+          ) : showPreview ? (
             /* Preview Mode - Shows exactly how article will appear on GetEducated.com */
             <ScrollArea className="flex-1">
               <GetEducatedPreview
@@ -587,6 +638,7 @@ function ArticleEditorContent() {
                 <TabsTrigger value="links" className="flex-1 text-xs py-2">Links</TabsTrigger>
                 <TabsTrigger value="monetize" className="flex-1 text-xs py-2">Monetize</TabsTrigger>
                 <TabsTrigger value="tools" className="flex-1 text-xs py-2">Tools</TabsTrigger>
+                <TabsTrigger value="training" className="flex-1 text-xs py-2">AI Training</TabsTrigger>
               </TabsList>
 
               <ScrollArea className="flex-1 min-h-0">
@@ -776,6 +828,15 @@ function ArticleEditorContent() {
                         Copy Plain Text
                       </Button>
                     </div>
+                  </TabsContent>
+
+                  {/* AI Training Tab */}
+                  <TabsContent value="training" className="mt-0">
+                    <AITrainingPanel
+                      articleId={articleId}
+                      content={content}
+                      onContentRestore={setContent}
+                    />
                   </TabsContent>
                 </div>
               </ScrollArea>

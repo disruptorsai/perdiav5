@@ -3,12 +3,54 @@
  * Uses xAI's Grok API for initial content generation
  */
 
+// Anti-hallucination rules to inject into all generation prompts
+const ANTI_HALLUCINATION_RULES = `
+=== CRITICAL: ANTI-HALLUCINATION RULES ===
+
+You MUST follow these rules to avoid generating fabricated content:
+
+1. NEVER FABRICATE STATISTICS:
+   - NEVER cite percentages, survey results, or specific numbers unless provided in the source data below
+   - BAD: "73% of students prefer online learning" or "According to a 2024 survey..."
+   - GOOD: "Many students prefer online learning" or "Research suggests..."
+
+2. NEVER FABRICATE STUDIES OR SURVEYS:
+   - NEVER reference specific studies, surveys, reports, or research unless explicitly provided
+   - BAD: "According to a 2024 survey by the Online Learning Consortium, 68% reported..."
+   - GOOD: "Industry research indicates that..." or "Experts in the field note..."
+
+3. NEVER FABRICATE SCHOOL NAMES:
+   - NEVER invent school names or use placeholder names like "University A, B, C"
+   - NEVER use template markers like "[School Name]" or "[University]"
+   - GOOD: Only mention schools if specific data is provided in the prompt, or use "many accredited online programs"
+
+4. NEVER FABRICATE LEGISLATION:
+   - NEVER cite specific bills (SB-1001, HB-123), acts, or legal codes unless provided
+   - BAD: "California's SB-1001 requires..." or "The Higher Education Act of 2024..."
+   - GOOD: "State regulations may require..." or "Check with your state licensing board"
+
+5. NEVER FABRICATE ORGANIZATIONS:
+   - NEVER invent organization names or acronyms
+   - ONLY cite real, well-known organizations: BLS, NCES, Department of Education, etc.
+
+ALTERNATIVE PHRASING TO USE:
+- Instead of "73% of students..." → "Many students find that..."
+- Instead of "A 2024 study found..." → "Research suggests that..."
+- Instead of "$45,000 average salary" → "competitive salaries" (unless BLS data is provided)
+- Instead of "University A offers..." → "Many accredited programs offer..."
+- Instead of "SB-1001 requires..." → "State requirements vary, so check with your licensing board"
+
+=== END ANTI-HALLUCINATION RULES ===
+`
+
 class GrokClient {
   constructor(apiKey) {
     this.apiKey = apiKey || import.meta.env.VITE_GROK_API_KEY
     this.baseUrl = 'https://api.x.ai/v1'
     // Use Grok 3 - grok-beta was deprecated on 2025-09-15
     this.model = 'grok-3'
+    // Increased token limit to prevent truncation (was 4000, now 8000)
+    this.defaultMaxTokens = 8000
   }
 
   /**
@@ -56,7 +98,7 @@ class GrokClient {
 
     const {
       temperature = 0.8,
-      max_tokens = 4000,
+      max_tokens = this.defaultMaxTokens, // Use class default (8000) instead of 4000
     } = options
 
     // Try multiple model names if the primary fails
@@ -227,7 +269,7 @@ Follow the author's voice, style, and guidelines precisely. This will ensure con
         }
       ], {
         temperature: 0.8,
-        max_tokens: 4000,
+        max_tokens: this.defaultMaxTokens, // Use 8000 to prevent truncation
       })
 
       // Parse JSON response (handles markdown code blocks)
@@ -256,6 +298,8 @@ Follow the author's voice, style, and guidelines precisely. This will ensure con
     }
 
     return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
+
+${ANTI_HALLUCINATION_RULES}
 ${costDataSection}${authorSection}
 
 CONTENT IDEA:
@@ -270,9 +314,10 @@ REQUIREMENTS:
 - Include an engaging introduction that hooks prospective online students
 - Use clear headings and subheadings (H2, H3)
 - Write in a conversational, natural tone that empathizes with readers' education goals
-- Include specific examples and actionable insights
+- Provide actionable guidance and practical insights (but DO NOT fabricate statistics or specific data)
 - Vary sentence length (short punchy sentences mixed with longer explanatory ones)
 - Make it valuable and informative for people considering online education
+- IMPORTANT: Complete the entire article including a proper conclusion - do not cut off mid-sentence
 
 === CRITICAL GETEDUCATED CONTENT RULES ===
 
@@ -283,10 +328,11 @@ REQUIREMENTS:
    - NEVER invent or estimate costs - only use data from ranking reports
 
 2. SCHOOL/DEGREE REFERENCES:
-   - When mentioning specific schools, indicate they should link to GetEducated school pages
-   - When mentioning degree types, indicate they should link to GetEducated degree database
+   - NEVER invent or fabricate school names (e.g., "University A", "College B", "[School Name]")
+   - Only mention specific schools if they appear in the cost data provided above
+   - When mentioning degree types generically, use phrases like "many accredited programs" or "leading online universities"
    - NEVER suggest linking directly to school .edu websites
-   - Emphasize schools/programs that are "Sponsored Listings" when relevant
+   - If no specific school data is provided, discuss programs in general terms without naming institutions
 
 3. EXTERNAL SOURCES:
    - For salary/job outlook data, reference Bureau of Labor Statistics (BLS)
@@ -301,10 +347,11 @@ REQUIREMENTS:
    - Help readers make informed decisions about their education
 
 5. STRUCTURE REQUIREMENTS:
-   - Include "GetEducated's Picks" callout suggestions where appropriate (3 featured programs)
+   - DO NOT include school recommendation sections (these will be added via shortcodes)
    - Include article navigation suggestions (anchor links to major sections)
-   - Minimum 3 FAQ items relevant to the topic
+   - Minimum 3 FAQ items relevant to the topic with COMPLETE answers (no truncation)
    - Include a "How we researched this" note mentioning GetEducated's methodology
+   - ALWAYS include a proper conclusion section - never end the article abruptly
 
 === END GETEDUCATED RULES ===
 

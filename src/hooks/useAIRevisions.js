@@ -115,7 +115,7 @@ export function useAIRevisionStats() {
 }
 
 /**
- * Create a new AI revision record
+ * Create a new AI revision record with full context for RLHF training
  */
 export function useCreateAIRevision() {
   const queryClient = useQueryClient()
@@ -129,7 +129,22 @@ export function useCreateAIRevision() {
       commentsSnapshot = [],
       revisionType = 'feedback',
       modelUsed = 'claude-sonnet-4',
+      // Enhanced context for RLHF
+      articleContext = {},  // { title, focus_keyword, content_type, contributor_name, contributor_style }
+      promptUsed = null,    // The actual prompt sent to AI
+      qualityDelta = null,  // { before, after, improvement }
     }) => {
+      // Calculate word counts for context
+      const wordCountBefore = previousVersion ? previousVersion.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0
+      const wordCountAfter = revisedVersion ? revisedVersion.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0
+
+      const fullContext = {
+        ...articleContext,
+        word_count_before: wordCountBefore,
+        word_count_after: wordCountAfter,
+        word_count_delta: wordCountAfter - wordCountBefore,
+      }
+
       const { data, error } = await supabase
         .from('ai_revisions')
         .insert({
@@ -141,6 +156,11 @@ export function useCreateAIRevision() {
           revision_type: revisionType,
           model_used: modelUsed,
           include_in_training: true, // Default to include per Kayleigh's requirements
+          // New enhanced fields
+          article_context: fullContext,
+          prompt_used: promptUsed,
+          quality_delta: qualityDelta,
+          applied: true,
         })
         .select()
         .single()
@@ -215,6 +235,98 @@ export function useDeleteAIRevision() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-revisions'] })
+    },
+  })
+}
+
+/**
+ * Rollback an AI revision - marks it as rolled back and returns previous content
+ * This preserves the revision record for training data audit
+ */
+export function useRollbackAIRevision() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ revisionId, articleId }) => {
+      // First get the revision to get the previous version
+      const { data: revision, error: fetchError } = await supabase
+        .from('ai_revisions')
+        .select('previous_version, article_id')
+        .eq('id', revisionId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      // Mark the revision as rolled back
+      const { data, error } = await supabase
+        .from('ai_revisions')
+        .update({
+          applied: false,
+          rolled_back_at: new Date().toISOString(),
+          rolled_back_by: user?.id,
+          include_in_training: false, // Don't include rolled back revisions in training
+        })
+        .eq('id', revisionId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        revision: data,
+        previousContent: revision.previous_version,
+        articleId: revision.article_id,
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-revisions'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-revisions', 'article', data.articleId] })
+    },
+  })
+}
+
+/**
+ * Re-apply a rolled back revision
+ */
+export function useReapplyAIRevision() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ revisionId }) => {
+      // Get the revision to return the revised version
+      const { data: revision, error: fetchError } = await supabase
+        .from('ai_revisions')
+        .select('revised_version, article_id')
+        .eq('id', revisionId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      // Mark it as applied again
+      const { data, error } = await supabase
+        .from('ai_revisions')
+        .update({
+          applied: true,
+          rolled_back_at: null,
+          rolled_back_by: null,
+          include_in_training: true, // Re-include in training
+        })
+        .eq('id', revisionId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        revision: data,
+        revisedContent: revision.revised_version,
+        articleId: revision.article_id,
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-revisions'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-revisions', 'article', data.articleId] })
     },
   })
 }
@@ -297,6 +409,8 @@ export default {
   useUpdateAIRevision,
   useToggleTrainingInclusion,
   useDeleteAIRevision,
+  useRollbackAIRevision,
+  useReapplyAIRevision,
   useBulkUpdateTrainingInclusion,
   useExportTrainingData,
 }

@@ -12,3 +12,6 @@ export { default as MonetizationPreview } from './MonetizationPreview'
 
 // Commenting system
 export { default as CommentableArticle } from './CommentableArticle'
+
+// AI Training
+export { default as AITrainingPanel } from './AITrainingPanel'

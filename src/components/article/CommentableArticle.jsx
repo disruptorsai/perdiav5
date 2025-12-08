@@ -438,6 +438,10 @@ export function CommentableArticle({
   articleId,
   content,
   title,
+  focusKeyword = '',
+  contentType = 'guide',
+  contributorName = null,
+  contributorStyle = null,
   onContentChange,
   className,
 }) {
@@ -569,6 +573,9 @@ export function CommentableArticle({
 - Any shortcodes like [degree_table] or [ge_internal_link]
 
 ARTICLE TITLE: ${title}
+${focusKeyword ? `FOCUS KEYWORD: ${focusKeyword}` : ''}
+${contentType ? `CONTENT TYPE: ${contentType}` : ''}
+${contributorName ? `AUTHOR STYLE: ${contributorName}${contributorStyle ? ` - ${contributorStyle}` : ''}` : ''}
 
 CURRENT CONTENT:
 ${content}
@@ -599,7 +606,7 @@ Revised content:`
         .replace(/^Here is the revised.*?:\s*/i, '')
         .trim()
 
-      // Save AI revision for training
+      // Save AI revision for training with full context
       setRevisionProgress('Saving revision...')
       const revisionData = await createAIRevision.mutateAsync({
         articleId,
@@ -613,6 +620,19 @@ Revised content:`
           feedback: c.feedback,
         })),
         revisionType: 'feedback',
+        // Enhanced context for RLHF training
+        articleContext: {
+          title,
+          focus_keyword: focusKeyword,
+          content_type: contentType,
+          contributor_name: contributorName,
+          contributor_style: contributorStyle,
+          comment_count: pendingComments.length,
+          categories_addressed: [...new Set(pendingComments.map(c => c.category))],
+          severities_addressed: [...new Set(pendingComments.map(c => c.severity))],
+        },
+        // Store the exact prompt used for reproducibility
+        promptUsed: prompt,
       })
 
       // Mark comments as addressed

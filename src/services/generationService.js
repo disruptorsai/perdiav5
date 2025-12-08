@@ -19,6 +19,7 @@ import {
   validateByline,
   recommendAuthor,
 } from '../hooks/useContributors'
+import { contentValidator, validateDraft, validateForPublish } from './validation/contentValidator'
 
 class GenerationService {
   constructor() {
@@ -89,6 +90,49 @@ class GenerationService {
         authorProfile: authorPrompt, // Pass comprehensive author profile
         authorName: contributor?.name,
       })
+
+      this.updateProgress(onProgress, 'Validating draft content...', 30)
+
+      // VALIDATION CHECKPOINT 1: Check draft for truncation and placeholders
+      const draftValidation = await validateDraft(draftData.content, {
+        targetWordCount,
+        faqs: draftData.faqs,
+        checkTruncation: true,
+        checkPlaceholders: true,
+        checkStatistics: false, // Defer to final validation
+        checkLegislation: false, // Defer to final validation
+      })
+
+      if (draftValidation.isBlocked) {
+        console.error('[Generation] Draft validation BLOCKED:', draftValidation.blockingIssues)
+        // Attempt to regenerate once if draft is truncated or has placeholders
+        console.log('[Generation] Attempting to regenerate draft...')
+        const retryDraftData = await this.grok.generateDraft(idea, {
+          contentType,
+          targetWordCount: targetWordCount + 200, // Request slightly longer to ensure completion
+          costDataContext: costContext.promptText,
+          authorProfile: authorPrompt,
+          authorName: contributor?.name,
+        })
+
+        // Re-validate
+        const retryValidation = await validateDraft(retryDraftData.content, {
+          targetWordCount,
+          faqs: retryDraftData.faqs,
+        })
+
+        if (retryValidation.isBlocked) {
+          // Still blocked - throw error with details
+          const issues = retryValidation.blockingIssues.map(i => i.message).join('; ')
+          throw new Error(`Draft generation failed validation: ${issues}`)
+        }
+
+        // Use retry data
+        Object.assign(draftData, retryDraftData)
+        console.log('[Generation] Retry draft passed validation')
+      } else {
+        console.log('[Generation] Draft validation passed:', contentValidator.getSummary(draftValidation))
+      }
 
       this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
 
@@ -205,6 +249,39 @@ class GenerationService {
         // Non-blocking - continue without shortcodes
       }
 
+      this.updateProgress(onProgress, 'Running content validation...', 68)
+
+      // VALIDATION CHECKPOINT 2: Full validation before quality scoring
+      const preQAValidation = await validateForPublish(finalContent, {
+        targetWordCount,
+        faqs: draftData.faqs,
+        checkTruncation: true,
+        checkPlaceholders: true,
+        checkStatistics: true,
+        checkLegislation: true,
+        checkSchoolNames: true,
+        checkInternalLinks: true,
+      })
+
+      // Log validation results
+      console.log('[Generation] Pre-QA Validation:', contentValidator.getSummary(preQAValidation))
+
+      // Extract validation flags for storage
+      const validationFlags = preQAValidation.issues.map(issue => ({
+        type: issue.type,
+        severity: issue.severity,
+        message: issue.message,
+      }))
+
+      const requiresHumanReview = preQAValidation.requiresReview
+      const reviewReasons = preQAValidation.warnings.map(w => w.type)
+
+      // If blocked, throw error (shouldn't happen if draft validation passed, but safety check)
+      if (preQAValidation.isBlocked) {
+        const issues = preQAValidation.blockingIssues.map(i => i.message).join('; ')
+        throw new Error(`Content validation failed: ${issues}`)
+      }
+
       this.updateProgress(onProgress, 'Running quality assurance...', 70)
 
       // STAGE 5: Quality Assurance Loop (with auto-fix)
@@ -220,6 +297,11 @@ class GenerationService {
         contributor_id: contributor?.id || null,
         contributor_name: contributor?.name || null,
         status: 'drafting',
+        // NEW: Validation tracking fields
+        validation_flags: validationFlags,
+        requires_human_review: requiresHumanReview,
+        review_reasons: reviewReasons,
+        validation_risk_level: preQAValidation.riskLevel,
       }
 
       if (autoFix) {
