@@ -44,13 +44,15 @@ export async function searchCostData(topic, options = {}) {
     query = query.ilike('degree_level', `%${degreeLevel}%`)
   }
 
-  // Search by keywords in program name, school name, or report title
-  const searchConditions = keywords.map(kw =>
-    `program_name.ilike.%${kw}%,school_name.ilike.%${kw}%,ranking_reports.report_title.ilike.%${kw}%`
-  ).join(',')
+  // Search by keywords in program name and school name
+  // Note: Cannot filter on nested table (ranking_reports) inside or() - PostgREST limitation
+  // Build conditions for each keyword: (program_name.ilike.%kw% OR school_name.ilike.%kw%)
+  if (keywords.length > 0) {
+    const keywordConditions = keywords.map(kw =>
+      `program_name.ilike.%${kw}%,school_name.ilike.%${kw}%`
+    ).join(',')
 
-  if (searchConditions) {
-    query = query.or(searchConditions)
+    query = query.or(keywordConditions)
   }
 
   // Order by sponsorship status if prioritizing

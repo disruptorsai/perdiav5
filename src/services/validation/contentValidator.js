@@ -315,24 +315,44 @@ class ContentValidator {
     // Check 2: Content ends mid-sentence
     const trimmedContent = htmlContent.trim()
 
-    // Check for truncation indicators
-    for (const pattern of TRUNCATION_INDICATORS) {
+    // Check for obvious truncation indicators (incomplete tags, unclosed brackets)
+    // Only check the most definitive patterns - avoid false positives
+    const definiteTruncationPatterns = [
+      // Incomplete HTML tags (opening tag never closed)
+      /<[a-z]+[^>]*$/i,
+      // Incomplete quotes (single unmatched quote at end)
+      /"[^"]{0,100}$/,
+      // Incomplete parentheses/brackets at the very end
+      /\([^)]{0,50}$/,
+      /\[[^\]]{0,50}$/,
+      // Incomplete HTML entities
+      /&[a-z]+$/i,
+      /&#\d+$/,
+    ]
+
+    for (const pattern of definiteTruncationPatterns) {
       if (pattern.test(trimmedContent)) {
         result.isTruncated = true
         result.reason = 'Content appears to end mid-sentence or mid-tag'
         result.details.indicator = pattern.toString()
+        result.details.ending = trimmedContent.slice(-100)
         return result
       }
     }
 
     // Check 3: Content doesn't end with valid ending
+    // Only check this if content is substantial (to avoid false positives on short descriptions)
     const hasValidEnding = VALID_ENDINGS.some(pattern => pattern.test(trimmedContent))
-    if (!hasValidEnding && wordCount > 100) {
-      // Only flag if there's substantial content
-      result.isTruncated = true
-      result.reason = 'Content does not end with a complete sentence or valid HTML tag'
-      result.details.ending = trimmedContent.slice(-50)
-      return result
+    if (!hasValidEnding && wordCount > 500) {
+      // More lenient: only flag if content is substantial and clearly incomplete
+      // Check if it ends with a partial sentence indicator
+      const endsWithPartialIndicator = TRUNCATION_INDICATORS.some(p => p.test(trimmedContent))
+      if (endsWithPartialIndicator) {
+        result.isTruncated = true
+        result.reason = 'Content does not end with a complete sentence or valid HTML tag'
+        result.details.ending = trimmedContent.slice(-100)
+        return result
+      }
     }
 
     // Check 4: FAQ answers are incomplete

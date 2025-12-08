@@ -49,8 +49,10 @@ class GrokClient {
     this.baseUrl = 'https://api.x.ai/v1'
     // Use Grok 3 - grok-beta was deprecated on 2025-09-15
     this.model = 'grok-3'
-    // Increased token limit to prevent truncation (was 4000, now 8000)
-    this.defaultMaxTokens = 8000
+    // Increased token limit to prevent truncation
+    // Long-form articles need ~2000 words = ~2500 tokens for content alone
+    // Plus JSON wrapper, FAQs, metadata = ~10000 tokens total needed
+    this.defaultMaxTokens = 12000
   }
 
   /**

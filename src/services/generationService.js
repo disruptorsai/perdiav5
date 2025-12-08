@@ -550,12 +550,22 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
     try {
       // First, check if there's a default author for this content type (per spec 8.2.2)
-      const { data: defaultConfig, error: configError } = await supabase
-        .from('default_author_by_article_type')
-        .select('default_author_name')
-        .eq('article_type', contentType)
-        .eq('is_active', true)
-        .single()
+      // Note: This table may not exist yet - it's an optional feature
+      let defaultConfig = null
+      try {
+        const { data, error: configError } = await supabase
+          .from('default_author_by_article_type')
+          .select('default_author_name')
+          .eq('article_type', contentType)
+          .eq('is_active', true)
+          .single()
+
+        if (!configError) {
+          defaultConfig = data
+        }
+      } catch (e) {
+        // Table doesn't exist - ignore silently, this is an optional feature
+      }
 
       const { data: contributors, error } = await supabase
         .from('article_contributors')
