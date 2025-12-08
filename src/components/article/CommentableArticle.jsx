@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useToast } from '@/components/ui/toast'
 import {
   Select,
   SelectContent,
@@ -98,18 +99,24 @@ function AddCommentDialog({
   const [severity, setSeverity] = useState('minor')
   const [feedback, setFeedback] = useState('')
 
-  const handleSubmit = () => {
-    if (!feedback.trim()) return
-    onSubmit({ category, severity, feedback: feedback.trim() })
+  // Reset form when dialog closes
+  const handleClose = useCallback(() => {
     setFeedback('')
     setCategory('general')
     setSeverity('minor')
+    onClose()
+  }, [onClose])
+
+  const handleSubmit = () => {
+    if (!feedback.trim()) return
+    onSubmit({ category, severity, feedback: feedback.trim() })
+    // Form reset happens after successful submission via handleClose
   }
 
   const severityConfig = getSeverityConfig(severity)
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -196,7 +203,7 @@ function AddCommentDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button
@@ -446,6 +453,7 @@ export function CommentableArticle({
   className,
 }) {
   const articleRef = useRef(null)
+  const selectionTimeoutRef = useRef(null)
   const [floatingButtonPos, setFloatingButtonPos] = useState(null)
   const [selectedText, setSelectedText] = useState('')
   const [selectionRange, setSelectionRange] = useState(null)
@@ -453,9 +461,13 @@ export function CommentableArticle({
   const [activeCommentId, setActiveCommentId] = useState(null)
   const [isRevising, setIsRevising] = useState(false)
   const [revisionProgress, setRevisionProgress] = useState('')
+  const [revisionError, setRevisionError] = useState(null)
+
+  // Toast for user feedback
+  const { toast } = useToast() // toast.success(), toast.error(), toast.info(), toast.warning()
 
   // Hooks
-  const { data: comments = [], refetch: refetchComments } = useArticleComments(articleId)
+  const { data: comments = [], isLoading: commentsLoading, refetch: refetchComments } = useArticleComments(articleId)
   const { data: pendingComments = [] } = usePendingComments(articleId)
   const createComment = useCreateComment()
   const deleteComment = useDeleteComment()
@@ -469,10 +481,24 @@ export function CommentableArticle({
     [content, comments]
   )
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current)
+      }
+    }
+  }, [])
+
   // Handle text selection
   const handleMouseUp = useCallback((e) => {
+    // Clear any existing timeout
+    if (selectionTimeoutRef.current) {
+      clearTimeout(selectionTimeoutRef.current)
+    }
+
     // Small delay to ensure selection is complete
-    setTimeout(() => {
+    selectionTimeoutRef.current = setTimeout(() => {
       const selection = window.getSelection()
       const text = selection?.toString().trim()
 
@@ -522,8 +548,10 @@ export function CommentableArticle({
       setDialogOpen(false)
       setSelectedText('')
       window.getSelection()?.removeAllRanges()
+      toast.success('Your feedback has been saved successfully.', { title: 'Comment added' })
     } catch (error) {
       console.error('Failed to create comment:', error)
+      toast.error(error?.message || 'An error occurred while saving your comment.', { title: 'Failed to add comment' })
     }
   }
 
@@ -531,8 +559,10 @@ export function CommentableArticle({
   const handleDeleteComment = async (commentId) => {
     try {
       await deleteComment.mutateAsync({ commentId, articleId })
+      toast.success('The comment has been removed.', { title: 'Comment deleted' })
     } catch (error) {
       console.error('Failed to delete comment:', error)
+      toast.error(error?.message || 'An error occurred while deleting the comment.', { title: 'Failed to delete comment' })
     }
   }
 
@@ -554,6 +584,7 @@ export function CommentableArticle({
 
     setIsRevising(true)
     setRevisionProgress('Analyzing feedback...')
+    setRevisionError(null)
 
     try {
       // Build the prompt with all pending comments
@@ -646,9 +677,13 @@ Revised content:`
       onContentChange?.(cleanedContent)
       setRevisionProgress('')
 
+      toast.success(`Successfully addressed ${pendingComments.length} comment${pendingComments.length !== 1 ? 's' : ''}.`, { title: 'Revision complete' })
+
     } catch (error) {
       console.error('AI revision failed:', error)
       setRevisionProgress('')
+      setRevisionError(error?.message || 'AI revision failed')
+      toast.error(error?.message || 'An error occurred while revising the article.', { title: 'AI Revision Failed' })
     } finally {
       setIsRevising(false)
     }
