@@ -44,9 +44,6 @@ export default function SecretJosh() {
     }
   }
 
-  const scrollToVideo = () => {
-    document.getElementById('video-section')?.scrollIntoView({ behavior: 'smooth' })
-  }
 
   if (!isAuthenticated) {
     return (
@@ -217,47 +214,6 @@ export default function SecretJosh() {
           .header p {
             font-size: 1rem;
           }
-        }
-
-        .video-notice {
-          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-          border: 2px solid #2196f3;
-          border-radius: 8px;
-          padding: 12px 16px;
-          margin-bottom: 20px;
-          text-align: center;
-        }
-
-        @media (min-width: 768px) {
-          .video-notice {
-            padding: 15px 20px;
-            margin-bottom: 30px;
-          }
-        }
-
-        .video-notice p {
-          margin: 0;
-          color: #1565c0;
-          font-weight: 500;
-          font-size: 0.9rem;
-          line-height: 1.5;
-        }
-
-        @media (min-width: 768px) {
-          .video-notice p {
-            font-size: 1rem;
-          }
-        }
-
-        .video-notice a {
-          color: #0d47a1;
-          text-decoration: underline;
-          cursor: pointer;
-          font-weight: 600;
-        }
-
-        .video-notice a:hover {
-          color: #1a237e;
         }
 
         .intro {
@@ -701,42 +657,6 @@ export default function SecretJosh() {
           }
         }
 
-        .video-section {
-          margin-top: 30px;
-          padding: 16px;
-          background: linear-gradient(135deg, #1a1a2e 0%, #4a4a8a 100%);
-          border-radius: 8px;
-          text-align: center;
-        }
-
-        @media (min-width: 768px) {
-          .video-section {
-            margin-top: 60px;
-            padding: 30px;
-          }
-        }
-
-        .video-section h2 {
-          color: white;
-          border: none;
-          margin-bottom: 16px;
-          font-size: 1.2rem;
-        }
-
-        @media (min-width: 768px) {
-          .video-section h2 {
-            margin-bottom: 20px;
-            font-size: 1.5rem;
-          }
-        }
-
-        .video-section video {
-          width: 100%;
-          max-width: 100%;
-          border-radius: 8px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
         .document-footer {
           text-align: center;
           margin-top: 30px;
@@ -778,9 +698,6 @@ export default function SecretJosh() {
         <p>December 2025</p>
       </div>
 
-      <div className="video-notice">
-        <p>📹 <strong>Video Message Below:</strong> There is a personal video message at the bottom of this document. <a onClick={scrollToVideo}>Click here to jump to video →</a></p>
-      </div>
 
       <div className="intro">
         <p>Josh,</p>
@@ -970,7 +887,7 @@ export default function SecretJosh() {
           <p>That comment caught me off guard, and I fully disagree with it.</p>
           <p>The company didn't just grow—it transformed from a marketing agency to an AI-first development company. I'm not saying that pivot was built entirely on my work. But I think it's unreasonable to assume that this transformation, which happened over the course of the few months since I started, wasn't at least an indirect result of my contributions.</p>
           <p>You brought me on as an AI expert. I've taught Kyle and the team everything I know about AI and how to best use it, every single day I've worked here. I'm the only developer. No other technical staff. Managing 3-6 projects simultaneously, alone.</p>
-          <p>We were at $18K MRR. We're now at $30K+ MRR, plus $15K+ in app deposits. In our initial phone conversations where you were telling me about pay and equity incentives that would be based on our MRR increasing, I asked you how you'd know if the growth was from me. Your response was that we're a three-person team, so where else would the increases in MRR come from.</p>
+          <p>We were at $18K MRR. We're now at $42K+ MRR and growing quickly, plus $15K+ in app deposits. In our initial phone conversations where you were telling me about pay and equity incentives that would be based on our MRR increasing, I asked you how you'd know if the growth was from me. Your response was that we're a three-person team, so where else would the increases in MRR come from.</p>
           <p>Rather than a lack of AI skills on my part, I think this perception can be attributed to a few things: the inherently unpredictable nature of AI development work, unrealistic expectations of what a one-person development team can deliver, and honestly—my own underwhelming communication skills. I'm not someone who demands credit where credit is due or escalates every obstacle. I'm used to working on teams of creators and engineers where failing fast is encouraged (as Elon always recommends), where we collaborate and solve problems together rather than constantly covering our own backs. That's served me well in those environments, but I recognize it may have left you without visibility into what I'm actually contributing here.</p>
           <p>For reference, here's what industry research says about realistic AI development timelines:</p>
           <table>
@@ -1017,7 +934,7 @@ export default function SecretJosh() {
 
         <div className="response-box">
           <strong>My response:</strong>
-          <p>I did receive part of the raise you promised—my bi-weekly checks went from $2K to $2,750. But the push to redo my contract and the concern that my work isn't generating revenue doesn't match what the numbers show—MRR has grown 67%, we have $15K+ in app deposits, and the company has transformed into an AI-first business.</p>
+          <p>I did receive part of the raise you promised—my bi-weekly checks went from $2K to $2,750. But the push to redo my contract and the concern that my work isn't generating revenue doesn't match what the numbers show—MRR has grown 133%, we have $15K+ in app deposits, and the company has transformed into an AI-first business.</p>
           <p>You said when I joined:</p>
           <blockquote>"If I can see that we've gone from, yeah, I think we're at, like, 17, 8, let's just call it 18,000, and now we're at 36,000. I give you my word as a man that I will give you a $2,000 pay increase."</blockquote>
           <p>Here's the thing: 50% of $250/hour is the absolute minimum I'll accept. And here's why that's already generous on my part:</p>
@@ -1629,19 +1546,6 @@ export default function SecretJosh() {
         <p><strong>Document Prepared By:</strong> Will Welsh</p>
         <p><strong>Company:</strong> Tech Integration Labs LLC</p>
         <p><strong>Date:</strong> December 2025</p>
-      </div>
-
-      {/* Video Section */}
-      <div className="video-section" id="video-section">
-        <h2>Video Message</h2>
-        <video
-          controls
-          preload="metadata"
-          playsInline
-        >
-          <source src="/secret/video.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
       </div>
     </div>
   )
