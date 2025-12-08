@@ -5,6 +5,8 @@ import { useArticles, useUpdateArticleStatus } from '../hooks/useArticles'
 import { useContentIdeas, useCreateContentIdea } from '../hooks/useContentIdeas'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import { useSystemSettings } from '../hooks/useSystemSettings'
+import { useBulkAddToQueue } from '../hooks/useAutomation'
+import { useGenerationProgress } from '../contexts/GenerationProgressContext'
 import { differenceInDays, differenceInHours, isPast, subDays } from 'date-fns'
 import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2, TrendingUp, ShieldCheck, AlertTriangle, Timer, DollarSign, BarChart3 } from 'lucide-react'
 import SourceSelector from '../components/ideas/SourceSelector'
@@ -41,12 +43,15 @@ function Dashboard() {
   const createContentIdea = useCreateContentIdea()
   const { data: settings } = useSystemSettings()
   const { addToast } = useToast()
+  const bulkAddToQueue = useBulkAddToQueue()
+  const { startQueueProcessing } = useGenerationProgress()
 
   const [generatingIdea, setGeneratingIdea] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false)
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [automationMode, setAutomationMode] = useState('manual') // 'manual' | 'semiauto' | 'full_auto'
+  const [isStartingBatch, setIsStartingBatch] = useState(false)
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
@@ -270,6 +275,54 @@ function Dashboard() {
     }
   }, [allIdeas, settings, addToast, ideaDiscoveryService])
 
+  // Handle batch generation - Generate All button
+  const handleGenerateAll = useCallback(async () => {
+    if (ideas.length === 0 || isStartingBatch) return
+
+    setIsStartingBatch(true)
+
+    try {
+      // 1. Add all approved ideas to the generation queue
+      const queueItems = ideas.map((idea, index) => ({
+        contentIdeaId: idea.id,
+        priority: ideas.length - index, // Higher priority for earlier items
+      }))
+
+      await bulkAddToQueue.mutateAsync(queueItems)
+
+      addToast({
+        title: 'Batch Generation Started',
+        description: `Added ${ideas.length} articles to the queue`,
+        variant: 'success',
+      })
+
+      // 2. Start queue processing
+      startQueueProcessing()
+
+      // 3. Open the batch progress page in a new tab
+      const progressWindow = window.open('/batch-progress', '_blank')
+
+      // If popup was blocked, show a message
+      if (!progressWindow) {
+        addToast({
+          title: 'Progress Window',
+          description: 'Pop-up blocked! Check the Batch Progress page manually at /batch-progress',
+          variant: 'warning',
+        })
+      }
+
+    } catch (error) {
+      console.error('Failed to start batch generation:', error)
+      addToast({
+        title: 'Batch Generation Failed',
+        description: error.message || 'Failed to add items to queue',
+        variant: 'error',
+      })
+    } finally {
+      setIsStartingBatch(false)
+    }
+  }, [ideas, isStartingBatch, bulkAddToQueue, addToast, startQueueProcessing])
+
   // Handle adding selected ideas to the content queue
   const handleSourceSelectorClose = useCallback(async (open, selectedIdeas) => {
     setSourceSelectorOpen(open)
@@ -448,18 +501,21 @@ function Dashboard() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  // Generate all approved ideas
-                  addToast({
-                    title: 'Batch Generation Started',
-                    description: `Generating ${ideas.length} articles...`,
-                    variant: 'info',
-                  })
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-all"
+                onClick={handleGenerateAll}
+                disabled={isStartingBatch}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Zap className="w-4 h-4" />
-                Generate All ({ideas.length})
+                {isStartingBatch ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Generate All ({ideas.length})
+                  </>
+                )}
               </motion.button>
             )}
           </motion.div>

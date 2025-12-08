@@ -673,10 +673,10 @@ Revised content:`
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Article content area */}
-        <div className="flex-1 overflow-y-auto">
-          <div
+      <div className="flex flex-1 min-h-0">
+        {/* Article content area - using block layout to fix text selection */}
+        <div className="flex-1 overflow-y-auto min-w-0">
+          <article
             ref={articleRef}
             className="prose prose-sm max-w-none p-6"
             onClick={handleContentClick}

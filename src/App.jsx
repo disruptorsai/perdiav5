@@ -26,6 +26,7 @@ import Contributors from './pages/Contributors'
 import ContributorDetail from './pages/ContributorDetail'
 import AITraining from './pages/AITraining'
 import SecretJosh from './pages/SecretJosh'
+import BatchProgress from './pages/BatchProgress'
 
 // Layout
 import MainLayout from './components/layout/MainLayout'
@@ -61,6 +62,16 @@ function App() {
                   {/* Public Routes */}
                   <Route path="/login" element={<Login />} />
                   <Route path="/secret/josh" element={<SecretJosh />} />
+
+                  {/* Batch Progress - Standalone page for new tab/window */}
+                  <Route
+                    path="/batch-progress"
+                    element={
+                      <ProtectedRoute>
+                        <BatchProgress />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Protected Routes */}
                   <Route
