@@ -9,12 +9,29 @@
  * - business: true uses 10x more powerful model
  * - Don't manually edit output - regenerate instead
  * - Check howLikelyToBeDetected score, retry if > 25
+ *
+ * CORS NOTE:
+ * In production, requests are proxied through a Supabase Edge Function
+ * to avoid CORS issues. Set VITE_SUPABASE_URL in your environment.
  */
 
 class StealthGptClient {
   constructor(apiKey) {
     this.apiKey = apiKey || import.meta.env.VITE_STEALTHGPT_API_KEY
     this.baseUrl = 'https://stealthgpt.ai/api'
+
+    // Edge Function URL for production (bypasses CORS)
+    this.supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    this.edgeFunctionUrl = this.supabaseUrl
+      ? `${this.supabaseUrl}/functions/v1/stealthgpt-humanize`
+      : null
+
+    // Determine if we should use the Edge Function
+    // Use Edge Function in production OR if explicitly requested
+    this.useEdgeFunction = import.meta.env.PROD || import.meta.env.VITE_USE_EDGE_FUNCTIONS === 'true'
+
+    // Track CORS failures to auto-switch to Edge Function
+    this.corsFailureDetected = false
 
     // Optimized default settings for maximum undetectability
     this.defaultOptions = {
@@ -39,41 +56,133 @@ class StealthGptClient {
 
   /**
    * Check if API key is configured
+   * In production, the Edge Function has its own API key, so we only need Supabase URL
    */
   isConfigured() {
+    // If using Edge Function, we just need Supabase URL
+    if (this.shouldUseEdgeFunction()) {
+      return !!this.edgeFunctionUrl
+    }
+    // Direct API mode requires API key
     return this.apiKey && this.apiKey !== 'undefined' && this.apiKey.length > 10
   }
 
   /**
+   * Check if we should use the Edge Function for this request
+   */
+  shouldUseEdgeFunction() {
+    return (this.useEdgeFunction || this.corsFailureDetected) && this.edgeFunctionUrl
+  }
+
+  /**
    * Make API request to StealthGPT
+   * Automatically routes through Edge Function in production or on CORS failure
    */
   async makeRequest(endpoint, payload) {
     if (!this.isConfigured()) {
-      console.warn('StealthGPT API key not configured')
-      throw new Error('StealthGPT API key not configured')
+      console.warn('StealthGPT not configured - missing API key or Edge Function URL')
+      throw new Error('StealthGPT not configured')
     }
 
+    // Determine which method to use
+    if (this.shouldUseEdgeFunction()) {
+      return this.makeEdgeFunctionRequest(payload)
+    }
+
+    // Try direct API first (development mode)
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'api-token': this.apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('StealthGPT API error:', response.status, errorText)
-        throw new Error(`StealthGPT API error: ${response.status} - ${errorText}`)
-      }
-
-      const data = await response.json()
-      return data
+      return await this.makeDirectApiRequest(endpoint, payload)
     } catch (error) {
-      console.error('StealthGPT request failed:', error)
+      // Check if this is a CORS error and fallback to Edge Function
+      if (this.isCorsError(error) && this.edgeFunctionUrl) {
+        console.warn('[StealthGPT] CORS error detected, switching to Edge Function')
+        this.corsFailureDetected = true
+        return this.makeEdgeFunctionRequest(payload)
+      }
       throw error
+    }
+  }
+
+  /**
+   * Check if an error is likely a CORS error
+   */
+  isCorsError(error) {
+    if (!error) return false
+    const message = error.message?.toLowerCase() || ''
+    return (
+      message.includes('cors') ||
+      message.includes('network error') ||
+      message.includes('failed to fetch') ||
+      message.includes('load failed') ||
+      error.name === 'TypeError' // fetch CORS errors often show as TypeError
+    )
+  }
+
+  /**
+   * Make direct API request to StealthGPT (development mode)
+   */
+  async makeDirectApiRequest(endpoint, payload) {
+    console.log('[StealthGPT] Making direct API request')
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'api-token': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('StealthGPT API error:', response.status, errorText)
+      throw new Error(`StealthGPT API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data
+  }
+
+  /**
+   * Make request through Supabase Edge Function (production mode)
+   * Bypasses CORS by proxying through server
+   */
+  async makeEdgeFunctionRequest(payload) {
+    console.log('[StealthGPT] Making request via Edge Function')
+
+    if (!this.edgeFunctionUrl) {
+      throw new Error('Edge Function URL not configured - set VITE_SUPABASE_URL')
+    }
+
+    // Get Supabase anon key for auth
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    const response = await fetch(this.edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      console.error('StealthGPT Edge Function error:', response.status, errorData)
+      throw new Error(`StealthGPT Edge Function error: ${response.status} - ${errorData.error || 'Unknown error'}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.error || 'Edge Function returned unsuccessful response')
+    }
+
+    // Map Edge Function response to direct API format
+    return {
+      result: data.result,
+      howLikelyToBeDetected: data.howLikelyToBeDetected,
     }
   }
 
