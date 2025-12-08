@@ -65,7 +65,7 @@ function FloatingAddButton({ position, onAdd }) {
 
   return createPortal(
     <div
-      className="fixed z-50 animate-in fade-in zoom-in-95 duration-150"
+      className="floating-add-btn fixed z-50 animate-in fade-in zoom-in-95 duration-150"
       style={{
         left: position.x,
         top: position.y,
