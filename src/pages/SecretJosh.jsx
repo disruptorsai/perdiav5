@@ -737,22 +737,22 @@ export default function SecretJosh() {
           <tbody>
             <tr>
               <td><strong>Elite Dental Force</strong> (turned down)</td>
-              <td>$560,000 - $950,000</td>
-              <td>9-15 months</td>
+              <td>$700,000 - $1,400,000</td>
+              <td>7-10 months</td>
               <td>4-7 developers</td>
               <td>N/A - deal passed</td>
             </tr>
             <tr>
               <td><strong>Perdia AI Platform</strong></td>
-              <td>$1,100,000 - $1,800,000</td>
-              <td>9-14 months</td>
+              <td>$500,000 - $1,000,000</td>
+              <td>6-9 months</td>
               <td>5-9 developers</td>
               <td><strong>90% complete in &lt;3 weeks</strong></td>
             </tr>
             <tr>
               <td><strong>Disruptors Marketing Hub</strong></td>
-              <td>$800,000 - $1,500,000</td>
-              <td>9-14 months</td>
+              <td>$325,000 - $590,000</td>
+              <td>4-6 months</td>
               <td>6-10 developers</td>
               <td><strong>Live</strong> (called "incomplete")</td>
             </tr>
@@ -769,16 +769,16 @@ export default function SecretJosh() {
         <h3>Why These Projects Cost So Much</h3>
         <p>When people hear "website" or "web app," they instinctively compare it to a simple WordPress site. That's like comparing a Tesla factory to a car wash because they both use concrete.</p>
 
-        <p><strong>DisruptorsMedia.com ($800K-$1.5M)</strong> isn't a website—it's a multi-tool marketing platform with: growth audit system, keyword research tools, content generators, Business Brain knowledge base, lead capture, and admin systems. Each is its own mini-app with AI orchestration, serverless functions, databases, plus hundreds of custom illustrations and videos. A WordPress site has 1-2 features; DisruptorsMedia.com has dozens.</p>
+        <p><strong>DisruptorsMedia.com ($300K-$550K)</strong> isn't a website—it's a multi-tool marketing platform with: growth audit system, keyword research tools, content generators, Business Brain knowledge base, lead capture, and admin systems. Each is its own mini-app with AI orchestration, serverless functions, databases, plus hundreds of custom illustrations and videos. A WordPress site has 1-2 features; DisruptorsMedia.com has dozens.</p>
 
-        <p><strong>Perdia ($1.1M-$1.8M)</strong> is even more complex because nothing like it exists anywhere. It's not just "AI that writes articles"—it's a 20+ step content factory that automates topic discovery, keyword research, drafting, SEO optimization, humanization, editor feedback, learning from corrections, and WordPress publishing. It maintains a complete memory of every article on the site so it doesn't repeat itself and learns to write better over time. You can't buy this as a product—it combines AI writer + SEO assistant + CMS + editorial platform + analytics engine into one system.</p>
+        <p><strong>Perdia ($500K-$1M)</strong> is even more complex because nothing like it exists anywhere. It's not just "AI that writes articles"—it's a 20+ step content factory that automates topic discovery, keyword research, drafting, SEO optimization, humanization, editor feedback, learning from corrections, and WordPress publishing. It maintains a complete memory of every article on the site so it doesn't repeat itself and learns to write better over time. You can't buy this as a product—it combines AI writer + SEO assistant + CMS + editorial platform + analytics engine into one system.</p>
 
         <p>To build either properly, agencies deploy 6-10 specialists (product leads, UX/UI designers, frontend/backend engineers, AI engineers, DevOps, QA, illustrators, video editors) at $150-$250+/hour. <strong>These are the kinds of products companies raise venture capital to build.</strong></p>
 
         <h3>The Contradiction</h3>
-        <p><strong>The dentist app they said I couldn't build:</strong> $560K-$950K agency value, requires 4-7 developers over 9-15 months.</p>
-        <p><strong>The Perdia app I'm actually building:</strong> $1.1M-$1.8M agency value, requires 5-9 developers over 9-14 months. <strong>I'm 90% complete in less than 3 weeks, working alone, for less than $4,000.</strong></p>
-        <p>Perdia is valued at nearly <strong>twice</strong> what the dentist app would cost. It requires a <strong>larger team</strong> and <strong>similar timeline</strong>. But I supposedly can't handle the dentist app?</p>
+        <p><strong>The dentist app they said I couldn't build:</strong> $700K-$1.4M agency value, requires 4-7 developers over 7-10 months.</p>
+        <p><strong>The Perdia app I'm actually building:</strong> $500K-$1M agency value, requires 5-9 developers over 6-9 months. <strong>I'm 90% complete in less than 3 weeks, working alone, for less than $4,000.</strong></p>
+        <p>Perdia is a comparable scope to the dentist app. It requires a <strong>similar team size</strong> and <strong>timeline</strong>. The concern about capability doesn't align with what I'm actively delivering.</p>
 
         <h3>What the "Vibe Coder" Is Actually Delivering</h3>
         <table>
@@ -799,21 +799,21 @@ export default function SecretJosh() {
             </tr>
             <tr>
               <td>Perdia AI Platform</td>
-              <td>$1.1M - $1.8M</td>
+              <td>$500K - $1M</td>
               <td>&lt; $4,000</td>
               <td><strong>90% complete in &lt;3 weeks</strong></td>
             </tr>
             <tr>
               <td>Disruptors Marketing Hub</td>
-              <td>$800K - $1.5M</td>
+              <td>$325K - $590K</td>
               <td>Included in salary</td>
               <td><strong>Live</strong> (called "incomplete")</td>
             </tr>
           </tbody>
         </table>
-        <p><strong>Combined industry value: $2.06 million - $3.62 million</strong></p>
+        <p><strong>Combined industry value: $985K - $1.91M</strong></p>
         <p><strong>Combined cost to Disruptors Media: ~$24,000</strong></p>
-        <p>That's a cost efficiency ratio of <strong>85x to 150x</strong> compared to traditional agency pricing.</p>
+        <p>That's a cost efficiency ratio of <strong>41x to 80x</strong> compared to traditional agency pricing.</p>
 
         <h3>Same Method, Opposite Conclusions</h3>
         <p>The company consulted AI and agencies to determine whether a "vibe coder" could build the dentist app. The conclusion was no—too risky, not capable.</p>
