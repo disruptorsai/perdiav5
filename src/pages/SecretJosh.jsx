@@ -2,13 +2,30 @@ import { useState, useEffect } from 'react'
 
 const SECRET_PASSWORD = 'dm2026'
 
+function CollapsibleAppendix({ id, title, children, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(false) // Always start collapsed
+
+  return (
+    <div className="appendix-section" id={id}>
+      <button
+        className="appendix-toggle"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
+        <span className="appendix-toggle-icon">{isOpen ? '−' : '+'}</span>
+        <span>{title}</span>
+      </button>
+      {isOpen && <div className="appendix-content">{children}</div>}
+    </div>
+  )
+}
+
 export default function SecretJosh() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Check if already authenticated in this session
     const auth = sessionStorage.getItem('secret-josh-auth')
     if (auth === 'true') {
       setIsAuthenticated(true)
@@ -27,255 +44,731 @@ export default function SecretJosh() {
     }
   }
 
+  const scrollToVideo = () => {
+    document.getElementById('video-section')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   if (!isAuthenticated) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#1a1a2e',
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-      }}>
-        <form onSubmit={handleSubmit} style={{
-          backgroundColor: 'white',
-          padding: '40px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          textAlign: 'center',
-          maxWidth: '400px',
-          width: '90%'
-        }}>
-          <h2 style={{ color: '#1a1a2e', marginBottom: '20px' }}>Password Required</h2>
+      <div className="password-screen">
+        <style>{`
+          .password-screen {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 16px;
+            box-sizing: border-box;
+          }
+          .password-form {
+            background-color: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+          }
+          @media (min-width: 768px) {
+            .password-form {
+              padding: 40px;
+            }
+          }
+          .password-form h2 {
+            color: #1a1a2e;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+          }
+          @media (min-width: 768px) {
+            .password-form h2 {
+              font-size: 1.5rem;
+            }
+          }
+          .password-form input {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            -webkit-appearance: none;
+          }
+          .password-form input:focus {
+            outline: none;
+            border-color: #4a4a8a;
+          }
+          .password-form .error {
+            color: #f44336;
+            margin-bottom: 15px;
+          }
+          .password-form button {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            background-color: #4a4a8a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            -webkit-appearance: none;
+          }
+          .password-form button:hover {
+            background-color: #2d2d5a;
+          }
+          .password-form button:active {
+            background-color: #1a1a3a;
+          }
+        `}</style>
+        <form onSubmit={handleSubmit} className="password-form">
+          <h2>Password Required</h2>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter password"
             autoFocus
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '16px',
-              border: '2px solid #ddd',
-              borderRadius: '4px',
-              marginBottom: '15px',
-              boxSizing: 'border-box'
-            }}
           />
-          {error && <p style={{ color: '#f44336', marginBottom: '15px' }}>{error}</p>}
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '16px',
-              backgroundColor: '#4a4a8a',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'background-color 0.2s'
-            }}
-            onMouseOver={(e) => e.target.style.backgroundColor = '#2d2d5a'}
-            onMouseOut={(e) => e.target.style.backgroundColor = '#4a4a8a'}
-          >
-            Access Document
-          </button>
+          {error && <p className="error">{error}</p>}
+          <button type="submit">Access Document</button>
         </form>
       </div>
     )
   }
 
   return (
-    <div style={{
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      lineHeight: 1.6,
-      maxWidth: '900px',
-      margin: '0 auto',
-      padding: '40px',
-      color: '#333',
-      backgroundColor: '#fff',
-      minHeight: '100vh'
-    }}>
+    <div className="document-container">
       <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        .document-container {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.6;
+          width: 100%;
+          max-width: 100%;
+          margin: 0 auto;
+          padding: 16px;
+          color: #333;
+          background-color: #fff;
+          min-height: 100vh;
+        }
+
+        @media (min-width: 768px) {
+          .document-container {
+            padding: 40px 60px;
+          }
+        }
+
+        @media (min-width: 1200px) {
+          .document-container {
+            padding: 40px 80px;
+          }
+        }
+
+        @media (min-width: 1600px) {
+          .document-container {
+            padding: 40px 120px;
+          }
+        }
+
         .header {
           text-align: center;
-          margin-bottom: 40px;
-          padding: 20px;
+          margin-bottom: 20px;
+          padding: 16px;
           background: linear-gradient(135deg, #1a1a2e 0%, #4a4a8a 100%);
           color: white;
           border-radius: 8px;
         }
+
+        @media (min-width: 768px) {
+          .header {
+            margin-bottom: 30px;
+            padding: 24px;
+          }
+        }
+
         .header h1 {
           color: white;
           border: none;
           margin: 0;
+          font-size: 1.25rem;
+          line-height: 1.3;
         }
+
+        @media (min-width: 768px) {
+          .header h1 {
+            font-size: 2rem;
+          }
+        }
+
         .header p {
           margin: 5px 0;
           opacity: 0.9;
+          font-size: 0.85rem;
         }
+
+        @media (min-width: 768px) {
+          .header p {
+            font-size: 1rem;
+          }
+        }
+
+        .video-notice {
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+          border: 2px solid #2196f3;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+
+        @media (min-width: 768px) {
+          .video-notice {
+            padding: 15px 20px;
+            margin-bottom: 30px;
+          }
+        }
+
+        .video-notice p {
+          margin: 0;
+          color: #1565c0;
+          font-weight: 500;
+          font-size: 0.9rem;
+          line-height: 1.5;
+        }
+
+        @media (min-width: 768px) {
+          .video-notice p {
+            font-size: 1rem;
+          }
+        }
+
+        .video-notice a {
+          color: #0d47a1;
+          text-decoration: underline;
+          cursor: pointer;
+          font-weight: 600;
+        }
+
+        .video-notice a:hover {
+          color: #1a237e;
+        }
+
         .intro {
           background-color: #f8f9fa;
-          padding: 20px;
+          padding: 16px;
           border-radius: 8px;
-          margin-bottom: 30px;
+          margin-bottom: 20px;
+          font-size: 0.95rem;
         }
+
+        @media (min-width: 768px) {
+          .intro {
+            padding: 24px;
+            margin-bottom: 30px;
+            font-size: 1rem;
+          }
+        }
+
         .section {
-          margin-bottom: 40px;
-          padding: 25px;
+          margin-bottom: 20px;
+          padding: 16px;
           background-color: #fafafa;
           border-radius: 8px;
           border-left: 4px solid #4a4a8a;
         }
+
+        @media (min-width: 768px) {
+          .section {
+            padding: 25px;
+            margin-bottom: 40px;
+          }
+        }
+
         h1 {
           color: #1a1a2e;
           border-bottom: 3px solid #4a4a8a;
           padding-bottom: 10px;
+          font-size: 1.3rem;
+          line-height: 1.3;
         }
+
+        @media (min-width: 768px) {
+          h1 {
+            font-size: 2rem;
+          }
+        }
+
         h2 {
           color: #2d2d5a;
-          margin-top: 40px;
+          margin-top: 20px;
           border-left: 4px solid #4a4a8a;
-          padding-left: 15px;
+          padding-left: 12px;
+          font-size: 1.1rem;
+          line-height: 1.3;
         }
+
+        @media (min-width: 768px) {
+          h2 {
+            font-size: 1.5rem;
+            margin-top: 40px;
+            padding-left: 15px;
+          }
+        }
+
         h3 {
           color: #3d3d6a;
+          font-size: 1rem;
+          line-height: 1.4;
         }
+
+        @media (min-width: 768px) {
+          h3 {
+            font-size: 1.1rem;
+          }
+        }
+
         .position-box {
           background-color: #e8e8f0;
-          padding: 15px;
+          padding: 12px;
           border-radius: 5px;
-          margin: 15px 0;
+          margin: 12px 0;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          .position-box {
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 1rem;
+          }
+        }
+
         .position-box strong {
           color: #2d2d5a;
         }
+
         .response-box {
           background-color: #f0f8f0;
-          padding: 15px;
+          padding: 12px;
           border-radius: 5px;
-          margin: 15px 0;
+          margin: 12px 0;
           border-left: 3px solid #4a8a4a;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          .response-box {
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 1rem;
+          }
+        }
+
         .my-position {
           background-color: #fff3e0;
-          padding: 15px;
+          padding: 12px;
           border-radius: 5px;
-          margin: 15px 0;
+          margin: 12px 0;
           border-left: 3px solid #ff9800;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          .my-position {
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 1rem;
+          }
+        }
+
         blockquote {
           background-color: #f5f5f5;
           border-left: 4px solid #666;
-          padding: 15px 20px;
-          margin: 20px 0;
+          padding: 12px 16px;
+          margin: 16px 0;
           font-style: italic;
           color: #555;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          blockquote {
+            padding: 15px 20px;
+            margin: 20px 0;
+            font-size: 1rem;
+          }
+        }
+
         table {
           width: 100%;
           border-collapse: collapse;
-          margin: 20px 0;
+          margin: 16px 0;
+          font-size: 0.8rem;
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
+
+        @media (min-width: 768px) {
+          table {
+            display: table;
+            font-size: 1rem;
+            margin: 20px 0;
+          }
+        }
+
         th, td {
           border: 1px solid #ddd;
-          padding: 12px;
+          padding: 8px 6px;
           text-align: left;
+          min-width: 80px;
         }
+
+        @media (min-width: 768px) {
+          th, td {
+            padding: 12px;
+            min-width: 100px;
+          }
+        }
+
         th {
           background-color: #4a4a8a;
           color: white;
+          font-size: 0.85rem;
         }
+
+        @media (min-width: 768px) {
+          th {
+            font-size: 1rem;
+          }
+        }
+
         tr:nth-child(even) {
           background-color: #f9f9f9;
         }
+
         .appendix-link {
           color: #4a4a8a;
           font-size: 0.9em;
           font-style: italic;
         }
+
         a {
           color: #4a4a8a;
+          word-break: break-word;
         }
+
         a:hover {
           color: #2d2d5a;
         }
+
         .proposal-section {
           background: linear-gradient(135deg, #f0f8f0 0%, #e8f5e9 100%);
-          padding: 30px;
+          padding: 16px;
           border-radius: 8px;
-          margin: 40px 0;
+          margin: 20px 0;
         }
+
+        @media (min-width: 768px) {
+          .proposal-section {
+            padding: 30px;
+            margin: 40px 0;
+          }
+        }
+
         .offering-list, .need-list {
           background-color: white;
-          padding: 20px;
+          padding: 12px;
           border-radius: 5px;
-          margin: 15px 0;
+          margin: 12px 0;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          .offering-list, .need-list {
+            padding: 20px;
+            margin: 15px 0;
+            font-size: 1rem;
+          }
+        }
+
         .offering-list {
           border-left: 4px solid #4caf50;
         }
+
         .need-list {
           border-left: 4px solid #2196f3;
         }
+
         .summary-box {
           background-color: #fff8e1;
-          padding: 25px;
+          padding: 16px;
           border-radius: 8px;
           border: 2px solid #ffc107;
-          margin: 40px 0;
+          margin: 20px 0;
         }
+
+        @media (min-width: 768px) {
+          .summary-box {
+            padding: 25px;
+            margin: 40px 0;
+          }
+        }
+
         .non-negotiable {
           background-color: #ffebee;
-          padding: 15px;
+          padding: 12px;
           border-radius: 5px;
           border-left: 4px solid #f44336;
+          font-size: 0.9rem;
         }
+
+        @media (min-width: 768px) {
+          .non-negotiable {
+            padding: 15px;
+            font-size: 1rem;
+          }
+        }
+
         .appendix {
-          margin-top: 60px;
-          padding-top: 40px;
+          margin-top: 30px;
+          padding-top: 20px;
           border-top: 3px solid #4a4a8a;
         }
+
+        @media (min-width: 768px) {
+          .appendix {
+            margin-top: 60px;
+            padding-top: 40px;
+          }
+        }
+
         .appendix h2 {
           color: #1a1a2e;
         }
+
+        .appendix-section {
+          margin-bottom: 12px;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+          .appendix-section {
+            margin-bottom: 15px;
+          }
+        }
+
+        .appendix-toggle {
+          width: 100%;
+          padding: 12px 14px;
+          background-color: #f5f5f5;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #2d2d5a;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: background-color 0.2s;
+        }
+
+        @media (min-width: 768px) {
+          .appendix-toggle {
+            padding: 15px 20px;
+            font-size: 1rem;
+          }
+        }
+
+        .appendix-toggle:hover {
+          background-color: #e8e8f0;
+        }
+
+        .appendix-toggle-icon {
+          font-size: 1rem;
+          font-weight: bold;
+          width: 22px;
+          height: 22px;
+          min-width: 22px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #4a4a8a;
+          color: white;
+          border-radius: 4px;
+        }
+
+        @media (min-width: 768px) {
+          .appendix-toggle-icon {
+            font-size: 1.2rem;
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+          }
+        }
+
+        .appendix-content {
+          padding: 16px;
+          background-color: #fafafa;
+          border-top: 1px solid #ddd;
+          font-size: 0.9rem;
+        }
+
+        @media (min-width: 768px) {
+          .appendix-content {
+            padding: 20px;
+            font-size: 1rem;
+          }
+        }
+
+        .appendix-content h3 {
+          margin-top: 16px;
+        }
+
+        @media (min-width: 768px) {
+          .appendix-content h3 {
+            margin-top: 20px;
+          }
+        }
+
+        .appendix-content h3:first-child {
+          margin-top: 0;
+        }
+
         .source-list {
           background-color: #f5f5f5;
-          padding: 20px;
+          padding: 12px;
           border-radius: 5px;
         }
+
+        @media (min-width: 768px) {
+          .source-list {
+            padding: 20px;
+          }
+        }
+
         .source-list a {
           display: block;
           margin: 8px 0;
+          font-size: 0.8rem;
+          word-break: break-word;
         }
+
+        @media (min-width: 768px) {
+          .source-list a {
+            font-size: 0.9rem;
+          }
+        }
+
         ul, ol {
-          padding-left: 25px;
+          padding-left: 18px;
         }
+
+        @media (min-width: 768px) {
+          ul, ol {
+            padding-left: 25px;
+          }
+        }
+
         li {
-          margin: 8px 0;
+          margin: 6px 0;
         }
+
+        @media (min-width: 768px) {
+          li {
+            margin: 8px 0;
+          }
+        }
+
         .signature {
-          margin-top: 40px;
+          margin-top: 30px;
           font-style: italic;
         }
+
+        @media (min-width: 768px) {
+          .signature {
+            margin-top: 40px;
+          }
+        }
+
         .video-section {
-          margin-top: 60px;
-          padding: 30px;
+          margin-top: 30px;
+          padding: 16px;
           background: linear-gradient(135deg, #1a1a2e 0%, #4a4a8a 100%);
           border-radius: 8px;
           text-align: center;
         }
+
+        @media (min-width: 768px) {
+          .video-section {
+            margin-top: 60px;
+            padding: 30px;
+          }
+        }
+
         .video-section h2 {
           color: white;
           border: none;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
+          font-size: 1.2rem;
         }
+
+        @media (min-width: 768px) {
+          .video-section h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+          }
+        }
+
         .video-section video {
+          width: 100%;
           max-width: 100%;
           border-radius: 8px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .document-footer {
+          text-align: center;
+          margin-top: 30px;
+          padding: 16px;
+          background-color: #f5f5f5;
+          border-radius: 8px;
+          font-size: 0.9rem;
+        }
+
+        @media (min-width: 768px) {
+          .document-footer {
+            margin-top: 60px;
+            padding: 20px;
+            font-size: 1rem;
+          }
+        }
+
+        .important-note {
+          margin-top: 10px;
+        }
+
+        /* Ensure full-width layout on mobile */
+        @media (max-width: 767px) {
+          body {
+            margin: 0;
+            padding: 0;
+          }
+
+          p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+          }
         }
       `}</style>
 
@@ -283,6 +776,10 @@ export default function SecretJosh() {
         <h1>CONTRACT & COMPENSATION DISCUSSION</h1>
         <p>Will Welsh | Tech Integration Labs LLC</p>
         <p>December 2025</p>
+      </div>
+
+      <div className="video-notice">
+        <p>📹 <strong>Video Message Below:</strong> There is a personal video message at the bottom of this document. <a onClick={scrollToVideo}>Click here to jump to video →</a></p>
       </div>
 
       <div className="intro">
@@ -745,7 +1242,7 @@ export default function SecretJosh() {
             <li><strong>Carry Tech E&O / professional liability insurance</strong> — development-related liability covered by my policy</li>
             <li><strong>Use standard limitation-of-liability contract language</strong> — capped exposure, excluded damages</li>
             <li><strong>Cover all AI subscriptions and API costs myself</strong> — These are the same subscriptions we're already paying through Disruptors Media (Claude, ChatGPT, Google Cloud, etc.). The ~$500-700/month is the absolute minimum needed to build all this stuff efficiently. And to be clear: these subscriptions and their associated API credits are the exact thing that resulted in the $1,800 charge. Under this structure, all of that would be on my accounts, not yours.
-              <p style={{marginTop: '10px'}}><strong>Important:</strong> If I'm expected to take on risks like API leaks (the $1,800 incident), then this is how it needs to be set up. The person who bears the risk needs to control the accounts. That's standard in the industry—you can't hold someone liable for costs on accounts they don't control. This structure solves that problem cleanly: I control the accounts, I bear the risk, and Disruptors Media has zero exposure.</p></li>
+              <p className="important-note"><strong>Important:</strong> If I'm expected to take on risks like API leaks (the $1,800 incident), then this is how it needs to be set up. The person who bears the risk needs to control the accounts. That's standard in the industry—you can't hold someone liable for costs on accounts they don't control. This structure solves that problem cleanly: I control the accounts, I bear the risk, and Disruptors Media has zero exposure.</p></li>
             <li><strong>Manage and pay software developer freelancers</strong> when their expertise is needed to complete a project</li>
             <li><strong>Manage all technical accounts and infrastructure</strong> — You won't be liable or responsible for any fees, risks, or complexities associated with these accounts. No more shared account concerns or confusion about who's responsible for what.</li>
             <li><strong>Implement Discovery/PoC phases</strong> for novel work — de-risk projects before full commitment</li>
@@ -760,7 +1257,7 @@ export default function SecretJosh() {
             <li><strong>10-20% of initial down payments</strong> — I do significant upfront work to close these deals <em>(open to negotiation)</em></li>
             <li><strong>10-20% of recurring revenue</strong> — the apps I build generate income for years <em>(open to negotiation)</em></li>
             <li><strong>Written compensation terms for internal DM work</strong> — no more ambiguity
-              <p style={{marginTop: '10px'}}><strong>Important caveat:</strong> This is where the good faith and repayment for being good to me comes in. I genuinely like Kyle, Tyler, Josh, and the company itself—I really mean that. And I appreciate many aspects of how I've been treated thus far. Because of that, I'm happy to help out the company without pay in many ways that are reasonable and agreed upon under friendly terms. This includes things like helping with Disruptors Connect events, consulting, and training anytime now and in the future. But it needs to be in a friendly and respectful manner—not "we need you here by this time and you will be expected to have trained us on X and Y by the end of this meeting." There's a big difference between asking for help and demanding it with an implication of failure on my part.</p></li>
+              <p className="important-note"><strong>Important caveat:</strong> This is where the good faith and repayment for being good to me comes in. I genuinely like Kyle, Tyler, Josh, and the company itself—I really mean that. And I appreciate many aspects of how I've been treated thus far. Because of that, I'm happy to help out the company without pay in many ways that are reasonable and agreed upon under friendly terms. This includes things like helping with Disruptors Connect events, consulting, and training anytime now and in the future. But it needs to be in a friendly and respectful manner—not "we need you here by this time and you will be expected to have trained us on X and Y by the end of this meeting." There's a big difference between asking for help and demanding it with an implication of failure on my part.</p></li>
             <li><strong>The $1,800 deduction reversed</strong> — Google will reimburse directly to the company</li>
             <li><strong>Everything in writing going forward</strong> — no more verbal agreements that get reinterpreted</li>
           </ol>
@@ -818,10 +1315,9 @@ export default function SecretJosh() {
 
       <div className="appendix" id="appendices">
         <h1>APPENDICES: DETAILED DOCUMENTATION & RESEARCH</h1>
+        <p style={{marginBottom: '20px', color: '#666'}}>Click on each appendix to expand/collapse the content.</p>
 
-        <div className="section" id="appendix-a">
-          <h2>APPENDIX A: The $1,800 API Deduction — Detailed Analysis</h2>
-
+        <CollapsibleAppendix id="appendix-a" title="APPENDIX A: The $1,800 API Deduction — Detailed Analysis">
           <h3>A.1 What Is an API Key?</h3>
           <p>Think of an API key like a password that lets one piece of software talk to another.</p>
           <p>When you use an app on your phone that shows you the weather, that app doesn't have its own weather satellites. It uses an API key to ask Google or Apple's weather service, "Hey, what's the weather in Boise?" The weather service checks the key, confirms it's legitimate, and sends back the answer.</p>
@@ -875,11 +1371,9 @@ export default function SecretJosh() {
             <a href="https://www.ecfr.gov/current/title-29/subtitle-A/part-4/subpart-D/subject-group-ECFR2c50d9c2d69b435/section-4.168" target="_blank" rel="noopener noreferrer">Federal Register 29 CFR 4.168</a>
             <a href="https://www.dol.gov/agencies/whd/fact-sheets/78d-h2b-deductions" target="_blank" rel="noopener noreferrer">DOL Fact Sheet 78D</a>
           </div>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-b">
-          <h2>APPENDIX B: The Website — Scope Creep Documentation</h2>
-
+        <CollapsibleAppendix id="appendix-b" title="APPENDIX B: The Website — Scope Creep Documentation">
           <h3>B.1 What Happened</h3>
           <ol>
             <li>I designed the website (Version 1)</li>
@@ -910,11 +1404,9 @@ export default function SecretJosh() {
             <li><strong>Change orders</strong> - Additional work beyond scope gets quoted separately</li>
           </ul>
           <p>Asking a developer to work until something is "perfect" with no clear definition of "perfect" is asking for infinite work.</p>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-c">
-          <h2>APPENDIX C: Industry Compensation Research</h2>
-
+        <CollapsibleAppendix id="appendix-c" title="APPENDIX C: Industry Compensation Research">
           <h3>C.1 Standard Hourly Rates</h3>
           <p>Research shows:</p>
           <ul>
@@ -967,11 +1459,9 @@ export default function SecretJosh() {
             <a href="https://www.ziprecruiter.com/Salaries/Software-Developer-Contractor-Salary" target="_blank" rel="noopener noreferrer">ZipRecruiter - Software Developer Contractor Salary</a>
             <a href="https://www.glassdoor.com/Salaries/software-engineer-contractor-salary-SRCH_KO0,28.htm" target="_blank" rel="noopener noreferrer">Glassdoor - Software Engineer Contractor Salary</a>
           </div>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-d">
-          <h2>APPENDIX D: Original Conversation Quotes</h2>
-
+        <CollapsibleAppendix id="appendix-d" title="APPENDIX D: Original Conversation Quotes">
           <h3>D.1 On Equity</h3>
           <blockquote>"That would mean that I would have 24% or something... It depends on what you're capable of. For sure, sure. I mean, if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."</blockquote>
           <blockquote>"It probably depends on how well it does, huh?"</blockquote>
@@ -993,11 +1483,9 @@ export default function SecretJosh() {
 
           <h3>D.6 On the Scarcity of Talent</h3>
           <blockquote>"There is an AI opportunity right now to be AI consultants and AI partners with tons of companies, because there's not enough people like us, right, and you, and Emerald Deacon, there's not enough people like them to facilitate the needs of all the companies out there. There just isn't."</blockquote>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-e">
-          <h2>APPENDIX E: Uncompensated Internal Work</h2>
-
+        <CollapsibleAppendix id="appendix-e" title="APPENDIX E: Uncompensated Internal Work">
           <table>
             <thead>
               <tr>
@@ -1034,11 +1522,9 @@ export default function SecretJosh() {
               </tr>
             </tbody>
           </table>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-f">
-          <h2>APPENDIX F: Professional Liability Insurance Research</h2>
-
+        <CollapsibleAppendix id="appendix-f" title="APPENDIX F: Professional Liability Insurance Research">
           <h3>F.1 What Is Tech E&O Insurance?</h3>
           <p>Technology Errors & Omissions (Tech E&O) Insurance is a specialized form of professional liability coverage tailored for tech companies. It protects businesses against claims resulting from mistakes, oversights, or failures in their products or services.</p>
 
@@ -1057,11 +1543,9 @@ export default function SecretJosh() {
             <a href="https://www.thehartford.com/professional-liability-insurance/errors-omissions-insurance/technology" target="_blank" rel="noopener noreferrer">The Hartford - Technology E&O Insurance</a>
             <a href="https://www.techinsurance.com/technology-business-insurance/software-development" target="_blank" rel="noopener noreferrer">TechInsurance - Software Developer Insurance</a>
           </div>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-g">
-          <h2>APPENDIX G: Agile Development & Client Pricing</h2>
-
+        <CollapsibleAppendix id="appendix-g" title="APPENDIX G: Agile Development & Client Pricing">
           <h3>G.1 How Agile Pricing Works</h3>
           <blockquote>"When a project's scope is subject to change due to early user feedback, evolving customer requirements, or other factors, the development cost can be bound to agreed rates and the efforts experts spend to introduce deliverables, so the client only pays for actual work done."</blockquote>
           <blockquote>"Although it's impossible to predict the exact scope of work early on, mature project management practices help accurately define the baseline scope and give realistic estimates from the start."</blockquote>
@@ -1078,11 +1562,9 @@ export default function SecretJosh() {
             <a href="https://stfalcon.com/en/blog/post/discovery-phase" target="_blank" rel="noopener noreferrer">Stfalcon - Discovery Phase in Software Development</a>
             <a href="https://designli.co/blog/5-steps-proof-concept-successful-software-development/" target="_blank" rel="noopener noreferrer">Designli - Proof of Concept in Software Development</a>
           </div>
-        </div>
+        </CollapsibleAppendix>
 
-        <div className="section" id="appendix-h">
-          <h2>APPENDIX H: Full Source Reference List</h2>
-
+        <CollapsibleAppendix id="appendix-h" title="APPENDIX H: Full Source Reference List">
           <h3>Compensation & Revenue Share</h3>
           <div className="source-list">
             <a href="https://www.ziprecruiter.com/Salaries/Software-Developer-Contractor-Salary" target="_blank" rel="noopener noreferrer">ZipRecruiter - Software Developer Contractor Salary</a>
@@ -1140,23 +1622,22 @@ export default function SecretJosh() {
             <a href="https://topflightapps.com/ideas/ai-app-development/" target="_blank" rel="noopener noreferrer">TopFlight Apps - AI App Development Guide</a>
             <a href="https://xbsoftware.com/blog/ai-in-software-development/" target="_blank" rel="noopener noreferrer">XB Software - Generative AI in Software Development</a>
           </div>
-        </div>
+        </CollapsibleAppendix>
       </div>
 
-      <div style={{textAlign: 'center', marginTop: '60px', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '8px'}}>
+      <div className="document-footer">
         <p><strong>Document Prepared By:</strong> Will Welsh</p>
         <p><strong>Company:</strong> Tech Integration Labs LLC</p>
         <p><strong>Date:</strong> December 2025</p>
       </div>
 
       {/* Video Section */}
-      <div className="video-section">
+      <div className="video-section" id="video-section">
         <h2>Video Message</h2>
         <video
           controls
-          width="100%"
-          style={{maxWidth: '800px'}}
           preload="metadata"
+          playsInline
         >
           <source src="/secret/video.mp4" type="video/mp4" />
           Your browser does not support the video tag.
