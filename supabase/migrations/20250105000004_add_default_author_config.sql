@@ -36,10 +36,10 @@ INSERT INTO default_author_by_article_type (article_type, default_author_name, d
   ('listicle', 'Kayleigh Gilbert', 'List-based content with rankings'),
   ('career-guide', 'Kayleigh Gilbert', 'Career-focused program guides'),
 
-  -- Sarah - Technical education, general guides (accessible, broad)
-  ('guide', 'Sarah', 'General guides and overviews, accessible explanations'),
-  ('explainer', 'Sarah', 'Educational explainer content'),
-  ('overview', 'Sarah', 'Broad topic overviews'),
+  -- Sara - Technical education, general guides (accessible, broad)
+  ('guide', 'Sara', 'General guides and overviews, accessible explanations'),
+  ('explainer', 'Sara', 'Educational explainer content'),
+  ('overview', 'Sara', 'Broad topic overviews'),
 
   -- Charity - Teaching degrees, certification paths (practical, career-focused)
   ('tutorial', 'Charity', 'Step-by-step tutorials and how-to content'),
@@ -57,7 +57,7 @@ CREATE TRIGGER update_default_author_config_updated_at BEFORE UPDATE ON default_
 -- Table comments
 COMMENT ON TABLE default_author_by_article_type IS 'Maps article types to default primary authors. Per GetEducated spec section 8.2.2.';
 COMMENT ON COLUMN default_author_by_article_type.article_type IS 'Content type (ranking, guide, listicle, etc.)';
-COMMENT ON COLUMN default_author_by_article_type.default_author_name IS 'Must be one of the 4 approved authors: Tony Huffman, Kayleigh Gilbert, Sarah, Charity';
+COMMENT ON COLUMN default_author_by_article_type.default_author_name IS 'Must be one of the 4 approved authors: Tony Huffman, Kayleigh Gilbert, Sara, Charity';
 
 -- Add system settings for workflow configuration
 INSERT INTO system_settings (key, value, category, description) VALUES

@@ -68,7 +68,7 @@ export function validateForPublish(article, options = {}) {
       result.checks.author.message = `"${authorName}" is not an approved author`
       result.blockingIssues.push({
         type: 'unauthorized_author',
-        message: `Author "${authorName}" is not approved. Only Tony Huffman, Kayleigh Gilbert, Sarah, and Charity are allowed.`,
+        message: `Author "${authorName}" is not approved. Only Tony Huffman, Kayleigh Gilbert, Sara, and Charity are allowed.`,
       })
     } else {
       result.checks.author.passed = true

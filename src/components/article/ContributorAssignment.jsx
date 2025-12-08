@@ -23,7 +23,7 @@ import {
  * CRITICAL: Only displays the 4 approved GetEducated authors
  * - Tony Huffman (Kif)
  * - Kayleigh Gilbert (Alicia Carrasco)
- * - Sarah (Daniel Catena)
+ * - Sara (Daniel Catena)
  * - Charity (Julia Tell)
  */
 export default function ContributorAssignment({

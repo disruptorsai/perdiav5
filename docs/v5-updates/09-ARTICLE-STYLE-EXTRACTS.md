@@ -155,7 +155,7 @@ This document contains representative excerpts and full opening/closing patterns
 #### Inclusive Language:
 > Finally, one of the most significant benefits of online education is its ability to level the playing field for a diverse range of students. Older students, veterans, and those who may not thrive in a traditional classroom setting find online education particularly exciting. It provides an inclusive environment that accommodates different lifestyles, learning paces, and commitments.
 
-### Sarah Style Summary:
+### Sara Style Summary:
 - **Tone:** Direct, practical, accessible
 - **Opening Pattern:** Reader pain point (time, money, career change barriers)
 - **Closing Pattern:** Action-oriented CTA, "What are you waiting for?"
@@ -171,7 +171,7 @@ This document contains representative excerpts and full opening/closing patterns
 | **Charity** | Reader's goal/motivation | "a great way to," "consider" | Encouraging, supportive | Question headings, comparisons |
 | **Tony** | Problem statement (cost) | "our database," "meticulous" | Authoritative, data-focused | Methodology, bullet points |
 | **Kayleigh** | Vision/aspiration | "make a difference," "equip you" | Warm, empowering | Numbered lists, detail |
-| **Sarah** | Reader pain point | "you can," "what are you waiting for?" | Direct, practical | Simple lists, action CTAs |
+| **Sara** | Reader pain point | "you can," "what are you waiting for?" | Direct, practical | Simple lists, action CTAs |
 
 ---
 

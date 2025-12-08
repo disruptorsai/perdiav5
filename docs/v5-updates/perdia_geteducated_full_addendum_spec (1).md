@@ -363,7 +363,7 @@ Until the exact syntax is confirmed by Kayleigh’s monetization sheet, the impl
 
   - Follow linking and monetization rules above.
 
-- Human editors (Kayleigh, Tony, Sarah, Charity) will:
+- Human editors (Kayleigh, Tony, Sara, Charity) will:
 
   - Review early batches of articles.
 
@@ -429,7 +429,7 @@ Only **four** real authors must be used as bylines for new AI-generated or AI-as
 
 - **Kayleigh Gilbert**
 - **Tony Huffman**
-- **Sarah <LastName>** (final name to be confirmed in your system)
+- **Sara <LastName>** (final name to be confirmed in your system)
 - **Charity <LastName>** (final name to be confirmed in your system)
 
 **Rules:**
@@ -453,8 +453,8 @@ Create an `allowed_authors` (or `authors`) table to mirror GetEducated’s autho
 
 **Implementation details:**
 
-- Seed this table with four records (Kayleigh, Tony, Sarah, Charity).
-- Mark only Kayleigh & Tony as `active = true` initially if Sarah and Charity’s WP accounts/pages are not yet created; update once they exist.
+- Seed this table with four records (Kayleigh, Tony, Sara, Charity).
+- Mark only Kayleigh & Tony as `active = true` initially if Sara and Charity's WP accounts/pages are not yet created; update once they exist.
 - Perdia’s author picker UI must only show rows where `active = true`.
 
 ### 8.1.3 Mapping to WordPress
@@ -484,12 +484,12 @@ Based on the writing samples and historical patterns, the app can provide **sens
 
 - **Program lists / degree roundups**  
   (e.g., LCSW programs, hospitality degrees, technical colleges)  
-  - Default `primary_author`: **Kayleigh**, **Sarah**, or **Charity** depending on category.
+  - Default `primary_author`: **Kayleigh**, **Sara**, or **Charity** depending on category.
   - Recommended initial config: use **Kayleigh** as default until a more granular mapping is agreed upon.
 
 - **General guides / explainer content**  
   (e.g., “What degrees can you get online?”)  
-  - Default `primary_author`: **Sarah** or **Charity**, once they’re fully onboarded as authors.
+  - Default `primary_author`: **Sara** or **Charity**, once they're fully onboarded as authors.
 
 **Implementation:**
 
@@ -519,7 +519,7 @@ The AI may move items between `drafting`, `refinement`, and `pre_check` automati
 For the GetEducated team, the important states are simpler:
 
 1. **Idea Queue** – Proposed topics, generated or manually added.
-2. **Ready for Human Review** – The article is drafted, passed internal AI checks, and is ready for Kayleigh/Tony/Sarah/Charity to review.
+2. **Ready for Human Review** – The article is drafted, passed internal AI checks, and is ready for Kayleigh/Tony/Sara/Charity to review.
 3. **Approved for Publish** – Human sign-off complete; article is ready to be pushed to WordPress (or scheduled).
 4. **Published** – Confirmed successfully published on the site.
 
@@ -603,7 +603,7 @@ At minimum, define these roles within Perdia:
   - Can approve articles for publish.
   - Can trigger AI revisions.
   - Can modify metadata, monetization blocks, and authors.
-- **Reviewer (Sarah, Charity)**
+- **Reviewer (Sara, Charity)**
   - Can add comments and suggest changes.
   - Can trigger AI revisions.
   - Cannot final-approve publishing (optional, configurable).
@@ -692,7 +692,7 @@ Sections:
 3. **Comments / Feedback Panel**
    - List of comments with:
      - Text excerpt
-     - Author of comment (Kayleigh/Tony/Sarah/Charity)
+     - Author of comment (Kayleigh/Tony/Sara/Charity)
      - Timestamp
    - Ability to mark a comment as “addressed”.
 
@@ -726,7 +726,7 @@ Sections:
 In addition to the checklist in the original document, confirm the following for **authoring and workflow**:
 
 1. **Authors & Identity**
-   - [ ] `allowed_authors` table created and seeded with Kayleigh, Tony, Sarah, Charity.
+   - [ ] `allowed_authors` table created and seeded with Kayleigh, Tony, Sara, Charity.
    - [ ] Only these authors can be selected as `primary_author_id` for new content.
    - [ ] WordPress integration maps Perdia authors to WP authors correctly and fails safely if missing.
 

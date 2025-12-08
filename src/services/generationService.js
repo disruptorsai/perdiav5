@@ -541,12 +541,12 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
    * CRITICAL: Only assigns from the 4 approved GetEducated authors
    * Per spec section 8.2.2: Uses default_author_by_article_type table first
    *
-   * PUBLIC BYLINE uses REAL NAME (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
+   * PUBLIC BYLINE uses REAL NAME (Tony Huffman, Kayleigh Gilbert, Sara, Charity)
    * NEVER use style proxy names (Kif, Alicia, Danny, Julia) as public bylines
    */
   async assignContributor(idea, contentType) {
     // APPROVED_AUTHORS is imported from useContributors hook
-    // Contains: ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+    // Contains: ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity']
 
     try {
       // First, check if there's a default author for this content type (per spec 8.2.2)
@@ -637,8 +637,8 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
           }
         }
 
-        // Sarah - Technical education, general guides, online learning basics
-        if (contributor.name === 'Sarah') {
+        // Sara - Technical education, general guides, online learning basics
+        if (contributor.name === 'Sara') {
           if (title.includes('technical') || title.includes('online college') || title.includes('what degree') ||
               title.includes('how to') || title.includes('guide to') || title.includes('beginner')) {
             score += 40

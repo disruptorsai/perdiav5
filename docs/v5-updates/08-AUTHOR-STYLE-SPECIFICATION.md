@@ -13,13 +13,13 @@ Only these four people can be assigned as authors on AI-generated content:
 |---------------------------|---------------------|------|---------------------|
 | **Tony Huffman** | Kif | Owner | Yes - [Link](https://www.geteducated.com/article-contributors/tony-huffman) |
 | **Kayleigh Gilbert** | Alicia | Editor | Yes (pending creation) |
-| **Sarah** | Danny | Writer | No (pending creation) |
+| **Sara** | Danny | Writer | No (pending creation) |
 | **Charity** | Julia | Writer | No (pending creation) |
 
 ### Critical Rules
 
 ```
-Public Byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
+Public Byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sara, Charity)
 Internal Style Proxy = For AI voice matching ONLY (Kif, Alicia, Danny, Julia)
 ```
 
@@ -41,7 +41,7 @@ Internal Style Proxy = For AI voice matching ONLY (Kif, Alicia, Danny, Julia)
 |--------|-------------|-----------------|---------------------------|
 | **Tony Huffman** | Kif | Rankings, data analysis, affordability metrics | Ranking reports, Best Buy lists, cost analysis, data-driven content, landing pages |
 | **Kayleigh Gilbert** | Alicia | Professional programs, healthcare/social work, school reviews | LCSW/MSW programs, hospitality, professional certifications, "best of" guides |
-| **Sarah** | Danny | Technical education, broad degree overviews, career pathways | Technical colleges, general "what degrees" content, career-focused guides |
+| **Sara** | Danny | Technical education, broad degree overviews, career pathways | Technical colleges, general "what degrees" content, career-focused guides |
 | **Charity** | Julia | Teaching degrees, education career guidance, degree comparisons | Teaching programs, MAT/MEd content, education career articles, comparison guides |
 
 ---
@@ -105,7 +105,7 @@ Internal Style Proxy = For AI voice matching ONLY (Kif, Alicia, Danny, Julia)
 
 ---
 
-### Sarah (Danny Style)
+### Sara (Danny Style)
 
 **Sample Articles:**
 - https://www.geteducated.com/top-online-colleges/online-technical-colleges/
@@ -223,13 +223,13 @@ Use this block in AI prompts:
 ALLOWED AUTHORS (use ONLY these four for bylines):
 1. Tony Huffman - Rankings, data analysis, affordability content
 2. Kayleigh Gilbert - Professional programs, healthcare, best-of guides
-3. Sarah - Technical education, degree overviews, career pathways
+3. Sara - Technical education, degree overviews, career pathways
 4. Charity - Teaching degrees, education careers, comparisons
 
 INTERNAL STYLE PROXIES (for voice matching, NEVER publish):
 - Tony = "Kif" style
 - Kayleigh = "Alicia" style
-- Sarah = "Danny" style
+- Sara = "Danny" style
 - Charity = "Julia" style
 
 PROHIBITED:
@@ -241,7 +241,7 @@ PROHIBITED:
 ARTICLE ASSIGNMENT:
 - Ranking reports & data content → Tony Huffman
 - Professional/healthcare programs → Kayleigh Gilbert
-- Technical colleges & career guides → Sarah
+- Technical colleges & career guides → Sara
 - Teaching & education degree content → Charity
 ```
 
@@ -253,7 +253,7 @@ ARTICLE ASSIGNMENT:
 
 ```sql
 UPDATE article_contributors SET is_active = false WHERE name NOT IN (
-  'Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity'
+  'Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity'
 );
 
 -- Tony Huffman
@@ -293,7 +293,7 @@ const BLOCKED_BYLINES = [
 const APPROVED_AUTHORS = [
   'Tony Huffman',
   'Kayleigh Gilbert',
-  'Sarah',
+  'Sara',
   'Charity'
 ];
 ```

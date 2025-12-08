@@ -1,6 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
+import FloatingHelpButton from '../help/FloatingHelpButton'
+import HelpModal from '../help/HelpModal'
 import {
   LayoutDashboard,
   FileText,
@@ -165,6 +167,10 @@ function MainLayout() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* How-To Guide Components */}
+      <FloatingHelpButton />
+      <HelpModal />
     </div>
   )
 }

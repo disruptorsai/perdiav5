@@ -89,11 +89,11 @@ UPDATE article_contributors SET
   is_active = true
 WHERE name = 'Kayleigh Gilbert';
 
--- Update Sarah
--- Public byline: "Sarah" | Style proxy: "Danny"
+-- Update Sara
+-- Public byline: "Sara" | Style proxy: "Danny"
 UPDATE article_contributors SET
-  name = 'Sarah',
-  display_name = 'Sarah',  -- PUBLIC BYLINE - Real name
+  name = 'Sara',
+  display_name = 'Sara',  -- PUBLIC BYLINE - Real name
   style_proxy = 'Danny',   -- INTERNAL ONLY - For AI style matching
   bio = 'Education content writer at GetEducated focusing on technical education, career pathways, and general degree guidance. Makes complex education topics accessible for all readers.',
   expertise_areas = ARRAY['technical-education', 'career-pathways', 'general-degrees', 'online-learning'],
@@ -116,7 +116,7 @@ UPDATE article_contributors SET
     {"type": "closing", "excerpt": "It doesn''t matter if you are an adult learner or still in high school. There''s a program out there which can tailor to your needs. Technical online colleges can be your gateway to a satisfying career and financial stability. What are you waiting for? Enroll in an online technical school today."}
   ]'::jsonb,
   is_active = true
-WHERE name = 'Sarah';
+WHERE name = 'Sara';
 
 -- Update Charity
 -- Public byline: "Charity" | Style proxy: "Julia"
@@ -150,10 +150,10 @@ WHERE name = 'Charity';
 -- Ensure no other contributors are active
 UPDATE article_contributors
 SET is_active = false
-WHERE name NOT IN ('Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity');
+WHERE name NOT IN ('Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity');
 
 -- Add comments explaining the critical distinction
-COMMENT ON COLUMN article_contributors.display_name IS 'PUBLIC BYLINE - Use real name (Tony Huffman, Kayleigh Gilbert, Sarah, Charity). NEVER use style proxy names as bylines.';
+COMMENT ON COLUMN article_contributors.display_name IS 'PUBLIC BYLINE - Use real name (Tony Huffman, Kayleigh Gilbert, Sara, Charity). NEVER use style proxy names as bylines.';
 COMMENT ON COLUMN article_contributors.style_proxy IS 'INTERNAL ONLY - Style proxy name for AI voice matching (Kif, Alicia, Danny, Julia). NEVER publish this as a byline.';
 COMMENT ON TABLE article_contributors IS 'GetEducated approved authors. CRITICAL: display_name is the PUBLIC byline (real names). style_proxy is INTERNAL ONLY for AI matching.';
 
@@ -166,7 +166,7 @@ DECLARE
     'Admin', 'GetEducated', 'Editorial Team',
     'Julia', 'Kif', 'Alicia', 'Danny', 'Daniel'
   ];
-  approved_names TEXT[] := ARRAY['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity'];
+  approved_names TEXT[] := ARRAY['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity'];
 BEGIN
   -- Check if byline is in blocked list
   IF byline = ANY(blocked_names) THEN

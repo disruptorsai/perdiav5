@@ -152,7 +152,7 @@ Could be used for:
 **Status:** Kayleigh said she'll send
 
 **What we need:**
-- Profile photos for: Tony, Kayleigh, Sarah, Charity
+- Profile photos for: Tony, Kayleigh, Sara, Charity
 - For WordPress author pages and app display
 
 ---
@@ -175,7 +175,7 @@ Please provide the following (in order of priority):
 - [ ] **Monetization spreadsheet export** - XLSX download of the Google Sheet
 - [ ] **Business model explanation** - Voice note or written summary
 - [ ] **Forum URL** - Link to GetEducated forums
-- [ ] **Author photos** - Pictures of Tony, Kayleigh, Sarah, Charity
+- [ ] **Author photos** - Pictures of Tony, Kayleigh, Sara, Charity
 
 Optional but helpful:
 - [ ] Ranking report data export (if available)

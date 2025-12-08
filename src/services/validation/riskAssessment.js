@@ -51,7 +51,7 @@ export function assessRisk(article, options = {}) {
   const {
     checkLinks = true,
     checkAuthor = true,
-    approvedAuthors = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity'],
+    approvedAuthors = ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity'],
   } = options
 
   const assessment = {

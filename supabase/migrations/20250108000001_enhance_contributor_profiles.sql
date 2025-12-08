@@ -116,7 +116,7 @@ UPDATE article_contributors SET
   seo_approach = 'Target question-based and "what is" keywords. Focus on beginner-level search intent. Include definitions and explanations that can appear in featured snippets.',
   intro_style = 'Start with empathy - acknowledge the reader might be feeling overwhelmed or unsure. Promise to make the topic clear and manageable.',
   conclusion_style = 'End on an encouraging note. Summarize the key options, remind readers that they can do this, and suggest a logical next step.'
-WHERE name = 'Sarah';
+WHERE name = 'Sara';
 
 UPDATE article_contributors SET
   voice_description = 'Supportive and practical. Specialist in career transitions, especially into teaching. Writes clear, actionable guides that help readers understand paths from A to B. Empathetic toward career changers while being realistic about requirements.',

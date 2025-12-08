@@ -14,10 +14,10 @@
 - [ ] Restrict author selection to only 4 approved authors:
   - Tony Huffman
   - Kayleigh Gilbert
-  - Sarah
+  - Sara
   - Charity
 - [ ] Remove/hide all legacy authors from contributor dropdown
-- [ ] Default to Tony or Kayleigh until Sarah/Charity pages exist
+- [ ] Default to Tony or Kayleigh until Sara/Charity pages exist
 - [ ] Update `article_contributors` table seed data
 - [ ] Add validation to block publishing with unauthorized authors
 

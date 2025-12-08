@@ -193,7 +193,7 @@ The database schema is **94.4% complete** (34 of 36 expected tables exist). Two 
 | System Settings | system_settings | ~7+ | 48 | COMPLETE |
 
 **Notes on article_contributors:**
-- The 4 approved authors for GetEducated are: Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+- The 4 approved authors for GetEducated are: Tony Huffman, Kayleigh Gilbert, Sara, Charity
 - Additional contributors may be legacy data or test data
 - Per CLAUDE.md, only these 4 authors should be used for public bylines
 

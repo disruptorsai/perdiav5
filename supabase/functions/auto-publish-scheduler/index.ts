@@ -227,7 +227,7 @@ serve(async (req) => {
       }
 
       // Check contributor (must be one of the 4 approved authors)
-      const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+      const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity']
       const contributorName = article.article_contributors?.name || article.contributor_name
       if (contributorName && !APPROVED_AUTHORS.includes(contributorName)) {
         results.articlesSkipped++

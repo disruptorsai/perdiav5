@@ -2,7 +2,7 @@
 
 **Last Updated:** December 3, 2025
 **Client:** GetEducated.com
-**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sara, Charity
 
 ---
 
@@ -109,7 +109,7 @@ Perdia v5 is being refined specifically for GetEducated.com's content production
 1. `idea` - Initial concept
 2. `drafting` - AI generation in progress
 3. `refinement` - AI or human refinement
-4. `qa_review` - Human review (Kayleigh/Sarah/Tony)
+4. `qa_review` - Human review (Kayleigh/Sara/Tony)
 5. `ready_to_publish` - Approved, awaiting publish
 6. `published` - Live on WordPress
 
@@ -126,12 +126,12 @@ Perdia v5 is being refined specifically for GetEducated.com's content production
 Only these four people can be attributed as authors:
 1. **Tony Huffman** - Has author page on site
 2. **Kayleigh Gilbert** - Has author page on site
-3. **Sarah** - Author page to be created
+3. **Sara** - Author page to be created
 4. **Charity** - Author page to be created
 
 **NEVER use legacy authors** - real people who didn't write AI content don't want their names on it.
 
-**Default until Sarah/Charity pages exist:** Tony or Kayleigh
+**Default until Sara/Charity pages exist:** Tony or Kayleigh
 
 ---
 
@@ -154,7 +154,7 @@ Only these four people can be attributed as authors:
 
 - **Tony Huffman** - Exec Sponsor, sets policy, reviews dashboards
 - **Kayleigh Gilbert** - SEO/Content Lead, defines topics, manages keywords/clusters
-- **Sarah** - Content Editor (daily reviewer), will be on future calls
+- **Sara** - Content Editor (daily reviewer), will be on future calls
 - **Josh Dennis** - Perdia PM/Integrator
 - **Will Welsh** - Perdia Developer
 

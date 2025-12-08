@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
  * CRITICAL: Only these 4 people can be attributed as authors on GetEducated content
  * IMPORTANT: PUBLIC bylines use REAL NAMES, not aliases
  */
-export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity']
+export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity']
 
 /**
  * Author display names for UI - maps internal name to public display name
@@ -16,20 +16,20 @@ export const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'C
 export const AUTHOR_DISPLAY_NAMES = {
   'Tony Huffman': 'Tony Huffman',
   'Kayleigh Gilbert': 'Kayleigh Gilbert',
-  'Sarah': 'Sarah',
+  'Sara': 'Sara',
   'Charity': 'Charity',
 }
 
 /**
  * Internal style proxy mapping - for AI voice matching ONLY
  * CRITICAL: These are INTERNAL style proxies - NEVER use as public bylines
- * Public byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sarah, Charity)
+ * Public byline = Real Name (Tony Huffman, Kayleigh Gilbert, Sara, Charity)
  * Style proxy = For AI voice matching only (Kif, Alicia, Danny, Julia)
  */
 export const AUTHOR_STYLE_PROXIES = {
   'Tony Huffman': 'Kif',
   'Kayleigh Gilbert': 'Alicia',
-  'Sarah': 'Danny',
+  'Sara': 'Danny',
   'Charity': 'Julia',
 }
 
@@ -63,7 +63,7 @@ export const AUTHOR_CONTENT_MAPPING = {
     specialties: ['professional-programs', 'healthcare', 'social-work', 'best-of-guides', 'hospitality'],
     keywords: ['lcsw', 'msw', 'nursing', 'healthcare', 'hospitality', 'professional', 'licensure'],
   },
-  'Sarah': {
+  'Sara': {
     specialties: ['technical-education', 'degree-overviews', 'career-pathways', 'general-guides'],
     keywords: ['technical', 'career', 'degrees online', 'what degrees', 'overview', 'guide'],
   },

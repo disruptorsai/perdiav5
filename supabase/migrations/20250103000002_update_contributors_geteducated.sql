@@ -27,7 +27,7 @@ UPDATE article_contributors SET is_active = false WHERE is_active = true;
 -- Based on author samples analysis:
 -- - Tony (Kif Samples) - Ranking landing pages, ranking reports - authoritative, data-driven
 -- - Kayleigh (Alicia Samples) - LCSW programs, hospitality - detailed rankings, comprehensive
--- - Sarah (Danny Samples) - Technical colleges, general guides - broad overviews, accessible
+-- - Sara (Danny Samples) - Technical colleges, general guides - broad overviews, accessible
 -- - Charity (Julia Samples) - Fast-track teaching, MAT vs MEd - clear, practical, career-focused
 
 INSERT INTO article_contributors (
@@ -61,7 +61,7 @@ INSERT INTO article_contributors (
   true
 ),
 (
-  'Sarah',
+  'Sara',
   'Daniel Catena',
   'Education content writer at GetEducated focusing on technical education, career pathways, and general degree guidance. Makes complex education topics accessible for all readers.',
   ARRAY['technical-education', 'career-pathways', 'general-degrees', 'online-learning', 'education-guide'],
@@ -90,4 +90,4 @@ ON CONFLICT (name) DO UPDATE SET
   is_active = true;
 
 -- Add comment explaining the author restriction
-COMMENT ON TABLE article_contributors IS 'GetEducated approved authors only. CRITICAL: Only Tony, Kayleigh, Sarah, and Charity can be attributed as authors. Their display names are used on the site.';
+COMMENT ON TABLE article_contributors IS 'GetEducated approved authors only. CRITICAL: Only Tony, Kayleigh, Sara, and Charity can be attributed as authors. Their display names are used on the site.';

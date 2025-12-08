@@ -4,7 +4,7 @@
 **Last Updated:** December 8, 2025
 **Status:** Active Development (v5 branch)
 **Primary Client:** GetEducated.com
-**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sara, Charity
 
 ---
 
@@ -2072,7 +2072,7 @@ export async function validateBeforePublish(article) {
   const warnings = [];
 
   // 1. Author Check
-  const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sarah', 'Charity'];
+  const APPROVED_AUTHORS = ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity'];
   const BLOCKED_BYLINES = ['Julia Tell', 'Kif Richmann', 'Alicia Carrasco', 'Daniel Catena', 'Admin'];
 
   if (!article.contributor_id || !article.contributor_name) {
@@ -2285,7 +2285,7 @@ export async function insertShortcodesIntoContent(content, idea, contentType) {
 |---------------------------|------------------------|-----------|
 | **Tony Huffman** | Kif | Rankings, data analysis, affordability, Best Buy lists |
 | **Kayleigh Gilbert** | Alicia | Professional programs, healthcare/social work, best-of guides |
-| **Sarah** | Danny | Technical education, degree overviews, career pathways |
+| **Sara** | Danny | Technical education, degree overviews, career pathways |
 | **Charity** | Julia | Teaching degrees, education careers, comparisons |
 
 ### 13.2 Blocked Bylines (NEVER PUBLISH)
@@ -2342,9 +2342,9 @@ const kayleighProfile = {
   content_types: ['guide', 'listicle', 'program-comparison'],
 };
 
-// Sarah (Danny Style)
-const sarahProfile = {
-  name: 'Sarah',
+// Sara (Danny Style)
+const saraProfile = {
+  name: 'Sara',
   style_proxy: 'Danny',
   writing_style_profile: `
     Direct, practical, accessible. Addresses reader pain points (time, money,

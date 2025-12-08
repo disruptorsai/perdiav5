@@ -12,7 +12,9 @@ import {
   GraduationCap,
   Link2,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  Monitor,
+  HelpCircle
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +27,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useSystemSettings, useBulkUpdateSettings } from '@/hooks/useSystemSettings'
 import { useToast, ToastProvider } from '@/components/ui/toast'
 import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
+import { useHowToGuide } from '@/contexts/HowToGuideContext'
 
 function SettingsContent() {
   const { toast } = useToast()
@@ -33,6 +36,7 @@ function SettingsContent() {
 
   const { data: settings = [], isLoading } = useSystemSettings()
   const bulkUpdateSettings = useBulkUpdateSettings()
+  const { isEnabled: howToGuidesEnabled, setEnabled: setHowToGuidesEnabled } = useHowToGuide()
 
   // Helper to get setting value
   const getSettingValue = (settingKey, defaultValue = '') => {
@@ -346,6 +350,10 @@ function SettingsContent() {
               <Shield className="w-4 h-4 mr-2" />
               Quality Rules
             </TabsTrigger>
+            <TabsTrigger value="ui">
+              <Monitor className="w-4 h-4 mr-2" />
+              User Interface
+            </TabsTrigger>
           </TabsList>
 
           {/* GetEducated Settings Tab */}
@@ -354,7 +362,7 @@ function SettingsContent() {
             <Alert className="border-blue-200 bg-blue-50">
               <GraduationCap className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-800">
-                <strong>Client:</strong> GetEducated.com | <strong>Stakeholders:</strong> Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+                <strong>Client:</strong> GetEducated.com | <strong>Stakeholders:</strong> Tony Huffman, Kayleigh Gilbert, Sara, Charity
               </AlertDescription>
             </Alert>
 
@@ -1389,6 +1397,53 @@ function SettingsContent() {
                     <Badge className="bg-emerald-600">Following</Badge>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* User Interface Settings Tab */}
+          <TabsContent value="ui" className="space-y-6 mt-6">
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5" />
+                  Help & Guidance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base font-medium">How-To Guides</Label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Show a floating "How to use this page" button on every page with helpful instructions
+                    </p>
+                  </div>
+                  <Switch
+                    checked={howToGuidesEnabled}
+                    onCheckedChange={setHowToGuidesEnabled}
+                  />
+                </div>
+
+                <Alert className="border-blue-200 bg-blue-50">
+                  <HelpCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800">
+                    When enabled, a floating button will appear in the bottom-right corner of each page. Click it to see helpful information about the current page's features and how to use them.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Monitor className="w-5 h-5" />
+                  Display Preferences
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-500">
+                  Additional display settings coming soon. This will include options for compact mode, sidebar preferences, and more.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Perdia v5 is an AI-powered content production system built with React 19, Vite, and Supabase. The application orchestrates a two-pass AI generation pipeline (Grok for drafting → StealthGPT for humanization) to produce SEO-optimized articles with automated quality assurance, contributor assignment, and WordPress publishing capabilities.
 
 **Primary Client:** GetEducated.com
-**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+**Stakeholders:** Tony Huffman, Kayleigh Gilbert, Sara, Charity
 
 ## CRITICAL CLIENT REQUIREMENTS
 
@@ -21,7 +21,7 @@ Perdia v5 is an AI-powered content production system built with React 19, Vite, 
 |---------------------------|----------------------------|------------------|
 | **Tony Huffman** | Kif | [Yes](https://www.geteducated.com/article-contributors/tony-huffman) |
 | **Kayleigh Gilbert** | Alicia | Pending creation |
-| **Sarah** | Danny | Pending creation |
+| **Sara** | Danny | Pending creation |
 | **Charity** | Julia | Pending creation |
 
 **NEVER publish these as bylines:**
@@ -32,7 +32,7 @@ Perdia v5 is an AI-powered content production system built with React 19, Vite, 
 **Author-to-Content Mapping:**
 - **Tony Huffman** → Rankings, data analysis, affordability, Best Buy lists
 - **Kayleigh Gilbert** → Professional programs, healthcare/social work, best-of guides
-- **Sarah** → Technical education, degree overviews, career pathways
+- **Sara** → Technical education, degree overviews, career pathways
 - **Charity** → Teaching degrees, education careers, degree comparisons
 
 See `docs/v5-updates/08-AUTHOR-STYLE-SPECIFICATION.md` for detailed style profiles.
@@ -134,7 +134,7 @@ The generation pipeline is the heart of the application, orchestrated by `src/se
 **Key Tables:**
 - `articles` - Main content storage with status workflow (idea → drafting → refinement → qa_review → ready_to_publish → published). Includes `risk_level`, `autopublish_deadline`, `reviewed_at` fields.
 - `content_ideas` - Article ideas with approval workflow (pending → approved → rejected → completed)
-- `article_contributors` - 4 approved authors (Tony/Kif, Kayleigh/Alicia, Sarah/Daniel, Charity/Julia) with writing style profiles
+- `article_contributors` - 4 approved authors (Tony/Kif, Kayleigh/Alicia, Sara/Daniel, Charity/Julia) with writing style profiles
 - `geteducated_articles` - GetEducated site catalog for internal linking (1000+ articles)
 - `monetization_categories` - 155 category/concentration pairs for shortcode generation
 - `monetization_levels` - 13 degree levels (Associate, Bachelor, Master, etc.)

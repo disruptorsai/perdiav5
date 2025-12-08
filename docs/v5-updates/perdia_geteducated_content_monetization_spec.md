@@ -363,7 +363,7 @@ Until the exact syntax is confirmed by Kayleigh’s monetization sheet, the impl
 
   - Follow linking and monetization rules above.
 
-- Human editors (Kayleigh, Tony, Sarah, Charity) will:
+- Human editors (Kayleigh, Tony, Sara, Charity) will:
 
   - Review early batches of articles.
 

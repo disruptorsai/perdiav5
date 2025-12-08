@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { GenerationProgressProvider } from './contexts/GenerationProgressContext'
+import { HowToGuideProvider } from './contexts/HowToGuideContext'
 import { ToastProvider } from './components/ui/toast'
 import FloatingProgressWindow from './components/ui/FloatingProgressWindow'
 import { queryClient } from './lib/queryClient'
@@ -55,8 +56,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <GenerationProgressProvider>
-          <ToastProvider>
-            <BrowserRouter>
+          <HowToGuideProvider>
+            <ToastProvider>
+              <BrowserRouter>
               <AnimatePresence mode="wait">
                 <Routes>
                   {/* Public Routes */}
@@ -107,8 +109,9 @@ function App() {
               </AnimatePresence>
               {/* Global Floating Progress Window - persists across page navigation */}
               <FloatingProgressWindow />
-            </BrowserRouter>
-          </ToastProvider>
+              </BrowserRouter>
+            </ToastProvider>
+          </HowToGuideProvider>
         </GenerationProgressProvider>
       </AuthProvider>
     </QueryClientProvider>

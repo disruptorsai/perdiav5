@@ -13,7 +13,7 @@ Only these 4 authors can be attributed on GetEducated content:
 |-----------|--------------|-------------|
 | Tony Huffman | Kif | /article-contributors/kif/ |
 | Kayleigh Gilbert | Alicia Carrasco | /article-contributors/alicia-carrasco/ |
-| Sarah | Daniel Catena | /article-contributors/daniel-catena/ |
+| Sara | Daniel Catena | /article-contributors/daniel-catena/ |
 | Charity | Julia Tell | /article-contributors/julia-tell/ |
 
 ---
@@ -61,7 +61,7 @@ Only these 4 authors can be attributed on GetEducated content:
 
 ---
 
-### Sarah (Daniel Catena)
+### Sara (Daniel Catena)
 **Sample Articles:**
 - https://www.geteducated.com/top-online-colleges/online-technical-colleges/
 - https://www.geteducated.com/distance-education-guide/what-degrees-can-you-get-online/
@@ -195,7 +195,7 @@ When generating content, the AI should:
    - Teaching/education → Charity (Julia Tell)
    - Rankings/cost analysis → Tony (Kif)
    - Healthcare/professional licensure → Kayleigh (Alicia)
-   - General guides/overviews → Sarah (Daniel)
+   - General guides/overviews → Sara (Daniel)
 
 2. **Apply author style:**
    - Use the `writing_style_profile` from the database

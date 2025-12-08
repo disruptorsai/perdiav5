@@ -360,7 +360,7 @@ IMPORTANT RULES:
 4. External links should ONLY go to government sites (BLS, ED.gov) or nonprofit sources
 5. NEVER link to competitors (US News, Online U, etc.)
 6. Preserve any existing monetization shortcodes
-7. Use approved authors only: Tony Huffman, Kayleigh Gilbert, Sarah, Charity
+7. Use approved authors only: Tony Huffman, Kayleigh Gilbert, Sara, Charity
 `
 
     // Article-specific context
