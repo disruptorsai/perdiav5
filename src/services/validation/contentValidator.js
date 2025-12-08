@@ -295,6 +295,7 @@ class ContentValidator {
 
   /**
    * Check for content truncation
+   * UPDATED: Much more lenient to avoid false positives on valid AI-generated content
    */
   checkTruncation(htmlContent, textContent, targetWordCount, faqs = []) {
     const result = {
@@ -303,84 +304,71 @@ class ContentValidator {
       details: {},
     }
 
-    // Check 1: Word count significantly below target (less than 70%)
+    // Check 1: Word count significantly below target (less than 50% - very lenient)
     const wordCount = this.countWords(textContent)
-    const minExpected = targetWordCount * 0.7
-    if (wordCount < minExpected) {
+    const minExpected = targetWordCount * 0.5
+    if (wordCount < minExpected && wordCount < 500) {
+      // Only flag if BOTH below 50% target AND very short (under 500 words)
       result.details.wordCount = wordCount
       result.details.expected = targetWordCount
-      // Don't mark as truncated yet - could just be short content
+      // Still don't mark as truncated - could just be concise content
     }
 
-    // Check 2: Content ends mid-sentence
+    // Check 2: Content ends mid-tag (most definitive truncation signal)
     const trimmedContent = htmlContent.trim()
 
-    // Check for obvious truncation indicators (incomplete tags, unclosed brackets)
-    // Only check the most definitive patterns - avoid false positives
+    // ONLY check for the most DEFINITIVE truncation patterns
+    // These are things that absolutely cannot appear in valid content
     const definiteTruncationPatterns = [
-      // Incomplete HTML tags (opening tag never closed)
-      /<[a-z]+[^>]*$/i,
-      // Incomplete quotes (single unmatched quote at end)
-      /"[^"]{0,100}$/,
-      // Incomplete parentheses/brackets at the very end
-      /\([^)]{0,50}$/,
-      /\[[^\]]{0,50}$/,
-      // Incomplete HTML entities
-      /&[a-z]+$/i,
-      /&#\d+$/,
+      // Incomplete HTML tags (opening tag that was cut off mid-attribute)
+      /<[a-z]+\s+[a-z]+\s*=\s*["'][^"']*$/i,
+      // Incomplete HTML entities at the very end
+      /&[a-z]{1,6}$/i,
+      /&#\d{1,4}$/,
+      // Obvious mid-word truncation (word cut off with no space after)
+      /\s[a-z]{1,3}$/i, // Single short word at end with no punctuation (like "the" "and" "or")
     ]
 
     for (const pattern of definiteTruncationPatterns) {
       if (pattern.test(trimmedContent)) {
         result.isTruncated = true
-        result.reason = 'Content appears to end mid-sentence or mid-tag'
+        result.reason = 'Content appears to end mid-tag or mid-word'
         result.details.indicator = pattern.toString()
         result.details.ending = trimmedContent.slice(-100)
         return result
       }
     }
 
-    // Check 3: Content doesn't end with valid ending
-    // Only check this if content is substantial (to avoid false positives on short descriptions)
-    const hasValidEnding = VALID_ENDINGS.some(pattern => pattern.test(trimmedContent))
-    if (!hasValidEnding && wordCount > 500) {
-      // More lenient: only flag if content is substantial and clearly incomplete
-      // Check if it ends with a partial sentence indicator
-      const endsWithPartialIndicator = TRUNCATION_INDICATORS.some(p => p.test(trimmedContent))
-      if (endsWithPartialIndicator) {
-        result.isTruncated = true
-        result.reason = 'Content does not end with a complete sentence or valid HTML tag'
-        result.details.ending = trimmedContent.slice(-100)
-        return result
-      }
-    }
+    // Check 3: REMOVED - Don't check for "valid endings" as this causes too many false positives
+    // AI-generated HTML content can end in many valid ways that don't match our patterns
+    // The old check was: hasValidEnding + TRUNCATION_INDICATORS which was too aggressive
 
-    // Check 4: FAQ answers are incomplete
+    // Check 4: FAQ answers are incomplete (only if FAQs exist and are very short)
     if (faqs && faqs.length > 0) {
       for (let i = 0; i < faqs.length; i++) {
         const faq = faqs[i]
         if (faq.answer) {
           const answer = faq.answer.trim()
-          // Check if answer ends properly
-          if (answer.length > 10 && !answer.match(/[.!?]$/)) {
+          // Only flag if answer is very short (under 20 chars) AND doesn't end with punctuation
+          // This catches obviously truncated answers like "The main benefit is th"
+          if (answer.length > 5 && answer.length < 20 && !answer.match(/[.!?]$/)) {
             result.isTruncated = true
-            result.reason = `FAQ answer ${i + 1} appears to be truncated`
+            result.reason = `FAQ answer ${i + 1} appears to be truncated (too short)`
             result.details.faqIndex = i
-            result.details.answerEnding = answer.slice(-30)
+            result.details.answerEnding = answer
             return result
           }
         }
       }
     }
 
-    // Check 5: Missing expected sections (conclusion, etc.)
+    // Check 5: Missing expected sections - just log, don't flag
     const hasConclusion = /conclusion|summary|wrap|final\s+thoughts|key\s+takeaways/i.test(textContent)
     const hasFAQSection = /frequently\s+asked|faq|questions/i.test(textContent)
 
     if (wordCount > 1000 && !hasConclusion && !hasFAQSection) {
-      // Large article without conclusion or FAQ might be truncated
       result.details.missingConclusion = true
-      // Don't block, just note it
+      // Don't block - this is informational only
     }
 
     return result

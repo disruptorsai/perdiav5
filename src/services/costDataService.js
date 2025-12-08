@@ -46,13 +46,23 @@ export async function searchCostData(topic, options = {}) {
 
   // Search by keywords in program name and school name
   // Note: Cannot filter on nested table (ranking_reports) inside or() - PostgREST limitation
-  // Build conditions for each keyword: (program_name.ilike.%kw% OR school_name.ilike.%kw%)
+  // Build a single OR condition with all keyword matches
   if (keywords.length > 0) {
-    const keywordConditions = keywords.map(kw =>
-      `program_name.ilike.%${kw}%,school_name.ilike.%${kw}%`
-    ).join(',')
+    // Build OR conditions for each keyword against program_name and school_name only
+    // Format: program_name.ilike.%kw1%,school_name.ilike.%kw1%,program_name.ilike.%kw2%,...
+    const conditions = []
+    for (const kw of keywords) {
+      // Escape any special characters in keyword for safety
+      const safeKw = kw.replace(/[%_]/g, '')
+      if (safeKw.length > 0) {
+        conditions.push(`program_name.ilike.%${safeKw}%`)
+        conditions.push(`school_name.ilike.%${safeKw}%`)
+      }
+    }
 
-    query = query.or(keywordConditions)
+    if (conditions.length > 0) {
+      query = query.or(conditions.join(','))
+    }
   }
 
   // Order by sponsorship status if prioritizing
