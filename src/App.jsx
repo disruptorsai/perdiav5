@@ -25,6 +25,7 @@ import Integrations from './pages/Integrations'
 import Contributors from './pages/Contributors'
 import ContributorDetail from './pages/ContributorDetail'
 import AITraining from './pages/AITraining'
+import SecretJosh from './pages/SecretJosh'
 
 // Layout
 import MainLayout from './components/layout/MainLayout'
@@ -59,6 +60,7 @@ function App() {
                 <Routes>
                   {/* Public Routes */}
                   <Route path="/login" element={<Login />} />
+                  <Route path="/secret/josh" element={<SecretJosh />} />
 
                   {/* Protected Routes */}
                   <Route
