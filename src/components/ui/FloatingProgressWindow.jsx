@@ -23,7 +23,134 @@ import {
   GripVertical,
   Settings,
   RefreshCw,
+  Terminal,
 } from 'lucide-react'
+
+// Typewriter step display component
+function TypewriterSteps({ steps }) {
+  const [displayedSteps, setDisplayedSteps] = useState([])
+  const [typingStep, setTypingStep] = useState(null)
+  const [typedText, setTypedText] = useState('')
+  const containerRef = useRef(null)
+
+  // Typewriter effect for new steps
+  useEffect(() => {
+    if (steps.length === 0) return
+
+    // Find new steps that haven't been displayed yet
+    const newSteps = steps.filter(
+      (step) => !displayedSteps.some((ds) => ds.text === step.text)
+    )
+
+    if (newSteps.length > 0 && !typingStep) {
+      const stepToType = newSteps[0]
+      setTypingStep(stepToType)
+      setTypedText('')
+
+      let charIndex = 0
+      const typeInterval = setInterval(() => {
+        if (charIndex <= stepToType.text.length) {
+          setTypedText(stepToType.text.slice(0, charIndex))
+          charIndex++
+        } else {
+          clearInterval(typeInterval)
+          setDisplayedSteps((prev) => [...prev, stepToType])
+          setTypingStep(null)
+          setTypedText('')
+        }
+      }, 12) // Fast typing speed
+
+      return () => clearInterval(typeInterval)
+    }
+  }, [steps, displayedSteps, typingStep])
+
+  // Auto-scroll to bottom when new steps are added
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [displayedSteps, typedText])
+
+  // Reset when steps are cleared
+  useEffect(() => {
+    if (steps.length === 0) {
+      setDisplayedSteps([])
+      setTypingStep(null)
+      setTypedText('')
+    }
+  }, [steps])
+
+  const getStepIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="w-3 h-3 text-green-400" />
+      case 'active':
+        return <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+      case 'error':
+        return <XCircle className="w-3 h-3 text-red-400" />
+      default:
+        return <div className="w-3 h-3 rounded-full border border-gray-500" />
+    }
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs"
+    >
+      {displayedSteps.map((step, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-start gap-2 py-0.5"
+        >
+          <span className="mt-0.5">{getStepIcon(step.status)}</span>
+          <span
+            className={`${
+              step.status === 'completed'
+                ? 'text-green-400'
+                : step.status === 'error'
+                ? 'text-red-400'
+                : 'text-gray-300'
+            }`}
+          >
+            {step.text}
+          </span>
+        </motion.div>
+      ))}
+
+      {/* Currently typing step */}
+      {typingStep && (
+        <div className="flex items-start gap-2 py-0.5">
+          <span className="mt-0.5">
+            <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+          </span>
+          <span className="text-blue-400">
+            {typedText}
+            <motion.span
+              animate={{ opacity: [1, 0] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="inline-block w-1.5 h-3 bg-blue-400 ml-0.5 align-middle"
+            />
+          </span>
+        </div>
+      )}
+
+      {/* Blinking cursor when idle but running */}
+      {steps.length === 0 && (
+        <div className="flex items-center gap-2 py-0.5">
+          <motion.span
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+            className="inline-block w-1.5 h-3 bg-gray-400"
+          />
+          <span className="text-gray-500 italic">Waiting to start...</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function FloatingProgressWindow() {
   const {
@@ -34,6 +161,9 @@ export default function FloatingProgressWindow() {
     failedCount,
     queueItems,
     stopQueueProcessing,
+
+    // Detailed step tracking
+    currentSteps,
 
     // Full auto mode
     isFullAuto,
@@ -274,13 +404,22 @@ export default function FloatingProgressWindow() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className={progress.stage === 'error' ? 'text-red-600' : 'text-gray-600'}>
-                        {progress.message || STAGE_LABELS[progress.stage] || 'Processing...'}
+                        {STAGE_LABELS[progress.stage] || 'Processing...'}
                       </span>
                       <span className="font-medium text-gray-900">
                         {Math.round(progress.percentage || 0)}%
                       </span>
                     </div>
                     <Progress value={progress.percentage || 0} className="h-2" />
+                  </div>
+
+                  {/* Detailed Steps with Typewriter Effect */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>Generation Progress</span>
+                    </div>
+                    <TypewriterSteps steps={currentSteps || []} />
                   </div>
 
                   {/* Stage Indicator */}

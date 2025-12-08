@@ -44,6 +44,9 @@ export function GenerationProgressProvider({ children }) {
     title: '',
   })
 
+  // Detailed step tracking for typewriter effect (like single article generation)
+  const [currentSteps, setCurrentSteps] = useState([])
+
   // Full auto mode state
   const [isFullAuto, setIsFullAuto] = useState(false)
   const [autoModeProgress, setAutoModeProgress] = useState({
@@ -69,6 +72,32 @@ export function GenerationProgressProvider({ children }) {
   const addLog = useCallback((message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString()
     setActivityLog(prev => [...prev.slice(-99), { timestamp, message, type }])
+  }, [])
+
+  // Add step for typewriter effect
+  const addStep = useCallback((text, status = 'active') => {
+    setCurrentSteps(prev => {
+      // Check if this step already exists
+      const exists = prev.some(s => s.text === text)
+      if (exists) {
+        // Update existing step status
+        return prev.map(s => s.text === text ? { ...s, status } : s)
+      }
+      // Add new step
+      return [...prev, { text, status, timestamp: Date.now() }]
+    })
+  }, [])
+
+  // Complete a step
+  const completeStep = useCallback((text) => {
+    setCurrentSteps(prev => prev.map(s =>
+      s.text === text ? { ...s, status: 'completed' } : s
+    ))
+  }, [])
+
+  // Clear steps (for new article)
+  const clearSteps = useCallback(() => {
+    setCurrentSteps([])
   }, [])
 
   // Clear log
@@ -114,6 +143,7 @@ export function GenerationProgressProvider({ children }) {
     if (!user || shouldStopRef.current) return false
 
     setCurrentItemId(item.id)
+    clearSteps() // Clear previous steps for new article
     setCurrentProgress({
       stage: 'drafting',
       percentage: 0,
@@ -121,6 +151,7 @@ export function GenerationProgressProvider({ children }) {
       title: item.content_ideas?.title || 'Untitled',
     })
 
+    addStep('Initializing article generation...', 'active')
     addLog(`Starting: ${item.content_ideas?.title || 'Untitled'}`, 'info')
 
     try {
@@ -189,10 +220,20 @@ export function GenerationProgressProvider({ children }) {
           else if (message.includes('fix')) stage = 'auto_fix'
           else if (message.includes('final') || message.includes('sav')) stage = 'saving'
 
+          // Complete previous step and add new one if message changed
+          if (message) {
+            // Mark previous active steps as completed
+            setCurrentSteps(prev => prev.map(s =>
+              s.status === 'active' ? { ...s, status: 'completed' } : s
+            ))
+            // Add new step
+            addStep(message, 'active')
+          }
+
           setCurrentProgress({
             stage,
             percentage,
-            message: STAGE_LABELS[stage] || message,
+            message, // Keep the detailed message, not just stage label
             title: item.content_ideas?.title || 'Untitled',
           })
 
@@ -448,6 +489,12 @@ export function GenerationProgressProvider({ children }) {
     currentProgress,
     startQueueProcessing,
     stopQueueProcessing,
+
+    // Detailed step tracking
+    currentSteps,
+    addStep,
+    completeStep,
+    clearSteps,
 
     // Full auto mode
     isFullAuto,

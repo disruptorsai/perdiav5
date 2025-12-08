@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGenerationQueue, useQueueStats, useRetryQueueItem, useClearCompleted } from '../hooks/useAutomation'
 import { useGenerationProgress } from '../contexts/GenerationProgressContext'
@@ -22,9 +22,138 @@ import {
   ChevronRight,
   ExternalLink,
   ArrowLeft,
+  Terminal,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { Link } from 'react-router-dom'
+
+// Typewriter step display component for batch progress
+function TypewriterSteps({ steps, isExpanded }) {
+  const [displayedSteps, setDisplayedSteps] = useState([])
+  const [typingStep, setTypingStep] = useState(null)
+  const [typedText, setTypedText] = useState('')
+  const containerRef = useRef(null)
+
+  // Typewriter effect for new steps
+  useEffect(() => {
+    if (!isExpanded || steps.length === 0) return
+
+    // Find new steps that haven't been displayed yet
+    const newSteps = steps.filter(
+      (step) => !displayedSteps.some((ds) => ds.text === step.text)
+    )
+
+    if (newSteps.length > 0 && !typingStep) {
+      const stepToType = newSteps[0]
+      setTypingStep(stepToType)
+      setTypedText('')
+
+      let charIndex = 0
+      const typeInterval = setInterval(() => {
+        if (charIndex <= stepToType.text.length) {
+          setTypedText(stepToType.text.slice(0, charIndex))
+          charIndex++
+        } else {
+          clearInterval(typeInterval)
+          setDisplayedSteps((prev) => [...prev, stepToType])
+          setTypingStep(null)
+          setTypedText('')
+        }
+      }, 12) // Fast typing speed
+
+      return () => clearInterval(typeInterval)
+    }
+  }, [steps, displayedSteps, typingStep, isExpanded])
+
+  // Auto-scroll to bottom when new steps are added
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [displayedSteps, typedText])
+
+  // Reset when steps are cleared
+  useEffect(() => {
+    if (steps.length === 0) {
+      setDisplayedSteps([])
+      setTypingStep(null)
+      setTypedText('')
+    }
+  }, [steps])
+
+  const getStepIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+      case 'active':
+        return <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+      case 'error':
+        return <XCircle className="w-3.5 h-3.5 text-red-400" />
+      default:
+        return <div className="w-3.5 h-3.5 rounded-full border border-gray-500" />
+    }
+  }
+
+  if (!isExpanded) return null
+
+  return (
+    <div
+      ref={containerRef}
+      className="bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-sm mt-3"
+    >
+      {displayedSteps.map((step, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-start gap-2 py-1"
+        >
+          <span className="mt-0.5">{getStepIcon(step.status)}</span>
+          <span
+            className={`${
+              step.status === 'completed'
+                ? 'text-green-400'
+                : step.status === 'error'
+                ? 'text-red-400'
+                : 'text-gray-300'
+            }`}
+          >
+            {step.text}
+          </span>
+        </motion.div>
+      ))}
+
+      {/* Currently typing step */}
+      {typingStep && (
+        <div className="flex items-start gap-2 py-1">
+          <span className="mt-0.5">
+            <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+          </span>
+          <span className="text-blue-400">
+            {typedText}
+            <motion.span
+              animate={{ opacity: [1, 0] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="inline-block w-2 h-4 bg-blue-400 ml-0.5 align-middle"
+            />
+          </span>
+        </div>
+      )}
+
+      {/* Blinking cursor when idle but running */}
+      {steps.length === 0 && (
+        <div className="flex items-center gap-2 py-1">
+          <motion.span
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+            className="inline-block w-2 h-4 bg-gray-400"
+          />
+          <span className="text-gray-500 italic">Waiting for generation to start...</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Stage labels for display
 const STAGE_LABELS = {
@@ -68,7 +197,7 @@ const STATUS_CONFIG = {
   },
 }
 
-function QueueItemCard({ item, onRetry }) {
+function QueueItemCard({ item, onRetry, currentSteps, isCurrentItem }) {
   const [isExpanded, setIsExpanded] = useState(item.status === 'processing')
   const config = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending
   const StatusIcon = config.icon
@@ -76,6 +205,13 @@ function QueueItemCard({ item, onRetry }) {
   const title = item.content_ideas?.title || 'Untitled Article'
   const progress = item.progress_percentage || 0
   const stage = item.current_stage
+
+  // Auto-expand when this item becomes the current processing item
+  useEffect(() => {
+    if (isCurrentItem && item.status === 'processing') {
+      setIsExpanded(true)
+    }
+  }, [isCurrentItem, item.status])
 
   return (
     <motion.div
@@ -164,6 +300,17 @@ function QueueItemCard({ item, onRetry }) {
                       )
                     })}
                   </div>
+
+                  {/* Detailed Steps with Typewriter Effect */}
+                  {isCurrentItem && (
+                    <div className="pt-3">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                        <Terminal className="w-3.5 h-3.5" />
+                        <span>Generation Progress</span>
+                      </div>
+                      <TypewriterSteps steps={currentSteps || []} isExpanded={isExpanded} />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -239,6 +386,8 @@ export default function BatchProgress() {
     startQueueProcessing,
     stopQueueProcessing,
     activityLog,
+    currentSteps,
+    currentItemId,
   } = useGenerationProgress()
 
   // Auto-scroll effect for processing items
@@ -488,6 +637,8 @@ export default function BatchProgress() {
                       key={item.id}
                       item={item}
                       onRetry={handleRetry}
+                      currentSteps={currentSteps}
+                      isCurrentItem={item.id === currentItemId}
                     />
                   ))}
                 </div>

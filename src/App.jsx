@@ -19,7 +19,7 @@ import ReviewQueue from './pages/ReviewQueue'
 import ArticleReview from './pages/ArticleReview'
 import SiteCatalog from './pages/SiteCatalog'
 import CatalogArticleDetail from './pages/CatalogArticleDetail'
-import KeywordsAndClusters from './pages/KeywordsAndClusters'
+import Keywords from './pages/Keywords'
 import Automation from './pages/Automation'
 import Integrations from './pages/Integrations'
 import Contributors from './pages/Contributors'
@@ -91,7 +91,7 @@ function App() {
                     <Route path="review/:articleId" element={<ArticleReview />} />
                     <Route path="catalog" element={<SiteCatalog />} />
                     <Route path="catalog/:articleId" element={<CatalogArticleDetail />} />
-                    <Route path="keywords" element={<KeywordsAndClusters />} />
+                    <Route path="keywords" element={<Keywords />} />
                     <Route path="automation" element={<Automation />} />
                     <Route path="integrations" element={<Integrations />} />
                     <Route path="contributors" element={<Contributors />} />
