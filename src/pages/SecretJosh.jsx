@@ -1,1552 +1,928 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
+import {
+  Briefcase,
+  ShieldCheck,
+  TrendingUp,
+  FileText,
+  Menu,
+  X,
+  AlertTriangle,
+  CheckCircle,
+  ExternalLink,
+} from 'lucide-react';
+import { CostChart } from '../components/secret/CostChart';
+import { IssueCard } from '../components/secret/IssueCard';
 
-const SECRET_PASSWORD = 'dm2026'
-
-function CollapsibleAppendix({ id, title, children, defaultOpen = false }) {
-  const [isOpen, setIsOpen] = useState(false) // Always start collapsed
-
-  return (
-    <div className="appendix-section" id={id}>
-      <button
-        className="appendix-toggle"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-      >
-        <span className="appendix-toggle-icon">{isOpen ? '−' : '+'}</span>
-        <span>{title}</span>
-      </button>
-      {isOpen && <div className="appendix-content">{children}</div>}
-    </div>
-  )
-}
+const SECRET_PASSWORD = 'dm2026';
 
 export default function SecretJosh() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('intro');
+  const [activeIssue, setActiveIssue] = useState(null);
 
   useEffect(() => {
-    const auth = sessionStorage.getItem('secret-josh-auth')
+    const auth = sessionStorage.getItem('secret-josh-auth');
     if (auth === 'true') {
-      setIsAuthenticated(true)
+      setIsAuthenticated(true);
     }
-  }, [])
+  }, []);
 
   const handleSubmit = (e) => {
-    e.preventDefault()
+    e.preventDefault();
     if (password === SECRET_PASSWORD) {
-      sessionStorage.setItem('secret-josh-auth', 'true')
-      setIsAuthenticated(true)
-      setError('')
+      sessionStorage.setItem('secret-josh-auth', 'true');
+      setIsAuthenticated(true);
+      setError('');
     } else {
-      setError('Incorrect password')
-      setPassword('')
+      setError('Incorrect password');
+      setPassword('');
     }
-  }
+  };
 
+  const scrollToSection = (id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      setActiveSection(id);
+      setIsMobileMenuOpen(false);
+    }
+  };
+
+  const NavLink = ({ id, icon, label }) => (
+    <button
+      onClick={() => scrollToSection(id)}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+        activeSection === id
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+          : 'text-slate-600 hover:bg-white hover:text-indigo-600'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
 
   if (!isAuthenticated) {
     return (
-      <div className="password-screen">
-        <style>{`
-          .password-screen {
-            min-height: 100vh;
-            min-height: 100dvh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #1a1a2e;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 16px;
-            box-sizing: border-box;
-          }
-          .password-form {
-            background-color: white;
-            padding: 24px;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 100%;
-          }
-          @media (min-width: 768px) {
-            .password-form {
-              padding: 40px;
-            }
-          }
-          .password-form h2 {
-            color: #1a1a2e;
-            margin-bottom: 20px;
-            font-size: 1.3rem;
-          }
-          @media (min-width: 768px) {
-            .password-form h2 {
-              font-size: 1.5rem;
-            }
-          }
-          .password-form input {
-            width: 100%;
-            padding: 14px;
-            font-size: 16px;
-            border: 2px solid #ddd;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            box-sizing: border-box;
-            -webkit-appearance: none;
-          }
-          .password-form input:focus {
-            outline: none;
-            border-color: #4a4a8a;
-          }
-          .password-form .error {
-            color: #f44336;
-            margin-bottom: 15px;
-          }
-          .password-form button {
-            width: 100%;
-            padding: 14px;
-            font-size: 16px;
-            background-color: #4a4a8a;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            -webkit-appearance: none;
-          }
-          .password-form button:hover {
-            background-color: #2d2d5a;
-          }
-          .password-form button:active {
-            background-color: #1a1a3a;
-          }
-        `}</style>
-        <form onSubmit={handleSubmit} className="password-form">
-          <h2>Password Required</h2>
+      <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-slate-900 p-4">
+        <form onSubmit={handleSubmit} className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShieldCheck className="w-8 h-8 text-indigo-600" />
+          </div>
+          <h2 className="text-slate-900 text-2xl font-bold mb-2">Password Required</h2>
+          <p className="text-slate-500 mb-6">Enter the password to access this document.</p>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter password"
             autoFocus
+            className="w-full px-4 py-3 text-base border-2 border-slate-200 rounded-lg mb-4 focus:outline-none focus:border-indigo-500 transition-colors"
           />
-          {error && <p className="error">{error}</p>}
-          <button type="submit">Access Document</button>
+          {error && <p className="text-red-500 mb-4 font-medium">{error}</p>}
+          <button
+            type="submit"
+            className="w-full px-4 py-3 text-base font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Access Document
+          </button>
         </form>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="document-container">
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        .document-container {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          line-height: 1.6;
-          width: 100%;
-          max-width: 100%;
-          margin: 0 auto;
-          padding: 16px;
-          color: #333;
-          background-color: #fff;
-          min-height: 100vh;
-        }
-
-        @media (min-width: 768px) {
-          .document-container {
-            padding: 40px 60px;
-          }
-        }
-
-        @media (min-width: 1200px) {
-          .document-container {
-            padding: 40px 80px;
-          }
-        }
-
-        @media (min-width: 1600px) {
-          .document-container {
-            padding: 40px 120px;
-          }
-        }
-
-        .header {
-          text-align: center;
-          margin-bottom: 20px;
-          padding: 16px;
-          background: linear-gradient(135deg, #1a1a2e 0%, #4a4a8a 100%);
-          color: white;
-          border-radius: 8px;
-        }
-
-        @media (min-width: 768px) {
-          .header {
-            margin-bottom: 30px;
-            padding: 24px;
-          }
-        }
-
-        .header h1 {
-          color: white;
-          border: none;
-          margin: 0;
-          font-size: 1.25rem;
-          line-height: 1.3;
-        }
-
-        @media (min-width: 768px) {
-          .header h1 {
-            font-size: 2rem;
-          }
-        }
-
-        .header p {
-          margin: 5px 0;
-          opacity: 0.9;
-          font-size: 0.85rem;
-        }
-
-        @media (min-width: 768px) {
-          .header p {
-            font-size: 1rem;
-          }
-        }
-
-        .intro {
-          background-color: #f8f9fa;
-          padding: 16px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          font-size: 0.95rem;
-        }
-
-        @media (min-width: 768px) {
-          .intro {
-            padding: 24px;
-            margin-bottom: 30px;
-            font-size: 1rem;
-          }
-        }
-
-        .section {
-          margin-bottom: 20px;
-          padding: 16px;
-          background-color: #fafafa;
-          border-radius: 8px;
-          border-left: 4px solid #4a4a8a;
-        }
-
-        @media (min-width: 768px) {
-          .section {
-            padding: 25px;
-            margin-bottom: 40px;
-          }
-        }
-
-        h1 {
-          color: #1a1a2e;
-          border-bottom: 3px solid #4a4a8a;
-          padding-bottom: 10px;
-          font-size: 1.3rem;
-          line-height: 1.3;
-        }
-
-        @media (min-width: 768px) {
-          h1 {
-            font-size: 2rem;
-          }
-        }
-
-        h2 {
-          color: #2d2d5a;
-          margin-top: 20px;
-          border-left: 4px solid #4a4a8a;
-          padding-left: 12px;
-          font-size: 1.1rem;
-          line-height: 1.3;
-        }
-
-        @media (min-width: 768px) {
-          h2 {
-            font-size: 1.5rem;
-            margin-top: 40px;
-            padding-left: 15px;
-          }
-        }
-
-        h3 {
-          color: #3d3d6a;
-          font-size: 1rem;
-          line-height: 1.4;
-        }
-
-        @media (min-width: 768px) {
-          h3 {
-            font-size: 1.1rem;
-          }
-        }
-
-        .position-box {
-          background-color: #e8e8f0;
-          padding: 12px;
-          border-radius: 5px;
-          margin: 12px 0;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .position-box {
-            padding: 15px;
-            margin: 15px 0;
-            font-size: 1rem;
-          }
-        }
-
-        .position-box strong {
-          color: #2d2d5a;
-        }
-
-        .response-box {
-          background-color: #f0f8f0;
-          padding: 12px;
-          border-radius: 5px;
-          margin: 12px 0;
-          border-left: 3px solid #4a8a4a;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .response-box {
-            padding: 15px;
-            margin: 15px 0;
-            font-size: 1rem;
-          }
-        }
-
-        .my-position {
-          background-color: #fff3e0;
-          padding: 12px;
-          border-radius: 5px;
-          margin: 12px 0;
-          border-left: 3px solid #ff9800;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .my-position {
-            padding: 15px;
-            margin: 15px 0;
-            font-size: 1rem;
-          }
-        }
-
-        blockquote {
-          background-color: #f5f5f5;
-          border-left: 4px solid #666;
-          padding: 12px 16px;
-          margin: 16px 0;
-          font-style: italic;
-          color: #555;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          blockquote {
-            padding: 15px 20px;
-            margin: 20px 0;
-            font-size: 1rem;
-          }
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 16px 0;
-          font-size: 0.8rem;
-          display: block;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        @media (min-width: 768px) {
-          table {
-            display: table;
-            font-size: 1rem;
-            margin: 20px 0;
-          }
-        }
-
-        th, td {
-          border: 1px solid #ddd;
-          padding: 8px 6px;
-          text-align: left;
-          min-width: 80px;
-        }
-
-        @media (min-width: 768px) {
-          th, td {
-            padding: 12px;
-            min-width: 100px;
-          }
-        }
-
-        th {
-          background-color: #4a4a8a;
-          color: white;
-          font-size: 0.85rem;
-        }
-
-        @media (min-width: 768px) {
-          th {
-            font-size: 1rem;
-          }
-        }
-
-        tr:nth-child(even) {
-          background-color: #f9f9f9;
-        }
-
-        .appendix-link {
-          color: #4a4a8a;
-          font-size: 0.9em;
-          font-style: italic;
-        }
-
-        a {
-          color: #4a4a8a;
-          word-break: break-word;
-        }
-
-        a:hover {
-          color: #2d2d5a;
-        }
-
-        .proposal-section {
-          background: linear-gradient(135deg, #f0f8f0 0%, #e8f5e9 100%);
-          padding: 16px;
-          border-radius: 8px;
-          margin: 20px 0;
-        }
-
-        @media (min-width: 768px) {
-          .proposal-section {
-            padding: 30px;
-            margin: 40px 0;
-          }
-        }
-
-        .offering-list, .need-list {
-          background-color: white;
-          padding: 12px;
-          border-radius: 5px;
-          margin: 12px 0;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .offering-list, .need-list {
-            padding: 20px;
-            margin: 15px 0;
-            font-size: 1rem;
-          }
-        }
-
-        .offering-list {
-          border-left: 4px solid #4caf50;
-        }
-
-        .need-list {
-          border-left: 4px solid #2196f3;
-        }
-
-        .summary-box {
-          background-color: #fff8e1;
-          padding: 16px;
-          border-radius: 8px;
-          border: 2px solid #ffc107;
-          margin: 20px 0;
-        }
-
-        @media (min-width: 768px) {
-          .summary-box {
-            padding: 25px;
-            margin: 40px 0;
-          }
-        }
-
-        .non-negotiable {
-          background-color: #ffebee;
-          padding: 12px;
-          border-radius: 5px;
-          border-left: 4px solid #f44336;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .non-negotiable {
-            padding: 15px;
-            font-size: 1rem;
-          }
-        }
-
-        .appendix {
-          margin-top: 30px;
-          padding-top: 20px;
-          border-top: 3px solid #4a4a8a;
-        }
-
-        @media (min-width: 768px) {
-          .appendix {
-            margin-top: 60px;
-            padding-top: 40px;
-          }
-        }
-
-        .appendix h2 {
-          color: #1a1a2e;
-        }
-
-        .appendix-section {
-          margin-bottom: 12px;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        @media (min-width: 768px) {
-          .appendix-section {
-            margin-bottom: 15px;
-          }
-        }
-
-        .appendix-toggle {
-          width: 100%;
-          padding: 12px 14px;
-          background-color: #f5f5f5;
-          border: none;
-          text-align: left;
-          cursor: pointer;
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: #2d2d5a;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          transition: background-color 0.2s;
-        }
-
-        @media (min-width: 768px) {
-          .appendix-toggle {
-            padding: 15px 20px;
-            font-size: 1rem;
-          }
-        }
-
-        .appendix-toggle:hover {
-          background-color: #e8e8f0;
-        }
-
-        .appendix-toggle-icon {
-          font-size: 1rem;
-          font-weight: bold;
-          width: 22px;
-          height: 22px;
-          min-width: 22px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: #4a4a8a;
-          color: white;
-          border-radius: 4px;
-        }
-
-        @media (min-width: 768px) {
-          .appendix-toggle-icon {
-            font-size: 1.2rem;
-            width: 24px;
-            height: 24px;
-            min-width: 24px;
-          }
-        }
-
-        .appendix-content {
-          padding: 16px;
-          background-color: #fafafa;
-          border-top: 1px solid #ddd;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .appendix-content {
-            padding: 20px;
-            font-size: 1rem;
-          }
-        }
-
-        .appendix-content h3 {
-          margin-top: 16px;
-        }
-
-        @media (min-width: 768px) {
-          .appendix-content h3 {
-            margin-top: 20px;
-          }
-        }
-
-        .appendix-content h3:first-child {
-          margin-top: 0;
-        }
-
-        .source-list {
-          background-color: #f5f5f5;
-          padding: 12px;
-          border-radius: 5px;
-        }
-
-        @media (min-width: 768px) {
-          .source-list {
-            padding: 20px;
-          }
-        }
-
-        .source-list a {
-          display: block;
-          margin: 8px 0;
-          font-size: 0.8rem;
-          word-break: break-word;
-        }
-
-        @media (min-width: 768px) {
-          .source-list a {
-            font-size: 0.9rem;
-          }
-        }
-
-        ul, ol {
-          padding-left: 18px;
-        }
-
-        @media (min-width: 768px) {
-          ul, ol {
-            padding-left: 25px;
-          }
-        }
-
-        li {
-          margin: 6px 0;
-        }
-
-        @media (min-width: 768px) {
-          li {
-            margin: 8px 0;
-          }
-        }
-
-        .signature {
-          margin-top: 30px;
-          font-style: italic;
-        }
-
-        @media (min-width: 768px) {
-          .signature {
-            margin-top: 40px;
-          }
-        }
-
-        .document-footer {
-          text-align: center;
-          margin-top: 30px;
-          padding: 16px;
-          background-color: #f5f5f5;
-          border-radius: 8px;
-          font-size: 0.9rem;
-        }
-
-        @media (min-width: 768px) {
-          .document-footer {
-            margin-top: 60px;
-            padding: 20px;
-            font-size: 1rem;
-          }
-        }
-
-        .important-note {
-          margin-top: 10px;
-        }
-
-        /* Ensure full-width layout on mobile */
-        @media (max-width: 767px) {
-          body {
-            margin: 0;
-            padding: 0;
-          }
-
-          p {
-            font-size: 0.95rem;
-            line-height: 1.6;
-          }
-        }
-      `}</style>
-
-      <div className="header">
-        <h1>CONTRACT & COMPENSATION DISCUSSION</h1>
-        <p>Will Welsh | Tech Integration Labs LLC</p>
-        <p>December 2025</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+        <h1 className="font-bold text-indigo-900 text-lg">Will Welsh</h1>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
 
+      {/* Sidebar Navigation */}
+      <div className={`
+        fixed inset-0 z-40 bg-slate-100/95 backdrop-blur-sm md:static md:bg-slate-100 md:w-80 md:border-r md:border-slate-200 md:h-screen md:sticky md:top-0
+        flex flex-col p-6 transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="hidden md:block mb-10 mt-4">
+          <h1 className="text-3xl font-bold text-indigo-900 leading-tight">Contract &<br/>Compensation</h1>
+          <p className="text-base text-slate-500 mt-2 font-medium">December 2025</p>
+        </div>
 
-      <div className="intro">
-        <p>Josh,</p>
-        <p>I need to address several things about my contract and compensation. I'm going to go through the issues you've raised point by point, give you my responses, and then present my proposal for how we move forward.</p>
-        <p>For each topic, I've included links to detailed documentation and research in the appendix if you want to dig deeper.</p>
-      </div>
+        <nav className="space-y-3 flex-1">
+          <NavLink id="intro" icon={<TrendingUp size={20} />} label="Cost & Value Analysis" />
+          <NavLink id="issues" icon={<AlertTriangle size={20} />} label="The Issues" />
+          <NavLink id="proposal" icon={<FileText size={20} />} label="My Proposal" />
+          <NavLink id="summary" icon={<CheckCircle size={20} />} label="Summary" />
+          <NavLink id="appendices" icon={<Briefcase size={20} />} label="Appendices" />
+        </nav>
 
-      <div className="section">
-        <h2>Industry Cost Analysis & The "Vibe Coder" Question</h2>
-
-        <p>Before we get into the specific issues, I want to share some important context. Somewhere along the way, a disconnect has developed between what I'm actually delivering and how that work is being perceived.</p>
-
-        <p>Recently, the company turned down a dentist app project (Elite Dental Force) due to liability concerns, risk concerns, and the belief that I—referred to as a "vibe coder"—wouldn't be capable of building it. This decision was informed by consulting AI and calling large development agencies.</p>
-
-        <p><strong>I decided to use the exact same methodology—consulting AI and getting agency estimates—but applied it to the work I've already completed.</strong> The results tell a very different story.</p>
-
-        <h3>How I Got These Numbers</h3>
-        <p>I want to be clear about my methodology—I didn't guide this analysis in any direction. I didn't write prompts designed to get high or low numbers. I simply provided AI with:</p>
-        <ul>
-          <li><strong>Full PRDs (Product Requirement Documents)</strong> for projects not yet built—the most accurate way to understand what an app will be in full context</li>
-          <li><strong>Full repositories (actual codebases)</strong> for projects that have been built—the most accurate way to analyze what has actually been delivered</li>
-        </ul>
-        <p>These are the two most reliable inputs you can give AI to get back accurate estimates. I asked it to analyze them and provide real-world estimates based on large software agency pricing, documented past project builds of similar scope, and standard industry team compositions.</p>
-        <p><strong>Importantly, I even asked it to account for how much faster and easier it is to build software today due to recent AI advancements.</strong> Despite factoring in AI-assisted development efficiencies, the estimates still came back in the ranges shown below.</p>
-
-        <h3>What Traditional Agencies Would Actually Charge</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Agency Cost</th>
-              <th>Timeline</th>
-              <th>Team Required</th>
-              <th>My Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Elite Dental Force</strong> (turned down)</td>
-              <td>$700,000 - $1,400,000</td>
-              <td>7-10 months</td>
-              <td>4-7 developers</td>
-              <td>N/A - deal passed</td>
-            </tr>
-            <tr>
-              <td><strong>Perdia AI Platform</strong></td>
-              <td>$500,000 - $1,000,000</td>
-              <td>6-9 months</td>
-              <td>5-9 developers</td>
-              <td><strong>90% complete in &lt;3 weeks</strong></td>
-            </tr>
-            <tr>
-              <td><strong>Disruptors Marketing Hub</strong></td>
-              <td>$325,000 - $590,000</td>
-              <td>4-6 months</td>
-              <td>6-10 developers</td>
-              <td><strong>Live</strong> (called "incomplete")</td>
-            </tr>
-            <tr>
-              <td><strong>SegPro Calculator</strong></td>
-              <td>$160,000 - $320,000</td>
-              <td>3-6 months</td>
-              <td>3-5 developers</td>
-              <td><strong>Completed</strong></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h3>Why These Projects Cost So Much</h3>
-        <p>When people hear "website" or "web app," they instinctively compare it to a simple WordPress site. That's like comparing a Tesla factory to a car wash because they both use concrete.</p>
-
-        <p><strong>DisruptorsMedia.com ($300K-$550K)</strong> isn't a website—it's a multi-tool marketing platform with: growth audit system, keyword research tools, content generators, Business Brain knowledge base, lead capture, and admin systems. Each is its own mini-app with AI orchestration, serverless functions, databases, plus hundreds of custom illustrations and videos. A WordPress site has 1-2 features; DisruptorsMedia.com has dozens.</p>
-
-        <p><strong>Perdia ($500K-$1M)</strong> is even more complex because nothing like it exists anywhere. It's not just "AI that writes articles"—it's a 20+ step content factory that automates topic discovery, keyword research, drafting, SEO optimization, humanization, editor feedback, learning from corrections, and WordPress publishing. It maintains a complete memory of every article on the site so it doesn't repeat itself and learns to write better over time. You can't buy this as a product—it combines AI writer + SEO assistant + CMS + editorial platform + analytics engine into one system.</p>
-
-        <p>To build either properly, agencies deploy 6-10 specialists (product leads, UX/UI designers, frontend/backend engineers, AI engineers, DevOps, QA, illustrators, video editors) at $150-$250+/hour. <strong>These are the kinds of products companies raise venture capital to build.</strong></p>
-
-        <h3>The Contradiction</h3>
-        <p><strong>The dentist app they said I couldn't build:</strong> $700K-$1.4M agency value, requires 4-7 developers over 7-10 months.</p>
-        <p><strong>The Perdia app I'm actually building:</strong> $500K-$1M agency value, requires 5-9 developers over 6-9 months. <strong>I'm 90% complete in less than 3 weeks, working alone, for less than $4,000.</strong></p>
-        <p>Perdia is a comparable scope to the dentist app. It requires a <strong>similar team size</strong> and <strong>timeline</strong>. The concern about capability doesn't align with what I'm actively delivering.</p>
-
-        <h3>What the "Vibe Coder" Is Actually Delivering</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Industry Value</th>
-              <th>My Cost to DM</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>SegPro Calculator</td>
-              <td>$160K - $320K</td>
-              <td>&lt; $4,000</td>
-              <td><strong>Completed</strong></td>
-            </tr>
-            <tr>
-              <td>Perdia AI Platform</td>
-              <td>$500K - $1M</td>
-              <td>&lt; $4,000</td>
-              <td><strong>90% complete in &lt;3 weeks</strong></td>
-            </tr>
-            <tr>
-              <td>Disruptors Marketing Hub</td>
-              <td>$325K - $590K</td>
-              <td>Included in salary</td>
-              <td><strong>Live</strong> (called "incomplete")</td>
-            </tr>
-          </tbody>
-        </table>
-        <p><strong>Combined industry value: $985K - $1.91M</strong></p>
-        <p><strong>Combined cost to Disruptors Media: ~$24,000</strong></p>
-        <p>That's a cost efficiency ratio of <strong>41x to 80x</strong> compared to traditional agency pricing.</p>
-
-        <h3>Same Method, Opposite Conclusions</h3>
-        <p>The company consulted AI and agencies to determine whether a "vibe coder" could build the dentist app. The conclusion was no—too risky, not capable.</p>
-        <p>I used the <strong>exact same method</strong> to analyze the actual work I've already delivered. The conclusion: I'm single-handedly producing millions of dollars worth of enterprise software at a tiny fraction of traditional costs.</p>
-        <p><strong>Same method. Opposite conclusions.</strong> The difference? My analysis is based on <strong>actual deliverables</strong>—real codebases, real PRDs, real completed work. Not hypotheticals about what might go wrong.</p>
-
-        <div className="my-position">
-          <strong>The Real Question:</strong> The question isn't whether I can build complex applications—the evidence shows I already am. The real question is how this perception gap developed, and why work that's worth millions by industry standards is being characterized as not good enough, taking too long, or not generating direct revenue.
+        <div className="mt-8 pt-6 border-t border-slate-200 text-sm text-slate-400">
+          Prepared for<br/>
+          <strong className="text-slate-600">Disruptors Media</strong>
         </div>
       </div>
 
-      <h1>PART 1: YOUR POINTS & MY RESPONSES</h1>
-
-      <div className="section">
-        <h2 id="section1">1. The $1,800 Deduction</h2>
-        <p className="appendix-link">[See <a href="#appendix-a">Appendix A</a> for detailed documentation]</p>
-
-        <div className="position-box">
-          <strong>Your position:</strong> I "signed up for something" that resulted in $1,800 in API charges, so it's coming out of my pay.
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>That's not what happened. API keys aren't optional services I signed up for—they're essential infrastructure. Every app I build has 10-20+ keys. Without them, nothing works. APIs are to apps and websites what electricity is to a job site.</p>
-          <p>API incidents happen constantly (39 million keys leaked on GitHub in 2024 alone—even Fortune 500 companies with dedicated security teams experience these incidents). Industry standard is that companies absorb these costs as operational overhead, not individual developers. I researched this extensively and could not find a single example of a company deducting API charges from a developer's paycheck. It's simply not done.</p>
-          <p>There was never any agreement—written or verbal—that I would personally cover operational costs. And according to Utah labor law and federal regulations, employers cannot deduct amounts from wages without express written authorization—deductions for operational costs without clear voluntary agreement are generally prohibited.</p>
-          <p>If I'm personally liable for API charges going forward, I would have to shut down every API key across every project immediately to protect myself. That would halt all development indefinitely. I don't think that's what you want.</p>
-        </div>
-
-        <div className="my-position">
-          <strong>My position:</strong> The $1,800 needs to be reversed. I'm actively pursuing the refund from Google, which will be reimbursed directly to the company.
-        </div>
-      </div>
-
-      <div className="section">
-        <h2 id="section2">2. The Website "Not Being Complete"</h2>
-        <p className="appendix-link">[See <a href="#appendix-b">Appendix B</a> for scope creep documentation]</p>
-
-        <div className="position-box">
-          <strong>Your position:</strong> The website was never completed, and since you've been good to me, I should finish it for free.
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>Here is a super simplified and condensed version of what actually happened: I designed the website. Then I got detailed page-by-page revisions from one person, applied them—which broke the visual coherence—so I had to redesign all the aesthetics around their requests until it all looked good again. Then I got a completely different set of revisions from someone else. This cycle repeated for weeks. Then the question came: "Why is this taking so long?"</p>
-          <p>The website is complete. It's live and functional. We have received lots of feedback on it from clients and it's all been extremely positive. One client even said that part of the reason he chose us was because he liked how we designed our website (I know that was Kyle and Tyler's point about the old website, but the comment I'm referring to came from a recent client about the new site).</p>
-          <p>You're telling me the website still isn't completed and tasking me with the responsibility of finally building the perfect version of it that you are envisioning. But when I ask you for details on what exactly is not complete you said something along the lines of "It doesn't tell our story perfectly." Based on my experience designing this site for you guys so far—the only way I will ever be able to produce the site you are envisioning (the site that you can feel good about considering complete and be happy with me about)—is if you give me:</p>
-          <ol>
-            <li><strong>Specific, written requirements</strong> — exactly what to change, page by page</li>
-            <li><strong>One point of contact for feedback</strong> — not conflicting input from multiple people</li>
-          </ol>
-          <p>I'm happy to do more work on the website. But vague direction + multiple conflicting stakeholders = the exact cycle that made this take so long in the first place.</p>
-          <p>For context: what happened with the website is textbook <strong>scope creep</strong>—the #1 cause of project delays and budget overruns in software and design. Research shows projects with unclear requirements take 2-3x longer than those with clear specs. That's why professional projects have discovery phases, defined revision rounds ("this price includes 2 rounds of revisions"), and change orders for additional work. Asking a developer to work until something is "perfect" with no clear definition of "perfect" is asking for infinite work.</p>
-        </div>
-
-        <div className="my-position">
-          <strong>Important note:</strong> You guys have been amazing and understanding about the unexpected situation with my mom, and I sincerely appreciate that, and am more than willing to go above and beyond and reciprocate that same decency and good will back to you guys. That being said, I don't feel good at all about tying this in with things you are saying like that I never completed, or somehow failed in the website build. And to be honest, if you feel the current disruptorsmedia.com website that I built is a failure—I'm not sure what a win would look like to you.
-        </div>
-      </div>
-
-      <div className="section">
-        <h2 id="section3">3. "Not As Far Along With AI As You Thought"</h2>
-        <p className="appendix-link">[See <a href="#appendix-c">Appendix C</a> for company growth documentation]</p>
-
-        <div className="position-box">
-          <strong>Your position:</strong> You said something along the lines of, <em>"I guess you weren't as far along with AI as you thought you were."</em>
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>That comment caught me off guard, and I fully disagree with it.</p>
-          <p>The company didn't just grow—it transformed from a marketing agency to an AI-first development company. I'm not saying that pivot was built entirely on my work. But I think it's unreasonable to assume that this transformation, which happened over the course of the few months since I started, wasn't at least an indirect result of my contributions.</p>
-          <p>You brought me on as an AI expert. I've taught Kyle and the team everything I know about AI and how to best use it, every single day I've worked here. I'm the only developer. No other technical staff. Managing 3-6 projects simultaneously, alone.</p>
-          <p>We were at $18K MRR. We're now at $42K+ MRR and growing quickly, plus $15K+ in app deposits. In our initial phone conversations where you were telling me about pay and equity incentives that would be based on our MRR increasing, I asked you how you'd know if the growth was from me. Your response was that we're a three-person team, so where else would the increases in MRR come from.</p>
-          <p>Rather than a lack of AI skills on my part, I think this perception can be attributed to a few things: the inherently unpredictable nature of AI development work, unrealistic expectations of what a one-person development team can deliver, and honestly—my own underwhelming communication skills. I'm not someone who demands credit where credit is due or escalates every obstacle. I'm used to working on teams of creators and engineers where failing fast is encouraged (as Elon always recommends), where we collaborate and solve problems together rather than constantly covering our own backs. That's served me well in those environments, but I recognize it may have left you without visibility into what I'm actually contributing here.</p>
-          <p>For reference, here's what industry research says about realistic AI development timelines:</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Project Type</th>
-                <th>Realistic Timeline</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Simple AI chatbot (FAQ-style)</td>
-                <td>4-8 weeks</td>
-              </tr>
-              <tr>
-                <td>Basic AI app with existing APIs</td>
-                <td>2-4 months</td>
-              </tr>
-              <tr>
-                <td>Custom AI features with training</td>
-                <td>3-6 months</td>
-              </tr>
-              <tr>
-                <td>Complex enterprise AI application</td>
-                <td>9-12+ months</td>
-              </tr>
-              <tr>
-                <td>Novel/never-done-before features</td>
-                <td>Add 2-4 weeks just for evaluation and tuning</td>
-              </tr>
-            </tbody>
-          </table>
-          <p>As one industry source put it: <em>"AI eats scope for breakfast—data pipelines, model eval loops, and privacy reviews can stretch timelines fast."</em></p>
-        </div>
-      </div>
-
-      <div className="section">
-        <h2 id="section4">4. The New Contract / Feeling Like My Work Isn't Creating Revenue</h2>
-        <p className="appendix-link">[See <a href="#appendix-d">Appendix D</a> for industry compensation research]</p>
-
-        <div className="position-box">
-          <strong>Your position:</strong> You want to redo my contract, moving to the 50% of $250/hour model.
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>I did receive part of the raise you promised—my bi-weekly checks went from $2K to $2,750. But the push to redo my contract and the concern that my work isn't generating revenue doesn't match what the numbers show—MRR has grown 133%, we have $15K+ in app deposits, and the company has transformed into an AI-first business.</p>
-          <p>You said when I joined:</p>
-          <blockquote>"If I can see that we've gone from, yeah, I think we're at, like, 17, 8, let's just call it 18,000, and now we're at 36,000. I give you my word as a man that I will give you a $2,000 pay increase."</blockquote>
-          <p>Here's the thing: 50% of $250/hour is the absolute minimum I'll accept. And here's why that's already generous on my part:</p>
-          <ul>
-            <li>I get 0% of initial down payments ($15K+ so far)</li>
-            <li>I get 0% of recurring revenue ($3-5K/month per app, ongoing for years)</li>
-            <li>I get 50% of the hourly rate we charge for development work—while doing 100% of the dev work</li>
-          </ul>
-          <p>For every billable hour, there's another hour of unbillable work (setup, research, testing, client emails). That $125/hour is really ~$62.50/hour of my actual time.</p>
-          <p>For context on industry standards:</p>
-          <ul>
-            <li>Senior/specialized developers (AI, complex integrations) command $150-$250+/hour</li>
-            <li>Agency rates for enterprise work often range $200-$400/hour</li>
-            <li>AI app development costs range from $20,000-$250,000+ per project</li>
-            <li>Staffing agencies typically take 30-50% of the billed rate, meaning contractors typically receive 50-70% of what clients pay</li>
-          </ul>
-          <p>At 50%, I'm at the low end of industry standard—while receiving nothing from down payments or recurring revenue.</p>
-        </div>
-
-        <div className="my-position">
-          <strong>My position:</strong> I want either a share of down payments (10-20%) or a share of recurring revenue (10-20%). If I'm getting 0% of both, 50% hourly is the floor.
-        </div>
-      </div>
-
-      <div className="section">
-        <h2 id="section5">5. Equity</h2>
-        <p className="appendix-link">[See <a href="#appendix-e">Appendix E</a> for original conversation quotes]</p>
-
-        <div className="position-box">
-          <strong>What you said when I joined:</strong>
-          <blockquote>"That would mean that I would have 24% or something... if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."</blockquote>
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>I accepted $48K/year—way below market—partly because of that conversation.</p>
-          <p>I'm assuming equity is off the table now, given that it hasn't been mentioned a single time since the moment I agreed to your terms. I imagine it has something to do with the "not as far along with AI" comment.</p>
-          <p>But if that's the perception, and if equity is no longer part of the picture, then the compensation structure needs to reflect that reality. I didn't accept below-market pay for the fun of it.</p>
-          <p>You also said at the time:</p>
-          <blockquote>"The reality is, Will, let's be honest, if you're not making a minimum of a quarter of a million a year, it's not enough."</blockquote>
-          <blockquote>"There is an AI opportunity right now to be AI consultants and AI partners with tons of companies, because there's not enough people like us, right, and you, and Emerald Deacon, there's not enough people like them to facilitate the needs of all the companies out there. There just isn't."</blockquote>
-          <p>I believed those things then, and I still believe them now. That's why I took this opportunity.</p>
-        </div>
-      </div>
-
-      <div className="section">
-        <h2 id="section6">6. Internal DM Work</h2>
-        <p className="appendix-link">[See <a href="#appendix-f">Appendix F</a> for list of uncompensated work]</p>
-
-        <div className="position-box">
-          <strong>The issue:</strong> A significant portion of my work has no defined compensation.
-        </div>
-
-        <div className="response-box">
-          <strong>My response:</strong>
-          <p>How will I be compensated for:</p>
-          <ul>
-            <li>Teaching the team</li>
-            <li>Website work (see above)</li>
-            <li>Internal apps (Sniper Sales, Client Portal, Content Writer)</li>
-            <li>GoHighLevel integrations</li>
-            <li>Non-app client work (EVLogic HeyGen, etc.)</li>
-          </ul>
-          <p>This needs to be defined in writing.</p>
-        </div>
-      </div>
-
-      <h1>PART 2: MY PROPOSAL</h1>
-
-      <div className="proposal-section">
-        <p className="appendix-link">[See <a href="#appendix-g">Appendix G</a> for professional liability insurance research]</p>
-
-        <p>Josh, I know liability is a major concern for you. The API incident brought this into sharp focus. Here's my proposal to address everything:</p>
-
-        <h2>What I'm Offering — Structured Like a Real Dev Vendor</h2>
-
-        <p>Josh, if your main concern is liability with clients, we can structure this like a professional development vendor relationship. Let me explain what that actually means in the industry, because "taking on liability" doesn't mean what most people think.</p>
-
-        <h3>What "Taking On Liability" Actually Means in the Industry</h3>
-
-        <p>Nobody in software says "I'll take unlimited personal liability for anything that goes wrong." That would be insane. Instead, real dev companies do three things:</p>
-
-        <div className="offering-list">
-          <p><strong>1. Use an entity, not a person</strong></p>
-          <p>The vendor is the company (Tech Integration Labs LLC), not the individual developer. That's what my LLC is for—it's the contracting party, not "Will personally."</p>
-        </div>
-
-        <div className="offering-list">
-          <p><strong>2. Carry Professional Liability Insurance (Tech E&O)</strong></p>
-          <p>This is called:</p>
-          <ul>
-            <li>Technology Errors & Omissions (E&O)</li>
-            <li>Professional liability insurance</li>
-            <li>Professional indemnity insurance</li>
-          </ul>
-          <p>It's designed for exactly this scenario. If a client claims our software error, negligence, or bad advice caused them financial loss, the insurance covers:</p>
-          <ul>
-            <li>Legal defense costs</li>
-            <li>Settlements/judgments, up to policy limits</li>
-          </ul>
-        </div>
-
-        <div className="offering-list">
-          <p><strong>3. Limit Liability in the Contract (This is HUGE)</strong></p>
-          <p>Standard software contracts have a <strong>limitation of liability clause</strong> that:</p>
-          <ul>
-            <li>Caps total liability to something like "fees paid under this contract in the last 12 months" or "2x the total fees paid"</li>
-            <li>Excludes certain damages (no liability for "indirect, consequential, lost profits," etc.)</li>
-          </ul>
-          <p>This is how actual vendors avoid "one bad incident ruins the company" risk.</p>
-        </div>
-
-        <h3>So When Actual Dev Shops "Take On Liability," It Means:</h3>
-
-        <blockquote>
-          "Our company will be legally responsible up to a defined cap for issues caused by our negligence, backed by professional liability insurance, and defined in the contract."
-        </blockquote>
-
-        <p><strong>NOT:</strong> <em>"I personally will eat any and all losses no matter what happens."</em></p>
-
-        <h3>How I Would Structure This with Tech Integration Labs</h3>
-
-        <div className="offering-list">
-          <p><strong>Tech Integration Labs LLC</strong> becomes the contracted development vendor:</p>
-          <ul>
-            <li>Disruptors Media: marketing, client relationship, billing front</li>
-            <li>Tech Integration Labs LLC: contracted dev vendor</li>
-          </ul>
-
-          <p><strong>I carry Tech E&O / professional indemnity insurance:</strong></p>
-          <ul>
-            <li>If a client claims financial loss due to development work, that's covered by my policy, not by Disruptors Media</li>
-          </ul>
-
-          <p><strong>We use standard limitation-of-liability language in our contract:</strong></p>
-          <ul>
-            <li>Cap liability to fees paid in last 12 months, or 1-2x total project fees</li>
-            <li>Exclude indirect damages, etc.</li>
-          </ul>
-        </div>
-
-        <h3>The Bottom Line on Liability</h3>
-
-        <div className="my-position">
-          <p>With this structure, I can say:</p>
-          <blockquote>
-            "If your main concern is liability with the client, we can structure this like an actual dev vendor relationship: Tech Integration Labs is the development vendor. I carry Tech E&O/professional liability insurance. Our contract has a standard limitation-of-liability cap. That means development-related liability is handled on my side instead of on DM's books—but it's handled professionally, not as some vague personal promise."
-          </blockquote>
-          <p>That's competent, grown-up, and very different from "I'll just personally be responsible for everything."</p>
-        </div>
-
-        <h2>How to Handle "Never-Been-Done-Before" Work</h2>
-
-        <p>For complex apps and future novel projects, here's how professional dev shops handle uncertain, first-of-its-kind work:</p>
-
-        <h3>Discovery / Scoping Phase (Paid)</h3>
-
-        <div className="offering-list">
-          <p>Before the full build, sell a <strong>Discovery Phase</strong> or <strong>Discovery + Architecture</strong> engagement:</p>
-          <ul>
-            <li><strong>Time-boxed:</strong> 2-6 weeks</li>
-            <li><strong>Fixed fee or small T&M budget</strong></li>
-            <li><strong>Deliverables:</strong>
-              <ul>
-                <li>Clarified requirements</li>
-                <li>Technical feasibility analysis</li>
-                <li>Candidate architectures/tools</li>
-                <li>Risks identified</li>
-                <li>Estimated ranges for time & cost</li>
-              </ul>
-            </li>
-          </ul>
-          <p>The sales line is: <em>"If we don't understand it properly, we're both flying blind. Discovery reduces risk for everyone."</em></p>
-        </div>
-
-        <h3>Proof of Concept (PoC) / Spike Work</h3>
-
-        <div className="offering-list">
-          <p>When something is truly novel or technically risky:</p>
-          <p><strong>Define a PoC focused on the hard part only:</strong></p>
-          <ul>
-            <li>One key algorithm</li>
-            <li>A critical integration</li>
-            <li>A workflow that might or might not be possible</li>
-          </ul>
-
-          <p><strong>Key attributes:</strong></p>
-          <ul>
-            <li><strong>Time-boxed:</strong> A few days to a few weeks</li>
-            <li><strong>Narrow in scope:</strong> "Can we get X working in a basic way?"</li>
-            <li><strong>Paid:</strong> This is billable work, not free experimentation</li>
-            <li><strong>Clearly defined success criteria:</strong> "PoC is successful if we can reliably do X with Y latency/accuracy."</li>
-            <li><strong>Limited, controlled cost:</strong> "We'll spend up to N hours / $N on this PoC."</li>
-          </ul>
-
-          <p><strong>Outcome-driven:</strong></p>
-          <ul>
-            <li>If PoC succeeds → proceed to full build with updated estimates</li>
-            <li>If it fails → you and the client both learned it's not feasible before burning $150k</li>
-          </ul>
-
-          <p>This is standard practice in complex/AI work. Agencies use terms like "Discovery & PoC," "Exploratory spike," or "Technical feasibility phase."</p>
-        </div>
-
-        <h3>Using a Complex App as an Example</h3>
-
-        <div className="my-position">
-          <p>Here's how this might work:</p>
-          <ol>
-            <li>Sell a Discovery/PoC phase first, maybe $10-25k, focused on proving the hardest part</li>
-            <li>Use what we learn there to tighten the estimate on the full build</li>
-          </ol>
-          <p>That's how actual agencies or dev companies do it, and clients are usually fine with it when you explain you're protecting their risk too.</p>
-        </div>
-
-        <h2>Summary: What I'm Offering</h2>
-
-        <div className="offering-list">
-          <p>Through <strong>Tech Integration Labs LLC</strong>, I will:</p>
-          <ol>
-            <li><strong>Act as the development vendor</strong> — entity-to-entity relationship</li>
-            <li><strong>Carry Tech E&O / professional liability insurance</strong> — development-related liability covered by my policy</li>
-            <li><strong>Use standard limitation-of-liability contract language</strong> — capped exposure, excluded damages</li>
-            <li><strong>Cover all AI subscriptions and API costs myself</strong> — These are the same subscriptions we're already paying through Disruptors Media (Claude, ChatGPT, Google Cloud, etc.). The ~$500-700/month is the absolute minimum needed to build all this stuff efficiently. And to be clear: these subscriptions and their associated API credits are the exact thing that resulted in the $1,800 charge. Under this structure, all of that would be on my accounts, not yours.
-              <p className="important-note"><strong>Important:</strong> If I'm expected to take on risks like API leaks (the $1,800 incident), then this is how it needs to be set up. The person who bears the risk needs to control the accounts. That's standard in the industry—you can't hold someone liable for costs on accounts they don't control. This structure solves that problem cleanly: I control the accounts, I bear the risk, and Disruptors Media has zero exposure.</p></li>
-            <li><strong>Manage and pay software developer freelancers</strong> when their expertise is needed to complete a project</li>
-            <li><strong>Manage all technical accounts and infrastructure</strong> — You won't be liable or responsible for any fees, risks, or complexities associated with these accounts. No more shared account concerns or confusion about who's responsible for what.</li>
-            <li><strong>Implement Discovery/PoC phases</strong> for novel work — de-risk projects before full commitment</li>
-          </ol>
-          <p><strong>This removes liability from Disruptors Media entirely—handled professionally, like an actual vendor relationship.</strong></p>
-        </div>
-
-        <h2>What I Need in Return</h2>
-        <div className="need-list">
-          <ol>
-            <li><strong>50% of hourly fees for actual development</strong> — this is the minimum, non-negotiable. The hourly rate we charge clients should be close to $250, which is standard and expected for this type of work. We can communicate to clients that they can expect considerably fewer hourly dev hours billed because we're using AI to build it. I'll also be using AI-powered time tracking software that tracks actual work done down to the minute, so you'll get very accurate hourly billing with detailed breakdowns of exactly what was worked on each hour—full transparency. <strong>To put this in perspective: 50% means you're getting paid exactly as much as I am for every hour of actual development work I complete.</strong></li>
-            <li><strong>10-20% of initial down payments</strong> — I do significant upfront work to close these deals <em>(open to negotiation)</em></li>
-            <li><strong>10-20% of recurring revenue</strong> — the apps I build generate income for years <em>(open to negotiation)</em></li>
-            <li><strong>Written compensation terms for internal DM work</strong> — no more ambiguity
-              <p className="important-note"><strong>Important caveat:</strong> This is where the good faith and repayment for being good to me comes in. I genuinely like Kyle, Tyler, Josh, and the company itself—I really mean that. And I appreciate many aspects of how I've been treated thus far. Because of that, I'm happy to help out the company without pay in many ways that are reasonable and agreed upon under friendly terms. This includes things like helping with Disruptors Connect events, consulting, and training anytime now and in the future. But it needs to be in a friendly and respectful manner—not "we need you here by this time and you will be expected to have trained us on X and Y by the end of this meeting." There's a big difference between asking for help and demanding it with an implication of failure on my part.</p></li>
-            <li><strong>The $1,800 deduction reversed</strong> — Google will reimburse directly to the company</li>
-            <li><strong>Everything in writing going forward</strong> — no more verbal agreements that get reinterpreted</li>
-          </ol>
-        </div>
-
-        <h2>Why This Works for Both of Us</h2>
-
-        <p>This isn't just about what I need—this structure genuinely benefits both sides. Let me break it down:</p>
-
-        <h3>For Disruptors Media:</h3>
-        <div className="offering-list">
-          <ol>
-            <li><strong>Zero liability exposure on the technical side</strong> — All development-related liability is handled through Tech Integration Labs LLC, backed by professional insurance and standard contract language. If something goes wrong with a client project, it's on my books, not yours.</li>
-            <li><strong>No surprise API charges hitting your accounts</strong> — The $1,800 incident can never happen again because those accounts won't be on your credit card. All subscriptions, API costs, and technical infrastructure costs are my responsibility.</li>
-            <li><strong>Predictable costs</strong> — You know exactly what you're paying: 50% of billable development hours. No hidden surprises, no unexpected invoices for tools or services.</li>
-            <li><strong>Full transparency on hours and deliverables</strong> — AI-powered time tracking gives you detailed breakdowns of exactly what was worked on, down to the minute. You can see exactly where every hour goes.</li>
-            <li><strong>Professional vendor relationship</strong> — This is how actual agencies and dev companies structure their partnerships. It's clean, it's professional, and it protects both parties.</li>
-            <li><strong>You get paid as much as I do</strong> — For every hour of development work, you're earning the same amount I am. That's a 50/50 split on the actual work.</li>
-            <li><strong>Access to help and training without the overhead</strong> — I'm genuinely happy to help with Disruptors Connect events, consulting, and training under friendly terms. You get the benefit of my expertise without having to pay for every conversation.</li>
-          </ol>
-        </div>
-
-        <h3>For Me:</h3>
-        <div className="need-list">
-          <ol>
-            <li><strong>Fair compensation that reflects the risk I'm taking on</strong> — I'm absorbing liability, paying for subscriptions, managing freelancers, and handling all the technical complexity. The compensation needs to match that.</li>
-            <li><strong>Clear terms I can count on</strong> — No more verbal agreements that get reinterpreted. Everything in writing means we both know exactly where we stand.</li>
-            <li><strong>The ability to operate professionally as a true subcontractor</strong> — This structure lets me run Tech Integration Labs LLC as a real business, which means I can invest in better tools, bring in help when needed, and deliver better results.</li>
-            <li><strong>Control over the things I'm responsible for</strong> — If I'm bearing the risk on accounts and infrastructure, I need to be the one managing them. That's only fair.</li>
-            <li><strong>A sustainable working relationship</strong> — I want this to work long-term. That means it needs to be structured in a way that's fair to both of us, not just one side.</li>
-            <li><strong>The autonomy to do my best work</strong> — This might be the most important point, and the one that could have the most significant impact moving forward. I'm able to deliver significantly better results when I have the freedom to execute the way I know works best. This structure gives me that autonomy while still keeping you fully informed through transparent reporting. You get better outcomes without needing to manage the technical details.</li>
-          </ol>
-        </div>
-      </div>
-
-      <div className="summary-box">
-        <h2>SUMMARY</h2>
-
-        <div className="non-negotiable">
-          <h3>Non-Negotiables:</h3>
-          <ol>
-            <li>$1,800 deduction reversed</li>
-            <li>50% of hourly minimum</li>
-            <li>Written terms for internal work</li>
-            <li>No unauthorized deductions going forward</li>
-          </ol>
-        </div>
-
-        <h3>The Bottom Line:</h3>
-        <p>I want this to work. I believe in what we're building. But it needs to work for both of us.</p>
-        <p>Let's discuss.</p>
-
-        <p className="signature">—Will</p>
-      </div>
-
-      <div className="appendix" id="appendices">
-        <h1>APPENDICES: DETAILED DOCUMENTATION & RESEARCH</h1>
-        <p style={{marginBottom: '20px', color: '#666'}}>Click on each appendix to expand/collapse the content.</p>
-
-        <CollapsibleAppendix id="appendix-a" title="APPENDIX A: The $1,800 API Deduction — Detailed Analysis">
-          <h3>A.1 What Is an API Key?</h3>
-          <p>Think of an API key like a password that lets one piece of software talk to another.</p>
-          <p>When you use an app on your phone that shows you the weather, that app doesn't have its own weather satellites. It uses an API key to ask Google or Apple's weather service, "Hey, what's the weather in Boise?" The weather service checks the key, confirms it's legitimate, and sends back the answer.</p>
-          <p><strong>Every modern app works this way.</strong> Apps don't exist in isolation—they connect to dozens of external services:</p>
-          <ul>
-            <li>AI services (Google Gemini, OpenAI, Claude)</li>
-            <li>Payment processors</li>
-            <li>Email services</li>
-            <li>Database services</li>
-            <li>Authentication services</li>
-            <li>Analytics</li>
-            <li>Maps</li>
-            <li>And dozens more</li>
-          </ul>
-          <p><strong>Each of those connections requires an API key.</strong></p>
-          <p>The apps I'm building for Disruptors Media each have <strong>10-20+ API keys</strong> connecting them to various services. Without these keys, the apps literally cannot function.</p>
-
-          <h3>A.2 API Incidents Are Extremely Common</h3>
-          <p><strong>Industry statistics:</strong></p>
-          <ul>
-            <li><strong>39 million API secrets were leaked on GitHub alone in 2024</strong></li>
-            <li><strong>40% of API keys across the industry are stored in ways that could be exposed</strong></li>
-            <li>Even Fortune 500 companies with dedicated security teams experience API key incidents</li>
-            <li>The average cost of a mobile application security incident ranges from just under $1 million to several million dollars</li>
-          </ul>
-
-          <h3>A.3 How Companies Normally Handle This</h3>
-          <p>In every professional software organization, <strong>the company absorbs these costs as operational overhead.</strong> Here's why:</p>
-          <ol>
-            <li><strong>It's a known risk of doing business</strong> - If you're building software, API incidents are a "when," not an "if"</li>
-            <li><strong>Developers aren't negligent</strong> - These incidents happen even with best practices</li>
-            <li><strong>The company has the resources</strong> - Individual developers often can't absorb thousands in surprise costs</li>
-            <li><strong>It would be unworkable otherwise</strong> - If developers were personally liable, no one would take development jobs</li>
-          </ol>
-          <p><strong>I researched this extensively and could not find a single example of a company deducting API charges from a developer's paycheck. It's simply not done.</strong></p>
-
-          <h3>A.4 What Labor Law Says About Deductions</h3>
-          <p>According to Utah labor law (and federal regulations under 29 CFR 4.168):</p>
-          <ul>
-            <li>Employers cannot deduct amounts from wages without express written authorization</li>
-            <li>Deductions for equipment damage, operational costs, or shortages without clear voluntary agreement are generally prohibited</li>
-            <li>This applies whether someone is classified as an employee or, in many cases, a contractor</li>
-          </ul>
-
-          <div className="source-list">
-            <strong>Sources:</strong>
-            <a href="https://www.gitguardian.com/remediation/google-api-key" target="_blank" rel="noopener noreferrer">GitGuardian - Remediating Google API Key Leaks</a>
-            <a href="https://www.wallarm.com/what/api-tokens-leaks" target="_blank" rel="noopener noreferrer">Wallarm - API Token Leaks Guide</a>
-            <a href="https://nordicapis.com/keep-api-keys-safe-because-the-repercussions-are-huge/" target="_blank" rel="noopener noreferrer">Nordic APIs - Keep API Keys Safe</a>
-            <a href="https://laborcommission.utah.gov/" target="_blank" rel="noopener noreferrer">Utah Labor Commission - Wage Regulations</a>
-            <a href="https://www.ecfr.gov/current/title-29/subtitle-A/part-4/subpart-D/subject-group-ECFR2c50d9c2d69b435/section-4.168" target="_blank" rel="noopener noreferrer">Federal Register 29 CFR 4.168</a>
-            <a href="https://www.dol.gov/agencies/whd/fact-sheets/78d-h2b-deductions" target="_blank" rel="noopener noreferrer">DOL Fact Sheet 78D</a>
+      {/* Main Content */}
+      <main className="flex-1 p-4 md:p-8 lg:p-12 max-w-7xl mx-auto overflow-y-auto">
+
+        {/* Header Section */}
+        <header className="mb-12 bg-gradient-to-br from-indigo-900 to-indigo-800 rounded-3xl p-8 md:p-16 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-40 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+          <div className="relative z-10">
+            <div className="inline-block bg-indigo-700/50 px-4 py-1.5 rounded-full text-xs md:text-sm font-bold tracking-wider mb-6 border border-indigo-500/30">
+              CONFIDENTIAL
+            </div>
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-8 leading-tight">Contract & Compensation Discussion</h1>
+            <div className="flex flex-col md:flex-row md:items-center gap-4 text-indigo-200 text-base md:text-lg">
+              <span className="font-medium">Will Welsh</span>
+              <span className="hidden md:block w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
+              <span className="font-medium">Tech Integration Labs LLC</span>
+            </div>
           </div>
-        </CollapsibleAppendix>
+        </header>
 
-        <CollapsibleAppendix id="appendix-b" title="APPENDIX B: The Website — Scope Creep Documentation">
-          <h3>B.1 What Happened</h3>
-          <ol>
-            <li>I designed the website (Version 1)</li>
-            <li>One boss provided a full list of revisions—page by page, tabs, text changes, color changes</li>
-            <li>I applied those revisions, which broke the visual coherence (changing one color affects everything around it)</li>
-            <li>I had to redesign sections to make it look good again while keeping the new revisions</li>
-            <li>By the time that was done, another boss provided a completely different list of revisions</li>
-            <li>Repeat the entire process</li>
-            <li>This went on for weeks</li>
-          </ol>
-          <p>Then the question came: "Why is this taking so long?"</p>
+        {/* Intro Section */}
+        <section className="mb-16">
+           <div className="bg-white rounded-2xl p-8 md:p-10 shadow-sm border border-slate-200">
+             <div className="text-lg md:text-xl text-slate-700 leading-relaxed space-y-6">
+               <p>Josh,</p>
+               <p>
+                 I need to address several things about my contract and compensation. I'm going to go through the issues you've raised point by point, give you my responses, and then present my proposal for how we move forward.
+               </p>
+               <p>
+                 For each topic, I've included links to detailed documentation and research in the appendix if you want to dig deeper.
+               </p>
+             </div>
+           </div>
+        </section>
 
-          <h3>B.2 What Is Scope Creep?</h3>
-          <p><strong>Scope creep</strong> is one of the most common problems in software and design projects. It's when requirements keep changing or expanding after work has begun.</p>
-          <p>Here's what research shows about scope creep:</p>
-          <ul>
-            <li>It's the #1 cause of project delays and budget overruns</li>
-            <li>Projects with unclear requirements take 2-3x longer than those with clear specs</li>
-            <li>The solution is <strong>change management</strong>—any new request gets documented, estimated, and approved before work begins</li>
-          </ul>
+        {/* Cost Analysis Section */}
+        <section id="intro" className="mb-24 scroll-mt-8">
+            <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm border border-slate-200">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 flex items-center gap-4 border-b border-slate-100 pb-6">
+                    <TrendingUp className="text-indigo-600 shrink-0" size={32} />
+                    Industry Cost Analysis & The "Vibe Coder" Question
+                </h2>
 
-          <h3>B.3 Why "Perfect" Is Impossible Without Clear Direction</h3>
-          <p>Even if you tell me exactly what to write, once you see it, you'll probably realize it's not quite what you wanted. That's normal. That's why professional projects have:</p>
-          <ul>
-            <li><strong>Discovery phases</strong> - To understand the vision before building</li>
-            <li><strong>Wireframes and mockups</strong> - To approve direction before full implementation</li>
-            <li><strong>Defined revision rounds</strong> - "This price includes 2 rounds of revisions"</li>
-            <li><strong>Change orders</strong> - Additional work beyond scope gets quoted separately</li>
-          </ul>
-          <p>Asking a developer to work until something is "perfect" with no clear definition of "perfect" is asking for infinite work.</p>
-        </CollapsibleAppendix>
+                <div className="prose prose-lg prose-slate max-w-none text-slate-600 mb-10">
+                    <p>
+                        Before we get into the specific issues, I want to share some important context. Somewhere along the way, a disconnect has developed between what I'm actually delivering and how that work is being perceived.
+                    </p>
+                    <p>
+                        Recently, the company turned down a dentist app project (Elite Dental Force) due to liability concerns, risk concerns, and the belief that I—referred to as a "vibe coder"—wouldn't be capable of building it. This decision was informed by consulting AI and calling large development agencies.
+                    </p>
+                    <div className="font-bold text-slate-800 bg-slate-50 p-6 rounded-xl border-l-4 border-indigo-500 my-8">
+                        I decided to use the exact same methodology—consulting AI and getting agency estimates—but applied it to the work I've already completed. The results tell a very different story.
+                    </div>
+                </div>
 
-        <CollapsibleAppendix id="appendix-c" title="APPENDIX C: Industry Compensation Research">
-          <h3>C.1 Standard Hourly Rates</h3>
-          <p>Research shows:</p>
-          <ul>
-            <li>Senior/specialized developers (AI, complex integrations) command $150-$250+/hour</li>
-            <li>Agency rates for enterprise work often range $200-$400/hour</li>
-            <li>AI app development costs range from $20,000-$250,000+ per project</li>
-          </ul>
+                <div className="bg-slate-50 rounded-2xl p-8 mb-12 border border-slate-200">
+                    <h3 className="font-bold text-xl text-slate-800 mb-4">How I Got These Numbers</h3>
+                    <p className="text-base text-slate-600 mb-6">
+                        I want to be clear about my methodology—I didn't guide this analysis in any direction. I didn't write prompts designed to get high or low numbers. I simply provided AI with:
+                    </p>
+                    <ul className="list-disc list-inside text-base text-slate-600 space-y-3 ml-2">
+                        <li><strong>Full PRDs (Product Requirement Documents)</strong> for projects not yet built—the most accurate way to understand what an app will be in full context</li>
+                        <li><strong>Full repositories (actual codebases)</strong> for projects that have been built—the most accurate way to analyze what has actually been delivered</li>
+                    </ul>
+                    <p className="text-base text-slate-600 mt-6">
+                        These are the two most reliable inputs you can give AI to get back accurate estimates. I asked it to analyze them and provide real-world estimates based on large software agency pricing, documented past project builds of similar scope, and standard industry team compositions.
+                    </p>
+                    <p className="text-base text-slate-600 mt-4">
+                        <strong>Importantly, I even asked it to account for how much faster and easier it is to build software today due to recent AI advancements.</strong> Despite factoring in AI-assisted development efficiencies, the estimates still came back in the ranges shown below.
+                    </p>
+                </div>
 
-          <h3>C.2 Revenue Share Arrangements</h3>
-          <p>Research shows that staffing agencies typically take 30-50% of the billed rate as their cut, meaning contractors typically receive 50-70% of what clients pay.</p>
-          <p>At 50%, I'm at the low end of industry standard—while receiving nothing from down payments or recurring revenue.</p>
+                {/* Table Data - Mobile Cards */}
+                <h3 className="text-xl md:text-2xl font-bold text-slate-800 mb-6">What Traditional Agencies Would Actually Charge</h3>
 
-          <h3>C.3 AI App Development Timelines</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Project Type</th>
-                <th>Realistic Timeline</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Simple AI chatbot (FAQ-style)</td>
-                <td>4-8 weeks</td>
-              </tr>
-              <tr>
-                <td>Basic AI app with existing APIs</td>
-                <td>2-4 months</td>
-              </tr>
-              <tr>
-                <td>Custom AI features with training</td>
-                <td>3-6 months</td>
-              </tr>
-              <tr>
-                <td>Complex enterprise AI application</td>
-                <td>9-12+ months</td>
-              </tr>
-              <tr>
-                <td>Novel/never-done-before features</td>
-                <td>Add 2-4 weeks just for evaluation and tuning</td>
-              </tr>
-            </tbody>
-          </table>
+                <div className="md:hidden space-y-4 mb-10">
+                    {[
+                      { name: 'Elite Dental Force (Turned Down)', cost: '$700,000 - $1.4M', time: '7-10 months', team: '4-7 developers', status: 'N/A - deal passed', bg: 'bg-slate-50' },
+                      { name: 'Perdia AI Platform', cost: '$500,000 - $1.0M', time: '6-9 months', team: '5-9 developers', status: '90% complete in <3 weeks', bg: 'bg-white', highlight: true },
+                      { name: 'Disruptors Marketing Hub', cost: '$325,000 - $590,000', time: '4-6 months', team: '6-10 developers', status: 'Live (called "incomplete")', bg: 'bg-slate-50', highlight: true },
+                      { name: 'SegPro Calculator', cost: '$160,000 - $320,000', time: '3-6 months', team: '3-5 developers', status: 'Completed', bg: 'bg-white', highlight: true },
+                    ].map((item, i) => (
+                      <div key={i} className={`p-6 rounded-xl border ${item.highlight ? 'border-indigo-200 shadow-sm' : 'border-slate-200'} ${item.bg}`}>
+                        <h4 className="font-bold text-lg text-indigo-900 mb-3">{item.name}</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-slate-500">Agency Cost:</span> <span className="font-bold text-slate-800">{item.cost}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">Timeline:</span> <span className="font-medium text-slate-800">{item.time}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">Team:</span> <span className="font-medium text-slate-800">{item.team}</span></div>
+                          <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
+                            <span className="text-slate-500">Status:</span>
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${item.highlight ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>{item.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
 
-          <div className="source-list">
-            <strong>Sources:</strong>
-            <a href="https://www.fullstack.com/labs/resources/blog/2024-price-guide" target="_blank" rel="noopener noreferrer">FullStack Labs - 2024 Software Development Price Guide</a>
-            <a href="https://geomotiv.com/blog/software-engineer-hourly-rate-in-the-usa/" target="_blank" rel="noopener noreferrer">Geomotiv - Software Engineer Hourly Rate USA</a>
-            <a href="https://topflightapps.com/ideas/ai-app-development/" target="_blank" rel="noopener noreferrer">TopFlight Apps - AI App Development Guide</a>
-            <a href="https://www.ziprecruiter.com/Salaries/Software-Developer-Contractor-Salary" target="_blank" rel="noopener noreferrer">ZipRecruiter - Software Developer Contractor Salary</a>
-            <a href="https://www.glassdoor.com/Salaries/software-engineer-contractor-salary-SRCH_KO0,28.htm" target="_blank" rel="noopener noreferrer">Glassdoor - Software Engineer Contractor Salary</a>
-          </div>
-        </CollapsibleAppendix>
+                {/* Table Data - Desktop */}
+                <div className="hidden md:block overflow-x-auto mb-12 border border-slate-200 rounded-xl shadow-sm">
+                    <table className="w-full text-base text-left">
+                        <thead className="bg-slate-800 text-white">
+                            <tr>
+                                <th className="p-5 font-semibold tracking-wide">Project</th>
+                                <th className="p-5 font-semibold tracking-wide">Agency Cost</th>
+                                <th className="p-5 font-semibold tracking-wide">Timeline</th>
+                                <th className="p-5 font-semibold tracking-wide">Team Required</th>
+                                <th className="p-5 font-semibold tracking-wide">My Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            <tr className="bg-slate-50/50">
+                                <td className="p-5 font-medium text-slate-600">Elite Dental Force (turned down)</td>
+                                <td className="p-5 text-slate-600">$700,000 - $1.4M</td>
+                                <td className="p-5 text-slate-600">7-10 months</td>
+                                <td className="p-5 text-slate-600">4-7 developers</td>
+                                <td className="p-5 text-slate-400 italic">N/A - deal passed</td>
+                            </tr>
+                            <tr className="bg-white">
+                                <td className="p-5 font-bold text-indigo-900">Perdia AI Platform</td>
+                                <td className="p-5 font-medium text-slate-800">$500,000 - $1.0M</td>
+                                <td className="p-5 text-slate-600">6-9 months</td>
+                                <td className="p-5 text-slate-600">5-9 developers</td>
+                                <td className="p-5"><span className="font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1 text-sm">90% complete in &lt;3 weeks</span></td>
+                            </tr>
+                            <tr className="bg-slate-50/50">
+                                <td className="p-5 font-bold text-indigo-900">Disruptors Marketing Hub</td>
+                                <td className="p-5 font-medium text-slate-800">$325,000 - $590,000</td>
+                                <td className="p-5 text-slate-600">4-6 months</td>
+                                <td className="p-5 text-slate-600">6-10 developers</td>
+                                <td className="p-5"><span className="font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1 text-sm">Live (called "incomplete")</span></td>
+                            </tr>
+                            <tr className="bg-white">
+                                <td className="p-5 font-bold text-indigo-900">SegPro Calculator</td>
+                                <td className="p-5 font-medium text-slate-800">$160,000 - $320,000</td>
+                                <td className="p-5 text-slate-600">3-6 months</td>
+                                <td className="p-5 text-slate-600">3-5 developers</td>
+                                <td className="p-5"><span className="font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1 text-sm">Completed</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-        <CollapsibleAppendix id="appendix-d" title="APPENDIX D: Original Conversation Quotes">
-          <h3>D.1 On Equity</h3>
-          <blockquote>"That would mean that I would have 24% or something... It depends on what you're capable of. For sure, sure. I mean, if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."</blockquote>
-          <blockquote>"It probably depends on how well it does, huh?"</blockquote>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-12 mb-12">
+                    <div>
+                        <h3 className="font-bold text-xl text-slate-800 mb-4">Why These Projects Cost So Much</h3>
+                        <div className="prose prose-lg text-slate-600 space-y-4">
+                            <p>When people hear "website" or "web app," they instinctively compare it to a simple WordPress site. That's like comparing a Tesla factory to a car wash because they both use concrete.</p>
+                            <p><strong>DisruptorsMedia.com ($300K-$550K)</strong> isn't a website—it's a multi-tool marketing platform with: growth audit system, keyword research tools, content generators, Business Brain knowledge base, lead capture, and admin systems. Each is its own mini-app with AI orchestration, serverless functions, databases, plus hundreds of custom illustrations and videos. A WordPress site has 1-2 features; DisruptorsMedia.com has dozens.</p>
+                            <p><strong>Perdia ($500K-$1M)</strong> is even more complex because nothing like it exists anywhere. It's not just "AI that writes articles"—it's a 20+ step content factory that automates topic discovery, keyword research, drafting, SEO optimization, humanization, editor feedback, learning from corrections, and WordPress publishing. It maintains a complete memory of every article on the site so it doesn't repeat itself and learns to write better over time. You can't buy this as a product—it combines AI writer + SEO assistant + CMS + editorial platform + analytics engine into one system.</p>
+                            <p>To build either properly, agencies deploy 6-10 specialists (product leads, UX/UI designers, frontend/backend engineers, AI engineers, DevOps, QA, illustrators, video editors) at $150-$250+/hour. <strong>These are the kinds of products companies raise venture capital to build.</strong></p>
+                        </div>
+                    </div>
+                    <div>
+                        <CostChart />
+                    </div>
+                </div>
 
-          <h3>D.2 On Pay Increases</h3>
-          <blockquote>"If I can see that we've gone from, yeah, I think we're at, like, 17, 8, let's just call it 18,000, and now we're at 36,000. I give you my word as a man that I will give you a $2,000 pay increase."</blockquote>
-          <blockquote>"For every 5,000 that we go up, you get 500 of it."</blockquote>
-          <blockquote>"When we get this then you would go to $4,500 a month... And then when we hit 30,000, every 5,000 gross the company goes up, you would get an additional $500 till you hit 6K."</blockquote>
+                <h3 className="text-xl md:text-2xl font-bold text-slate-800 mb-6">What the "Vibe Coder" Is Actually Delivering</h3>
+                <div className="hidden md:block overflow-x-auto mb-8 border border-slate-200 rounded-xl shadow-sm">
+                    <table className="w-full text-base text-left">
+                        <thead className="bg-slate-800 text-white">
+                            <tr>
+                                <th className="p-5 font-semibold tracking-wide">Project</th>
+                                <th className="p-5 font-semibold tracking-wide">Industry Value</th>
+                                <th className="p-5 font-semibold tracking-wide">My Cost to DM</th>
+                                <th className="p-5 font-semibold tracking-wide">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                             <tr className="bg-white">
+                                <td className="p-5 font-bold text-indigo-900">SegPro Calculator</td>
+                                <td className="p-5 font-medium text-slate-800">$160K - $320K</td>
+                                <td className="p-5 text-emerald-600">&lt; $4,000</td>
+                                <td className="p-5 font-bold text-emerald-700">Completed</td>
+                            </tr>
+                            <tr className="bg-slate-50/50">
+                                <td className="p-5 font-bold text-indigo-900">Perdia AI Platform</td>
+                                <td className="p-5 font-medium text-slate-800">$500K - $1M</td>
+                                <td className="p-5 text-emerald-600">&lt; $4,000</td>
+                                <td className="p-5 font-bold text-emerald-700">90% complete in &lt;3 weeks</td>
+                            </tr>
+                            <tr className="bg-white">
+                                <td className="p-5 font-bold text-indigo-900">Disruptors Marketing Hub</td>
+                                <td className="p-5 font-medium text-slate-800">$325K - $590K</td>
+                                <td className="p-5 text-emerald-600">Included in salary</td>
+                                <td className="p-5 font-bold text-emerald-700">Live (called "incomplete")</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-          <h3>D.3 On the $250K Benchmark</h3>
-          <blockquote>"The reality is, Will, let's be honest, if you're not making a minimum of a quarter of a million a year, it's not enough."</blockquote>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                    <div className="bg-indigo-900 text-white p-8 rounded-2xl text-center shadow-lg transform hover:-translate-y-1 transition-transform">
+                        <div className="text-xs md:text-sm uppercase tracking-wider opacity-75 font-semibold mb-3">Combined Industry Value</div>
+                        <div className="text-3xl md:text-4xl font-bold">$985K - $1.91M</div>
+                    </div>
+                    <div className="bg-emerald-600 text-white p-8 rounded-2xl text-center shadow-lg transform hover:-translate-y-1 transition-transform">
+                        <div className="text-xs md:text-sm uppercase tracking-wider opacity-75 font-semibold mb-3">Cost to Disruptors Media</div>
+                        <div className="text-3xl md:text-4xl font-bold">~$24,000</div>
+                    </div>
+                    <div className="bg-white border-2 border-slate-100 p-8 rounded-2xl text-center shadow-sm transform hover:-translate-y-1 transition-transform">
+                        <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">Cost Efficiency Ratio</div>
+                        <div className="text-3xl md:text-4xl font-bold text-indigo-600">41x - 80x</div>
+                        <div className="text-sm text-slate-400 mt-2 font-medium">Compared to traditional agency pricing</div>
+                    </div>
+                </div>
 
-          <h3>D.4 On Who Absorbs Operational Costs</h3>
-          <blockquote>"So our total operating overhead is about 10,000 a month... And we could do that for literally years."</blockquote>
-          <blockquote>"We are literally to bring you on, pulling $1,000 a month out of savings."</blockquote>
+                <div className="bg-slate-50 rounded-2xl p-8 border-l-8 border-slate-800">
+                    <h3 className="font-bold text-xl text-slate-800 mb-4">Same Method, Opposite Conclusions</h3>
+                    <p className="text-slate-600 text-lg mb-4">
+                        The company consulted AI and agencies to determine whether a "vibe coder" could build the dentist app. The conclusion was no—too risky, not capable.
+                    </p>
+                    <p className="text-slate-600 text-lg mb-4">
+                        I used the <strong>exact same method</strong> to analyze the actual work I've already delivered. The conclusion: I'm single-handedly producing millions of dollars worth of enterprise software at a tiny fraction of traditional costs.
+                    </p>
+                    <p className="font-bold text-slate-800 text-lg">
+                        Same method. Opposite conclusions. The difference? My analysis is based on actual deliverables—real codebases, real PRDs, real completed work. Not hypotheticals about what might go wrong.
+                    </p>
+                </div>
 
-          <h3>D.5 On My Status as an Independent Contractor</h3>
-          <blockquote>"So you're an independent contractor, so I'll just be blunt... I have no say in your schedule, and I legally, because you're an independent contractor."</blockquote>
+                 <div className="mt-8 bg-indigo-900 p-8 rounded-2xl text-white">
+                    <strong className="block text-xl text-yellow-400 mb-3">The Real Question:</strong>
+                    <p className="text-lg leading-relaxed">
+                        The question isn't whether I can build complex applications—the evidence shows I already am. The real question is how this perception gap developed, and why work that's worth millions by industry standards is being characterized as not good enough, taking too long, or not generating direct revenue.
+                    </p>
+                </div>
+            </div>
+        </section>
 
-          <h3>D.6 On the Scarcity of Talent</h3>
-          <blockquote>"There is an AI opportunity right now to be AI consultants and AI partners with tons of companies, because there's not enough people like us, right, and you, and Emerald Deacon, there's not enough people like them to facilitate the needs of all the companies out there. There just isn't."</blockquote>
-        </CollapsibleAppendix>
+        {/* Issues Section */}
+        <section id="issues" className="mb-24 scroll-mt-8">
+            <h2 className="text-3xl font-bold text-slate-800 mb-10 flex items-center gap-4 border-b border-slate-200 pb-6">
+                <AlertTriangle className="text-indigo-600" size={32} />
+                Part 1: Your Points & My Responses
+            </h2>
 
-        <CollapsibleAppendix id="appendix-e" title="APPENDIX E: Uncompensated Internal Work">
-          <table>
-            <thead>
-              <tr>
-                <th>Work Type</th>
-                <th>Examples</th>
-                <th>Time Spent</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Teaching the team</td>
-                <td>Training sessions (2+ hours this last Monday afternoon alone)</td>
-                <td>Ongoing</td>
-              </tr>
-              <tr>
-                <td>Website work</td>
-                <td>Disruptors Media website development</td>
-                <td>Weeks</td>
-              </tr>
-              <tr>
-                <td>Internal apps</td>
-                <td>Sniper Sales App, Client Portal, Content Writer Template</td>
-                <td>Significant</td>
-              </tr>
-              <tr>
-                <td>GoHighLevel integrations</td>
-                <td>Various automations and workflows</td>
-                <td>Ongoing</td>
-              </tr>
-              <tr>
-                <td>Non-app client work</td>
-                <td>EVLogic's digital avatar/HeyGen work</td>
-                <td>Project-based</td>
-              </tr>
-            </tbody>
-          </table>
-        </CollapsibleAppendix>
+            <IssueCard
+                number={1}
+                title="The $1,800 Deduction"
+                summary="API charges deducted from pay."
+                yourPosition="I 'signed up for something' that resulted in $1,800 in API charges, so it's coming out of my pay."
+                myResponse={
+                    <>
+                        <p>That's not what happened. API keys aren't optional services I signed up for—they're essential infrastructure. Every app I build has 10-20+ keys. Without them, nothing works. APIs are to apps and websites what electricity is to a job site.</p>
+                        <p>API incidents happen constantly (39 million keys leaked on GitHub in 2024 alone—even Fortune 500 companies with dedicated security teams experience these incidents). Industry standard is that companies absorb these costs as operational overhead, not individual developers. I researched this extensively and could not find a single example of a company deducting API charges from a developer's paycheck. It's simply not done.</p>
+                        <p>There was never any agreement—written or verbal—that I would personally cover operational costs. And according to Utah labor law and federal regulations, employers cannot deduct amounts from wages without express written authorization—deductions for operational costs without clear voluntary agreement are generally prohibited.</p>
+                        <p>If I'm personally liable for API charges going forward, I would have to shut down every API key across every project immediately to protect myself. That would halt all development indefinitely. I don't think that's what you want.</p>
+                    </>
+                }
+                conclusion="The $1,800 needs to be reversed. I'm actively pursuing the refund from Google, which will be reimbursed directly to the company."
+                appendixLink="#appendix-a"
+                appendixLabel="Appendix A: API Deduction Analysis"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 1}
+                onToggle={() => setActiveIssue(activeIssue === 1 ? null : 1)}
+            />
 
-        <CollapsibleAppendix id="appendix-f" title="APPENDIX F: Professional Liability Insurance Research">
-          <h3>F.1 What Is Tech E&O Insurance?</h3>
-          <p>Technology Errors & Omissions (Tech E&O) Insurance is a specialized form of professional liability coverage tailored for tech companies. It protects businesses against claims resulting from mistakes, oversights, or failures in their products or services.</p>
+            <IssueCard
+                number={2}
+                title="The Website 'Not Being Complete'"
+                summary="Scope creep and design iterations."
+                yourPosition="The website was never completed, and since you've been good to me, I should finish it for free."
+                myResponse={
+                    <>
+                        <p>Here is a super simplified and condensed version of what actually happened: I designed the website. Then I got detailed page-by-page revisions from one person, applied them—which broke the visual coherence—so I had to redesign all the aesthetics around their requests until it all looked good again. Then I got a completely different set of revisions from someone else. This cycle repeated for weeks. Then the question came: "Why is this taking so long?"</p>
+                        <p>The website is complete. It's live and functional. We have received lots of feedback on it from clients and it's all been extremely positive. One client even said that part of the reason he chose us was because he liked how we designed our website (I know that was Kyle and Tyler's point about the old website, but the comment I'm referring to came from a recent client about the new site).</p>
+                        <p>You're telling me the website still isn't completed and tasking me with the responsibility of finally building the perfect version of it that you are envisioning. But when I ask you for details on what exactly is not complete you said something along the lines of "It doesn't tell our story perfectly." Based on my experience designing this site for you guys so far—the only way I will ever be able to produce the site you are envisioning (the site that you can feel good about considering complete and be happy with me about)—is if you give me:</p>
+                        <ol className="list-decimal list-inside ml-2 space-y-2 my-4 font-medium pl-4 border-l-2 border-indigo-200">
+                            <li>Specific, written requirements — exactly what to change, page by page</li>
+                            <li>One point of contact for feedback — not conflicting input from multiple people</li>
+                        </ol>
+                        <p>I'm happy to do more work on the website. But vague direction + multiple conflicting stakeholders = the exact cycle that made this take so long in the first place.</p>
+                        <p>For context: what happened with the website is textbook <strong>scope creep</strong>—the #1 cause of project delays and budget overruns in software and design. Research shows projects with unclear requirements take 2-3x longer than those with clear specs. That's why professional projects have discovery phases, defined revision rounds ("this price includes 2 rounds of revisions"), and change orders for additional work. Asking a developer to work until something is "perfect" with no clear definition of "perfect" is asking for infinite work.</p>
+                    </>
+                }
+                conclusion="Important note: You guys have been amazing and understanding about the unexpected situation with my mom, and I sincerely appreciate that... That being said, I don't feel good at all about tying this in with things you are saying like that I never completed, or somehow failed in the website build."
+                appendixLink="#appendix-b"
+                appendixLabel="Appendix B: Scope Creep"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 2}
+                onToggle={() => setActiveIssue(activeIssue === 2 ? null : 2)}
+            />
 
-          <h3>F.2 What Does It Cover?</h3>
-          <ul>
-            <li>Errors, omissions, and negligent acts in technology services</li>
-            <li>Software bugs and service outages</li>
-            <li>Data mishandling</li>
-            <li>Intellectual property disputes</li>
-            <li>Certain cyber-related incidents</li>
-          </ul>
+            <IssueCard
+                number={3}
+                title="'Not As Far Along With AI As You Thought'"
+                summary="Response to comment regarding AI capability."
+                yourPosition="You said something along the lines of, 'I guess you weren't as far along with AI as you thought you were.'"
+                myResponse={
+                    <>
+                        <p>That comment caught me off guard, and I fully disagree with it.</p>
+                        <p>The company didn't just grow—it transformed from a marketing agency to an AI-first development company. I'm not saying that pivot was built entirely on my work. But I think it's unreasonable to assume that this transformation, which happened over the course of the few months since I started, wasn't at least an indirect result of my contributions.</p>
+                        <p>You brought me on as an AI expert. I've taught Kyle and the team everything I know about AI and how to best use it, every single day I've worked here. I'm the only developer. No other technical staff. Managing 3-6 projects simultaneously, alone.</p>
+                        <p>We were at $18K MRR. We're now at $42K+ MRR and growing quickly, plus $15K+ in app deposits. In our initial phone conversations where you were telling me about pay and equity incentives that would be based on our MRR increasing, I asked you how you'd know if the growth was from me. Your response was that we're a three-person team, so where else would the increases in MRR come from.</p>
+                        <p>Rather than a lack of AI skills on my part, I think this perception can be attributed to a few things: the inherently unpredictable nature of AI development work, unrealistic expectations of what a one-person development team can deliver, and honestly—my own underwhelming communication skills. I'm not someone who demands credit where credit is due or escalates every obstacle. I'm used to working on teams of creators and engineers where failing fast is encouraged (as Elon always recommends), where we collaborate and solve problems together rather than constantly covering our own backs. That's served me well in those environments, but I recognize it may have left you without visibility into what I'm actually contributing here.</p>
+                        <p>For reference, here's what industry research says about realistic AI development timelines:</p>
+                        <ul className="list-disc list-inside ml-2 my-2 text-sm text-slate-500 bg-slate-100 p-3 rounded-lg">
+                            <li>Simple AI chatbot: 4-8 weeks</li>
+                            <li>Basic AI app with existing APIs: 2-4 months</li>
+                            <li>Custom AI features with training: 3-6 months</li>
+                            <li>Complex enterprise AI application: 9-12+ months</li>
+                            <li>Novel/never-done-before features: Add 2-4 weeks just for evaluation</li>
+                        </ul>
+                         <p>As one industry source put it: <em>"AI eats scope for breakfast—data pipelines, model eval loops, and privacy reviews can stretch timelines fast."</em></p>
+                    </>
+                }
+                conclusion="The results (transformation to AI company, MRR growth, completed apps) contradict this sentiment."
+                appendixLink="#appendix-c"
+                appendixLabel="Appendix C: Company Growth"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 3}
+                onToggle={() => setActiveIssue(activeIssue === 3 ? null : 3)}
+            />
 
-          <div className="source-list">
-            <strong>Sources:</strong>
-            <a href="https://www.insureon.com/technology-business-insurance/software-developers" target="_blank" rel="noopener noreferrer">Insureon - Software Developer Insurance</a>
-            <a href="https://www.thehartford.com/professional-liability-insurance/errors-omissions-insurance/technology" target="_blank" rel="noopener noreferrer">The Hartford - Technology E&O Insurance</a>
-            <a href="https://www.techinsurance.com/technology-business-insurance/software-development" target="_blank" rel="noopener noreferrer">TechInsurance - Software Developer Insurance</a>
-          </div>
-        </CollapsibleAppendix>
+            <IssueCard
+                number={4}
+                title="The New Contract / Feeling Like My Work Isn't Creating Revenue"
+                summary="Contract renegotiation."
+                yourPosition="You want to redo my contract, moving to the 50% of $250/hour model."
+                myResponse={
+                    <>
+                        <p>I did receive part of the raise you promised—my bi-weekly checks went from $2K to $2,750. But the push to redo my contract and the concern that my work isn't generating revenue doesn't match what the numbers show—MRR has grown 133%, we have $15K+ in app deposits, and the company has transformed into an AI-first business.</p>
+                        <p>You said when I joined: <em>"If I can see that we've gone from, yeah, I think we're at, like, 17, 8, let's just call it 18,000, and now we're at 36,000. I give you my word as a man that I will give you a $2,000 pay increase."</em></p>
+                        <p>Here's the thing: 50% of $250/hour is the absolute minimum I'll accept. And here's why that's already generous on my part:</p>
+                        <ul className="list-disc list-inside ml-2 my-4 space-y-2">
+                            <li>I get 0% of initial down payments ($15K+ so far)</li>
+                            <li>I get 0% of recurring revenue ($3-5K/month per app, ongoing for years)</li>
+                            <li>I get 50% of the hourly rate we charge for development work—while doing 100% of the dev work</li>
+                        </ul>
+                        <p>For every billable hour, there's another hour of unbillable work (setup, research, testing, client emails). That $125/hour is really ~$62.50/hour of my actual time.</p>
+                        <p>For context on industry standards:</p>
+                        <ul className="list-disc list-inside ml-2 my-2 space-y-1">
+                             <li>Senior/specialized developers (AI, complex integrations) command $150-$250+/hour</li>
+                             <li>Agency rates for enterprise work often range $200-$400/hour</li>
+                             <li>AI app development costs range from $20,000-$250,000+ per project</li>
+                             <li>Staffing agencies typically take 30-50% of the billed rate, meaning contractors typically receive 50-70% of what clients pay</li>
+                        </ul>
+                        <p>At 50%, I'm at the low end of industry standard—while receiving nothing from down payments or recurring revenue.</p>
+                    </>
+                }
+                conclusion="My position: I want either a share of down payments (10-20%) or a share of recurring revenue (10-20%). If I'm getting 0% of both, 50% hourly is the floor."
+                appendixLink="#appendix-d"
+                appendixLabel="Appendix D: Industry Compensation"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 4}
+                onToggle={() => setActiveIssue(activeIssue === 4 ? null : 4)}
+            />
 
-        <CollapsibleAppendix id="appendix-g" title="APPENDIX G: Agile Development & Client Pricing">
-          <h3>G.1 How Agile Pricing Works</h3>
-          <blockquote>"When a project's scope is subject to change due to early user feedback, evolving customer requirements, or other factors, the development cost can be bound to agreed rates and the efforts experts spend to introduce deliverables, so the client only pays for actual work done."</blockquote>
-          <blockquote>"Although it's impossible to predict the exact scope of work early on, mature project management practices help accurately define the baseline scope and give realistic estimates from the start."</blockquote>
+            <IssueCard
+                number={5}
+                title="Equity"
+                summary="Unfulfilled equity discussions."
+                yourPosition={
+                    <>
+                        "That would mean that I would have 24% or something... if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."
+                    </>
+                }
+                myResponse={
+                    <>
+                        <p>I accepted $48K/year—way below market—partly because of that conversation.</p>
+                        <p>I'm assuming equity is off the table now, given that it hasn't been mentioned a single time since the moment I agreed to your terms. I imagine it has something to do with the "not as far along with AI" comment.</p>
+                        <p>But if that's the perception, and if equity is no longer part of the picture, then the compensation structure needs to reflect that reality. I didn't accept below-market pay for the fun of it.</p>
+                        <p>You also said at the time: <em>"The reality is, Will, let's be honest, if you're not making a minimum of a quarter of a million a year, it's not enough."</em></p>
+                        <p><em>"There is an AI opportunity right now to be AI consultants and AI partners with tons of companies, because there's not enough people like us, right, and you, and Emerald Deacon, there's not enough people like them to facilitate the needs of all the companies out there. There just isn't."</em></p>
+                        <p>I believed those things then, and I still believe them now. That's why I took this opportunity.</p>
+                    </>
+                }
+                conclusion="If no equity, the pay structure needs to change."
+                appendixLink="#appendix-e"
+                appendixLabel="Appendix E: Original Quotes"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 5}
+                onToggle={() => setActiveIssue(activeIssue === 5 ? null : 5)}
+            />
 
-          <h3>G.2 Discovery Phases & Proof of Concept</h3>
-          <p>For projects involving novel features—things that have never been done before—professional development companies use paid discovery phases and proofs of concept.</p>
-          <blockquote>"The pre-development stage, first of all, aims to eliminate financial risks for the client and make the development process as predictable and smooth as possible."</blockquote>
-          <blockquote>"If the solution employs cutting-edge technologies or APIs that haven't been used for this purpose before, a PoC will help test its feasibility."</blockquote>
+            <IssueCard
+                number={6}
+                title="Internal DM Work"
+                summary="Unpaid internal labor."
+                yourPosition="The issue: A significant portion of my work has no defined compensation."
+                myResponse={
+                    <>
+                        <p>How will I be compensated for:</p>
+                        <ul className="list-disc list-inside ml-2 my-2 space-y-1">
+                            <li>Teaching the team</li>
+                            <li>Website work (see above)</li>
+                            <li>Internal apps (Sniper Sales, Client Portal, Content Writer)</li>
+                            <li>GoHighLevel integrations</li>
+                            <li>Non-app client work (EVLogic HeyGen, etc.)</li>
+                        </ul>
+                        <p>This needs to be defined in writing.</p>
+                    </>
+                }
+                conclusion="This needs to be defined in writing."
+                appendixLink="#appendix-f"
+                appendixLabel="Appendix F: Uncompensated Work List"
+                scrollToId={scrollToSection}
+                isOpen={activeIssue === 6}
+                onToggle={() => setActiveIssue(activeIssue === 6 ? null : 6)}
+            />
+        </section>
 
-          <div className="source-list">
-            <strong>Sources:</strong>
-            <a href="https://www.toptal.com/agile/software-costs-estimation-in-agile-project-management" target="_blank" rel="noopener noreferrer">Toptal - Software Costs Estimation in Agile</a>
-            <a href="https://aida.mitre.org/agile/agile-cost-estimation/" target="_blank" rel="noopener noreferrer">MITRE - Agile Cost Estimation</a>
-            <a href="https://stfalcon.com/en/blog/post/discovery-phase" target="_blank" rel="noopener noreferrer">Stfalcon - Discovery Phase in Software Development</a>
-            <a href="https://designli.co/blog/5-steps-proof-concept-successful-software-development/" target="_blank" rel="noopener noreferrer">Designli - Proof of Concept in Software Development</a>
-          </div>
-        </CollapsibleAppendix>
+        {/* Proposal Section */}
+        <section id="proposal" className="mb-24 scroll-mt-8">
+             <div className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200">
+                <header className="mb-12 border-b border-slate-100 pb-8">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-6">Part 2: My Proposal</h2>
+                    <p className="text-lg text-slate-600 leading-relaxed">
+                        Josh, I know liability is a major concern for you. The API incident brought this into sharp focus. Here's my proposal to address everything:
+                    </p>
+                </header>
 
-        <CollapsibleAppendix id="appendix-h" title="APPENDIX H: Full Source Reference List">
-          <h3>Compensation & Revenue Share</h3>
-          <div className="source-list">
-            <a href="https://www.ziprecruiter.com/Salaries/Software-Developer-Contractor-Salary" target="_blank" rel="noopener noreferrer">ZipRecruiter - Software Developer Contractor Salary</a>
-            <a href="https://www.glassdoor.com/Salaries/software-engineer-contractor-salary-SRCH_KO0,28.htm" target="_blank" rel="noopener noreferrer">Glassdoor - Software Engineer Contractor Salary</a>
-            <a href="https://www.fullstack.com/labs/resources/blog/2024-price-guide" target="_blank" rel="noopener noreferrer">FullStack Labs - 2024 Software Development Price Guide</a>
-            <a href="https://www.payscale.com/research/US/Job=Software_Engineer_Contractor/Hourly_Rate" target="_blank" rel="noopener noreferrer">PayScale - Software Engineer Contractor Hourly Pay</a>
-          </div>
+                <div className="mb-16">
+                    <h3 className="text-2xl font-bold text-indigo-900 mb-6">What "Taking On Liability" Actually Means in the Industry</h3>
+                    <div className="bg-slate-50 p-8 rounded-2xl text-slate-700 text-base leading-relaxed mb-8">
+                        <p className="mb-6">Nobody in software says "I'll take unlimited personal liability for anything that goes wrong." That would be insane. Instead, real dev companies do three things:</p>
+                        <ol className="list-decimal list-inside space-y-4 mb-6">
+                            <li><strong>Use an entity, not a person:</strong> The vendor is the company (Tech Integration Labs LLC), not the individual developer. That's what my LLC is for—it's the contracting party, not "Will personally."</li>
+                            <li><strong>Carry Professional Liability Insurance (Tech E&O):</strong> This is called Technology Errors & Omissions (E&O). It's designed for exactly this scenario. If a client claims our software error, negligence, or bad advice caused them financial loss, the insurance covers legal defense costs and settlements.</li>
+                            <li><strong>Limit Liability in the Contract:</strong> Standard software contracts have a limitation of liability clause that caps total liability to something like "fees paid under this contract in the last 12 months" or "2x the total fees paid" and excludes certain damages.</li>
+                        </ol>
+                        <p>So when actual dev shops "take on liability," it means: <em>"Our company will be legally responsible up to a defined cap for issues caused by our negligence, backed by professional liability insurance, and defined in the contract."</em> <strong>NOT:</strong> <em>"I personally will eat any and all losses no matter what happens."</em></p>
+                    </div>
 
-          <h3>API Key Security & Liability</h3>
-          <div className="source-list">
-            <a href="https://nordicapis.com/keep-api-keys-safe-because-the-repercussions-are-huge/" target="_blank" rel="noopener noreferrer">Nordic APIs - Keep API Keys Safe</a>
-            <a href="https://www.wallarm.com/what/api-tokens-leaks" target="_blank" rel="noopener noreferrer">Wallarm - API Token Leaks Guide</a>
-            <a href="https://www.gitguardian.com/remediation/google-api-key" target="_blank" rel="noopener noreferrer">GitGuardian - Remediating Google API Key Leaks</a>
-            <a href="https://travisasm.com/blog/our-blog-1/api-key-leaks-how-to-detect-prevent-and-secure-your-business-57" target="_blank" rel="noopener noreferrer">Travis ASM - API Key Leaks</a>
-          </div>
+                    <h3 className="text-2xl font-bold text-indigo-900 mb-6">How to Handle "Never-Been-Done-Before" Work</h3>
+                    <div className="bg-slate-50 p-8 rounded-2xl text-slate-700 text-base leading-relaxed">
+                        <p className="mb-4">For complex apps and future novel projects, here's how professional dev shops handle uncertain, first-of-its-kind work:</p>
+                        <ul className="list-disc list-inside space-y-4">
+                            <li><strong>Discovery / Scoping Phase (Paid):</strong> Time-boxed (2-6 weeks). Fixed fee or small T&M budget. Deliverables: Clarified requirements, feasibility analysis, architecture, risks, ranges.</li>
+                            <li><strong>Proof of Concept (PoC) / Spike Work:</strong> When something is truly novel, we define a paid PoC focused on just the hard part. Key attributes: Time-boxed, narrow scope, paid, outcome-driven.</li>
+                        </ul>
+                    </div>
+                </div>
 
-          <h3>Wage Deduction Laws</h3>
-          <div className="source-list">
-            <a href="https://laborcommission.utah.gov/" target="_blank" rel="noopener noreferrer">Utah Labor Commission - Wage Regulations</a>
-            <a href="https://www.ecfr.gov/current/title-29/subtitle-A/part-4/subpart-D/subject-group-ECFR2c50d9c2d69b435/section-4.168" target="_blank" rel="noopener noreferrer">Federal Register 29 CFR 4.168</a>
-            <a href="https://www.dol.gov/agencies/whd/fact-sheets/78d-h2b-deductions" target="_blank" rel="noopener noreferrer">DOL Fact Sheet 78D - Deductions</a>
-            <a href="https://fmlaw.org/blog/can-my-employer-deduct-money-from-my-paycheck-without-my-permission/" target="_blank" rel="noopener noreferrer">FM Law - Can Employer Deduct From Paycheck</a>
-            <a href="https://www.legalfix.com/articles/can-an-employer-withhold-pay" target="_blank" rel="noopener noreferrer">LegalFix - Can an Employer Withhold Pay?</a>
-          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                    {/* Offering Column */}
+                    <div className="bg-emerald-50 rounded-2xl p-8 border border-emerald-100 shadow-sm">
+                        <h3 className="text-2xl font-bold text-emerald-900 mb-8 flex items-center gap-3">
+                            <ShieldCheck size={28} /> What I'm Offering
+                        </h3>
+                        <p className="text-emerald-800 text-base mb-6 italic font-medium">Through Tech Integration Labs LLC, I will:</p>
+                        <ul className="space-y-6">
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Act as the development vendor</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">Entity-to-entity relationship.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Carry Tech E&O insurance</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">Development-related liability covered by my policy.</span>
+                                </div>
+                            </li>
+                             <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Use standard limitation-of-liability contract language</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">Capped exposure, excluded damages.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Cover all AI subscriptions and API costs myself</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">These are the same subscriptions we're already paying through Disruptors Media. The person who bears the risk needs to control the accounts.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Manage and pay software developer freelancers</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">When their expertise is needed to complete a project.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Manage all technical accounts and infrastructure</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">You won't be liable or responsible for any fees, risks, or complexities.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-emerald-900">
+                                <div className="mt-1 bg-emerald-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-emerald-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Implement Discovery/PoC phases</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">De-risk projects before full commitment.</span>
+                                </div>
+                            </li>
+                        </ul>
+                         <p className="mt-6 text-emerald-800 font-bold text-center">This removes liability from Disruptors Media entirely—handled professionally, like an actual vendor relationship.</p>
+                    </div>
 
-          <h3>Professional Liability Insurance</h3>
-          <div className="source-list">
-            <a href="https://www.insureon.com/technology-business-insurance/software-developers" target="_blank" rel="noopener noreferrer">Insureon - Software Developer Insurance</a>
-            <a href="https://www.thehartford.com/professional-liability-insurance/errors-omissions-insurance/technology" target="_blank" rel="noopener noreferrer">The Hartford - Technology E&O Insurance</a>
-            <a href="https://www.techinsurance.com/technology-business-insurance/software-development" target="_blank" rel="noopener noreferrer">TechInsurance - Software Developer Insurance</a>
-            <a href="https://www.flowspecialty.com/blog-post/what-is-tech-e-o" target="_blank" rel="noopener noreferrer">Flow Specialty - What is Tech E&O Insurance</a>
-          </div>
+                    {/* Needs Column */}
+                    <div className="bg-blue-50 rounded-2xl p-8 border border-blue-100 shadow-sm">
+                        <h3 className="text-2xl font-bold text-blue-900 mb-8 flex items-center gap-3">
+                            <Briefcase size={28} /> What I Need in Return
+                        </h3>
+                        <ul className="space-y-6">
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">50% of hourly fees for actual development</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">This is the minimum, non-negotiable. The hourly rate we charge clients should be close to $250, which is standard. I'll also be using AI-powered time tracking software for full transparency. 50% means you're getting paid exactly as much as I am for every hour of actual development work I complete.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">10-20% of initial down payments</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">I do significant upfront work to close these deals (open to negotiation).</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">10-20% of recurring revenue</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">The apps I build generate income for years (open to negotiation).</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Written compensation terms for internal DM work</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">No more ambiguity. Important caveat: I'm happy to help out the company without pay in many ways that are reasonable and agreed upon under friendly terms (training, consulting). But it needs to be in a friendly and respectful manner.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">The $1,800 deduction reversed</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">Google will reimburse directly to the company.</span>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4 text-blue-900">
+                                <div className="mt-1 bg-blue-200 p-1.5 rounded-full shrink-0"><CheckCircle size={16} className="text-blue-700" /></div>
+                                <div>
+                                    <span className="font-bold block text-lg mb-1">Everything in writing going forward</span>
+                                    <span className="text-sm opacity-90 leading-relaxed block">No more verbal agreements that get reinterpreted.</span>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
 
-          <h3>Agile Development & Pricing</h3>
-          <div className="source-list">
-            <a href="https://www.toptal.com/agile/software-costs-estimation-in-agile-project-management" target="_blank" rel="noopener noreferrer">Toptal - Software Costs Estimation in Agile</a>
-            <a href="https://aida.mitre.org/agile/agile-cost-estimation/" target="_blank" rel="noopener noreferrer">MITRE - Agile Cost Estimation</a>
-            <a href="https://www.scnsoft.com/software-development/about/how-we-work/pricing-models" target="_blank" rel="noopener noreferrer">SciSoft - Software Development Pricing Models</a>
-            <a href="https://stayrelevant.globant.com/en/technology/agile-organizations/agile-fixed-price/" target="_blank" rel="noopener noreferrer">Globant - Agile and Fixed Price Projects</a>
-          </div>
+                <div className="mt-8 bg-slate-800 text-white p-8 md:p-10 rounded-2xl shadow-xl">
+                    <h4 className="font-bold text-xl md:text-2xl mb-8">Why This Works for Both of Us</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-base">
+                        <div>
+                            <strong className="block text-indigo-300 text-lg mb-4">For Disruptors Media:</strong>
+                            <ol className="list-decimal list-inside space-y-3 text-slate-300">
+                                <li>Zero liability exposure on the technical side</li>
+                                <li>No surprise API charges hitting your accounts</li>
+                                <li>Predictable costs</li>
+                                <li>Full transparency on hours and deliverables</li>
+                                <li>Professional vendor relationship</li>
+                                <li>You get paid as much as I do</li>
+                                <li>Access to help and training without the overhead</li>
+                            </ol>
+                        </div>
+                        <div>
+                            <strong className="block text-emerald-300 text-lg mb-4">For Me:</strong>
+                            <ol className="list-decimal list-inside space-y-3 text-slate-300">
+                                <li>Fair compensation that reflects the risk I'm taking on</li>
+                                <li>Clear terms I can count on</li>
+                                <li>The ability to operate professionally as a true subcontractor</li>
+                                <li>Control over the things I'm responsible for</li>
+                                <li>A sustainable working relationship</li>
+                                <li>The autonomy to do my best work</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+             </div>
+        </section>
 
-          <h3>Discovery Phase & Proof of Concept</h3>
-          <div className="source-list">
-            <a href="https://stfalcon.com/en/blog/post/discovery-phase" target="_blank" rel="noopener noreferrer">Stfalcon - Discovery Phase in Software Development</a>
-            <a href="https://designli.co/blog/5-steps-proof-concept-successful-software-development/" target="_blank" rel="noopener noreferrer">Designli - Proof of Concept in Software Development</a>
-            <a href="https://softjourn.com/insights/how-product-definition-helps-your-app-development-process" target="_blank" rel="noopener noreferrer">Softjourn - Project Discovery Phase Guide</a>
-            <a href="https://fulcrum.rocks/blog/discovery-phase-software-development" target="_blank" rel="noopener noreferrer">Fulcrum - Discovery Phase Saves Time & Money</a>
-          </div>
+        {/* Summary */}
+        <section id="summary" className="mb-24 scroll-mt-8">
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8 md:p-16 text-center">
+                <h2 className="text-3xl font-bold text-amber-900 mb-10">Summary</h2>
+                <div className="bg-white p-8 rounded-2xl shadow-md inline-block text-left max-w-2xl w-full mb-12 transform rotate-1">
+                    <h3 className="font-bold text-slate-800 mb-6 uppercase tracking-wider text-sm border-b pb-4">Non-Negotiables</h3>
+                    <ol className="space-y-4 list-decimal list-inside text-slate-800 text-lg font-medium">
+                        <li>$1,800 deduction reversed</li>
+                        <li>50% of hourly minimum</li>
+                        <li>Written terms for internal work</li>
+                        <li>No unauthorized deductions going forward</li>
+                    </ol>
+                </div>
 
-          <h3>AI Development Timelines</h3>
-          <div className="source-list">
-            <a href="https://www.thedroidsonroids.com/blog/ai-mobile-app-development-guide" target="_blank" rel="noopener noreferrer">Droids on Roids - AI Mobile App Development Guide 2025</a>
-            <a href="https://jetruby.com/blog/ai-roadmap-for-ai-app-development-2025/" target="_blank" rel="noopener noreferrer">JetRuby - AI Roadmap for App Development 2025</a>
-            <a href="https://www.code-brew.com/ai-app-development/" target="_blank" rel="noopener noreferrer">Code-Brew - AI App Development 2025</a>
-            <a href="https://topflightapps.com/ideas/ai-app-development/" target="_blank" rel="noopener noreferrer">TopFlight Apps - AI App Development Guide</a>
-            <a href="https://xbsoftware.com/blog/ai-in-software-development/" target="_blank" rel="noopener noreferrer">XB Software - Generative AI in Software Development</a>
-          </div>
-        </CollapsibleAppendix>
-      </div>
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-10 md:p-14 rounded-2xl shadow-xl">
+                    <h3 className="text-2xl font-bold mb-4">The Bottom Line</h3>
+                    <p className="text-slate-300 text-xl leading-relaxed max-w-3xl mx-auto">
+                        I want this to work. I believe in what we're building.
+                        <br/><span className="text-white font-bold block mt-2 text-2xl">But it needs to work for both of us.</span>
+                    </p>
+                    <div className="mt-12 pt-8 border-t border-slate-700 flex justify-end">
+                        <div className="text-right">
+                            <p className="text-xl font-bold mb-0">Let's discuss.</p>
+                            <div className="font-serif italic text-3xl text-slate-300 mt-6">—Will</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-      <div className="document-footer">
-        <p><strong>Document Prepared By:</strong> Will Welsh</p>
-        <p><strong>Company:</strong> Tech Integration Labs LLC</p>
-        <p><strong>Date:</strong> December 2025</p>
-      </div>
+        {/* Appendices */}
+        <section id="appendices" className="mb-20 scroll-mt-8">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 border-b pb-6">Appendices: Detailed Documentation & Research</h2>
+
+            <div className="space-y-10">
+                {/* Appendix A */}
+                <div id="appendix-a" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix A: The $1,800 API Deduction — Detailed Analysis</h3>
+                    <div className="prose prose-lg max-w-none text-slate-600">
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">A.1 What Is an API Key?</h4>
+                        <p>Think of an API key like a password that lets one piece of software talk to another. Every modern app works this way. The apps I'm building for Disruptors Media each have 10-20+ API keys connecting them to various services. Without these keys, the apps literally cannot function.</p>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">A.2 API Incidents Are Extremely Common</h4>
+                        <ul className="list-disc list-inside">
+                            <li>39 million API secrets were leaked on GitHub in 2024 alone</li>
+                            <li>40% of API keys across the industry are stored in ways that could be exposed</li>
+                            <li>Even Fortune 500 companies with dedicated security teams experience API key incidents</li>
+                            <li>The average cost of a mobile application security incident ranges from just under $1 million to several million dollars</li>
+                        </ul>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">A.3 How Companies Normally Handle This</h4>
+                        <p>In every professional software organization, the company absorbs these costs as operational overhead. Developers aren't negligent; it's a known risk. I researched this extensively and could not find a single example of a company deducting API charges from a developer's paycheck.</p>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">A.4 What Labor Law Says About Deductions</h4>
+                        <p>According to Utah labor law (and federal regulations under 29 CFR 4.168), employers cannot deduct amounts from wages without express written authorization. Deductions for equipment damage, operational costs, or shortages without clear voluntary agreement are generally prohibited.</p>
+                        <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap gap-6 text-sm">
+                            <a href="https://www.gitguardian.com/remediation/google-api-key" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"><ExternalLink size={14}/> GitGuardian - Remediating Google API Key Leaks</a>
+                            <a href="https://laborcommission.utah.gov/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"><ExternalLink size={14}/> Utah Labor Commission</a>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Appendix B */}
+                <div id="appendix-b" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix B: The Website — Scope Creep Documentation</h3>
+                    <div className="prose prose-lg max-w-none text-slate-600">
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">B.1 What Happened</h4>
+                        <ol className="list-decimal list-inside space-y-2">
+                            <li>I designed the website (Version 1)</li>
+                            <li>One boss provided a full list of revisions—page by page, tabs, text changes, color changes</li>
+                            <li>I applied those revisions, which broke the visual coherence (changing one color affects everything around it)</li>
+                            <li>I had to redesign sections to make it look good again while keeping the new revisions</li>
+                            <li>By the time that was done, another boss provided a completely different list of revisions</li>
+                            <li>Repeat the entire process</li>
+                            <li>This went on for weeks</li>
+                        </ol>
+                        <p className="mt-4">Then the question came: "Why is this taking so long?"</p>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">B.2 What Is Scope Creep?</h4>
+                        <p>Scope creep is one of the most common problems in software and design projects. It's when requirements keep changing or expanding after work has begun. Research shows projects with unclear requirements take 2-3x longer than those with clear specs.</p>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">B.3 Why "Perfect" Is Impossible Without Clear Direction</h4>
+                        <p>Asking a developer to work until something is "perfect" with no clear definition of "perfect" is asking for infinite work. Professional projects have defined revision rounds and change orders.</p>
+                    </div>
+                </div>
+
+                {/* Appendix C & D Combined */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                     <div id="appendix-c" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix C: Industry Compensation Research</h3>
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="font-bold text-slate-900 mb-2">C.1 Standard Hourly Rates</h4>
+                                <ul className="text-base text-slate-600 list-disc list-inside">
+                                    <li>Senior/specialized developers (AI, complex integrations): $150-$250+/hour</li>
+                                    <li>Agency rates for enterprise work: $200-$400/hour</li>
+                                    <li>AI app development costs: $20,000-$250,000+ per project</li>
+                                </ul>
+                            </div>
+                             <div>
+                                <h4 className="font-bold text-slate-900 mb-2">C.2 Revenue Share Arrangements</h4>
+                                <p className="text-base text-slate-600">Research shows that staffing agencies typically take 30-50% of the billed rate as their cut, meaning contractors typically receive 50-70% of what clients pay. At 50%, I'm at the low end.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="appendix-d" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix D: Original Conversation Quotes</h3>
+                        <div className="space-y-4">
+                             <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                                "That would mean that I would have 24% or something... if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."
+                            </blockquote>
+                            <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                                "The reality is, Will, let's be honest, if you're not making a minimum of a quarter of a million a year, it's not enough."
+                            </blockquote>
+                            <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                                "There is an AI opportunity right now to be AI consultants and AI partners with tons of companies, because there's not enough people like us... There just isn't."
+                            </blockquote>
+                        </div>
+                    </div>
+                </div>
+
+                 <div id="appendix-e" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix E: Original Quotes (Extended)</h3>
+                    <div className="prose prose-lg max-w-none text-slate-600">
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">E.1 On Equity</h4>
+                        <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                            "That would mean that I would have 24% or something... It depends on what you're capable of. For sure, sure. I mean, if you're capable of doing those incredible things, yeah, I mean, I know that the entire team would not be opposed, if you can just absolutely crush it."
+                        </blockquote>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">E.2 On Pay Increases</h4>
+                        <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                            "If I can see that we've gone from, yeah, I think we're at, like, 17, 8, let's just call it 18,000, and now we're at 36,000. I give you my word as a man that I will give you a $2,000 pay increase."
+                        </blockquote>
+                        <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1 mt-4">
+                            "For every 5,000 that we go up, you get 500 of it."
+                        </blockquote>
+                    </div>
+                </div>
+
+                 <div id="appendix-f" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix F: Uncompensated Internal Work</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-base text-left">
+                            <thead className="bg-slate-100">
+                                <tr>
+                                    <th className="p-4 rounded-tl-lg">Work Type</th>
+                                    <th className="p-4 rounded-tr-lg">Examples</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                <tr>
+                                    <td className="p-4 font-medium">Teaching the team</td>
+                                    <td className="p-4">Training sessions (2+ hours this last Monday afternoon alone)</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-4 font-medium">Website work</td>
+                                    <td className="p-4">Disruptors Media website development (Weeks)</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-4 font-medium">Internal apps</td>
+                                    <td className="p-4">Sniper Sales App, Client Portal, Content Writer Template</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-4 font-medium">GoHighLevel integrations</td>
+                                    <td className="p-4">Various automations and workflows</td>
+                                </tr>
+                                 <tr>
+                                    <td className="p-4 font-medium">Non-app client work</td>
+                                    <td className="p-4">EVLogic's digital avatar/HeyGen work</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="appendix-g" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix G: Agile Development & Client Pricing</h3>
+                    <div className="prose prose-lg max-w-none text-slate-600">
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">G.1 How Agile Pricing Works</h4>
+                        <p>"When a project's scope is subject to change due to early user feedback, evolving customer requirements, or other factors, the development cost can be bound to agreed rates and the efforts experts spend to introduce deliverables, so the client only pays for actual work done."</p>
+                        <h4 className="font-bold text-slate-900 mt-6 mb-3">G.2 Discovery Phases & Proof of Concept</h4>
+                        <p>For projects involving novel features—things that have never been done before—professional development companies use paid discovery phases and proofs of concept.</p>
+                        <blockquote className="text-base italic text-slate-600 border-l-4 border-slate-200 pl-4 py-1">
+                            "The pre-development stage, first of all, aims to eliminate financial risks for the client and make the development process as predictable and smooth as possible."
+                        </blockquote>
+                    </div>
+                </div>
+
+                 <div id="appendix-h" className="scroll-mt-4 bg-white p-8 rounded-2xl border border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Briefcase size={20} className="text-slate-400"/> Appendix H: Full Source Reference List</h3>
+                    <div className="text-sm text-slate-600 space-y-2">
+                        <p className="font-bold text-slate-800 mb-4">Compensation & Revenue Share</p>
+                        <ul className="list-disc list-inside space-y-1 mb-6">
+                            <li>ZipRecruiter - Software Developer Contractor Salary</li>
+                            <li>Glassdoor - Software Engineer Contractor Salary</li>
+                            <li>FullStack Labs - 2024 Software Development Price Guide</li>
+                            <li>PayScale - Software Engineer Contractor Hourly Pay</li>
+                        </ul>
+                        <p className="font-bold text-slate-800 mb-4">API Key Security & Liability</p>
+                        <ul className="list-disc list-inside space-y-1 mb-6">
+                            <li>Nordic APIs - Keep API Keys Safe</li>
+                            <li>Wallarm - API Token Leaks Guide</li>
+                            <li>GitGuardian - Remediating Google API Key Leaks</li>
+                        </ul>
+                        <p className="font-bold text-slate-800 mb-4">Professional Liability Insurance</p>
+                        <ul className="list-disc list-inside space-y-1 mb-6">
+                            <li>Insureon - Software Developer Insurance</li>
+                            <li>The Hartford - Technology E&O Insurance</li>
+                            <li>TechInsurance - Software Developer Insurance</li>
+                        </ul>
+                        <p className="font-bold text-slate-800 mb-4">Agile Development & Pricing</p>
+                        <ul className="list-disc list-inside space-y-1">
+                            <li>Toptal - Software Costs Estimation in Agile</li>
+                            <li>MITRE - Agile Cost Estimation</li>
+                            <li>Stfalcon - Discovery Phase in Software Development</li>
+                            <li>Designli - Proof of Concept in Software Development</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+      </main>
     </div>
-  )
+  );
 }
