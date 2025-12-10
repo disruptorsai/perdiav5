@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -6,6 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/services/supabaseClient'
 import articleRevisionService from '@/services/articleRevisionService'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  useSelectVersion,
+  useClearSelectedVersion,
+  useEffectiveVersion,
+  usePublishSelectedVersion,
+  useQueueSelectedVersionForPublishing,
+} from '@/hooks/useGetEducatedCatalog'
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -35,6 +42,18 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert'
 
 // Icons
 import {
@@ -57,6 +76,13 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  Check,
+  Circle,
+  CircleDot,
+  Send,
+  ListPlus,
+  Info,
+  Radio,
 } from 'lucide-react'
 
 export default function CatalogArticleDetail() {
@@ -72,6 +98,7 @@ export default function CatalogArticleDetail() {
   const [customInstructions, setCustomInstructions] = useState('')
   const [revisionProgress, setRevisionProgress] = useState(null)
   const [expandedVersion, setExpandedVersion] = useState(null)
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false)
 
   // Fetch article
   const { data: article, isLoading, error } = useQuery({
@@ -105,6 +132,15 @@ export default function CatalogArticleDetail() {
     enabled: !!articleId && !!user,
   })
 
+  // Get effective version (selected or current)
+  const { data: effectiveVersionData } = useEffectiveVersion(articleId)
+
+  // Selection mutations
+  const selectVersionMutation = useSelectVersion()
+  const clearSelectionMutation = useClearSelectedVersion()
+  const publishSelectedMutation = usePublishSelectedVersion()
+  const queueForPublishMutation = useQueueSelectedVersionForPublishing()
+
   // Analyze article
   const { data: analysis } = useQuery({
     queryKey: ['catalog-article-analysis', articleId],
@@ -125,9 +161,13 @@ export default function CatalogArticleDetail() {
         onProgress: (progress) => setRevisionProgress(progress),
       })
     },
-    onSuccess: () => {
+    onSuccess: (newVersion) => {
       queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
       queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+      // Auto-select the new revision for preview
+      if (newVersion?.id) {
+        selectVersionMutation.mutate({ articleId, versionId: newVersion.id })
+      }
       setIsRevisionDialogOpen(false)
       setRevisionProgress(null)
     },
@@ -156,6 +196,77 @@ export default function CatalogArticleDetail() {
     setRevisionProgress({ stage: 'starting', message: 'Starting revision...', progress: 0 })
     revisionMutation.mutate({ revisionType, customInstructions })
   }
+
+  // Handle version selection
+  const handleSelectVersion = (versionId) => {
+    selectVersionMutation.mutate({ articleId, versionId })
+  }
+
+  // Handle clear selection
+  const handleClearSelection = () => {
+    clearSelectionMutation.mutate(articleId)
+  }
+
+  // Handle publish selected version
+  const handlePublishSelected = () => {
+    if (!effectiveVersionData?.selectedVersionId && !article?.current_version_id) return
+    const versionToPublish = effectiveVersionData?.selectedVersionId || article?.current_version_id
+    publishSelectedMutation.mutate({ articleId, versionId: versionToPublish })
+    setIsPublishDialogOpen(false)
+  }
+
+  // Handle queue for publishing
+  const handleQueueForPublishing = () => {
+    if (!effectiveVersionData?.selectedVersionId && !article?.current_version_id) return
+    const versionToPublish = effectiveVersionData?.selectedVersionId || article?.current_version_id
+    queueForPublishMutation.mutate({ articleId, versionId: versionToPublish })
+    setIsPublishDialogOpen(false)
+  }
+
+  // Compute version states for UI
+  const versionStates = useMemo(() => {
+    if (!versions.length) return {}
+
+    const states = {}
+    const selectedId = article?.selected_version_id
+    const currentId = article?.current_version_id
+    const latestVersion = versions[0] // versions are sorted newest first
+
+    versions.forEach((version) => {
+      states[version.id] = {
+        isSelected: version.id === selectedId,
+        isLive: version.id === currentId || version.is_current,
+        isLatest: version.id === latestVersion?.id,
+        isHistorical: version.id !== selectedId && version.id !== currentId && !version.is_current,
+      }
+    })
+
+    return states
+  }, [versions, article?.selected_version_id, article?.current_version_id])
+
+  // Get content to display in Content tab
+  const displayContent = useMemo(() => {
+    if (effectiveVersionData?.version) {
+      return {
+        html: effectiveVersionData.version.content_html,
+        wordCount: effectiveVersionData.version.word_count,
+        title: effectiveVersionData.version.title,
+        versionNumber: effectiveVersionData.version.version_number,
+        source: effectiveVersionData.versionSource,
+      }
+    }
+    return {
+      html: article?.content_html,
+      wordCount: article?.word_count,
+      title: article?.title,
+      versionNumber: null,
+      source: 'article',
+    }
+  }, [effectiveVersionData, article])
+
+  // Check if there's a pending selection (selected version different from current)
+  const hasUnsavedSelection = article?.selected_version_id &&
+    article.selected_version_id !== article.current_version_id
 
   if (isLoading) {
     return (
@@ -229,8 +340,65 @@ export default function CatalogArticleDetail() {
               <RefreshCw className="w-4 h-4" />
               Revise Article
             </Button>
+
+            {/* Publish Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="gap-2"
+                  disabled={!hasUnsavedSelection && versions.length === 0}
+                >
+                  <Send className="w-4 h-4" />
+                  Publish
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setIsPublishDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Publish Now
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleQueueForPublishing}
+                  className="gap-2"
+                >
+                  <ListPlus className="w-4 h-4" />
+                  Add to Publishing Queue
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        {/* Selection Alert Banner */}
+        {hasUnsavedSelection && (
+          <Alert className="border-green-200 bg-green-50">
+            <Check className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">Version Selected for Review</AlertTitle>
+            <AlertDescription className="text-green-700">
+              You have selected Version {effectiveVersionData?.version?.version_number} for review.
+              This is not the live version.
+              <Button
+                variant="link"
+                className="text-green-700 underline px-1 h-auto"
+                onClick={handleClearSelection}
+              >
+                Clear selection
+              </Button>
+              or
+              <Button
+                variant="link"
+                className="text-green-700 underline px-1 h-auto"
+                onClick={() => setIsPublishDialogOpen(true)}
+              >
+                Publish this version
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -243,7 +411,7 @@ export default function CatalogArticleDetail() {
                 <div>
                   <p className="text-xs text-gray-500">Words</p>
                   <p className="text-lg font-bold text-gray-900">
-                    {article.word_count?.toLocaleString() || 0}
+                    {displayContent.wordCount?.toLocaleString() || 0}
                   </p>
                 </div>
               </div>
@@ -331,9 +499,12 @@ export default function CatalogArticleDetail() {
               <BookOpen className="w-4 h-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="content" className="gap-2">
+            <TabsTrigger value="content" className="gap-2 relative">
               <FileText className="w-4 h-4" />
               Content
+              {hasUnsavedSelection && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />
+              )}
             </TabsTrigger>
             <TabsTrigger value="versions" className="gap-2">
               <History className="w-4 h-4" />
@@ -443,34 +614,122 @@ export default function CatalogArticleDetail() {
             )}
           </TabsContent>
 
-          {/* Content Tab */}
+          {/* Content Tab - Shows Selected Revision */}
           <TabsContent value="content">
             <Card className="border-none shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">Current Content</CardTitle>
-                <Badge variant="secondary">
-                  {article.word_count?.toLocaleString() || 0} words
-                </Badge>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {displayContent.source === 'selected' ? (
+                      <>
+                        <Check className="w-5 h-5 text-green-600" />
+                        Selected Revision (v{displayContent.versionNumber})
+                      </>
+                    ) : displayContent.versionNumber ? (
+                      <>
+                        <Radio className="w-5 h-5 text-blue-600" />
+                        Live Version (v{displayContent.versionNumber})
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-5 h-5 text-gray-600" />
+                        Current Content
+                      </>
+                    )}
+                  </CardTitle>
+                  {displayContent.source === 'selected' && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Previewing selected revision. This is not the live version.
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {displayContent.wordCount?.toLocaleString() || 0} words
+                  </Badge>
+                  {displayContent.source === 'selected' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearSelection}
+                    >
+                      View Live Version
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
+
+              {/* Content Preview Banner */}
+              {displayContent.source === 'selected' && (
+                <div className="mx-6 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <Info className="w-4 h-4" />
+                    <span className="text-sm">
+                      Showing Version {displayContent.versionNumber} - Not yet published
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-green-300 text-green-700 hover:bg-green-100"
+                      onClick={handleClearSelection}
+                    >
+                      View Live
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => setIsPublishDialogOpen(true)}
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Publish This
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <CardContent>
                 <div
                   className="prose prose-sm max-w-none max-h-[600px] overflow-y-auto p-4 bg-gray-50 rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: article.content_html || '<p>No content available</p>' }}
+                  dangerouslySetInnerHTML={{ __html: displayContent.html || '<p>No content available</p>' }}
                 />
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Versions Tab */}
+          {/* Versions Tab - With Selection UI */}
           <TabsContent value="versions">
             <Card className="border-none shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg">Version History</CardTitle>
                 <CardDescription>
-                  Track all changes made to this article over time
+                  Select a version to preview it in the Content tab. The selected version can then be published.
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Legend */}
+                <div className="flex flex-wrap gap-4 mb-4 pb-4 border-b text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded border-2 border-green-500 bg-green-50 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-green-600" />
+                    </div>
+                    <span className="text-gray-600">Selected for Review</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded border-2 border-blue-500 bg-blue-50 flex items-center justify-center">
+                      <Radio className="w-3 h-3 text-blue-600" />
+                    </div>
+                    <span className="text-gray-600">Live on WordPress</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700">
+                      NEW
+                    </Badge>
+                    <span className="text-gray-600">Latest Version</span>
+                  </div>
+                </div>
+
                 {versionsLoading ? (
                   <div className="space-y-3">
                     {[1, 2, 3].map(i => (
@@ -485,106 +744,173 @@ export default function CatalogArticleDetail() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {versions.map((version) => (
-                      <motion.div
-                        key={version.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`border rounded-lg p-4 ${
-                          version.is_current ? 'border-blue-200 bg-blue-50' : 'border-gray-200'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${
-                              version.version_type === 'original' ? 'bg-gray-100' :
-                              version.version_type === 'ai_revision' ? 'bg-purple-100' :
-                              'bg-blue-100'
-                            }`}>
-                              {version.version_type === 'original' ? (
-                                <FileText className="w-4 h-4 text-gray-600" />
-                              ) : version.version_type === 'ai_revision' ? (
-                                <Zap className="w-4 h-4 text-purple-600" />
-                              ) : (
-                                <Edit3 className="w-4 h-4 text-blue-600" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">
-                                  Version {version.version_number}
-                                </span>
-                                <Badge variant="secondary" className="text-xs capitalize">
-                                  {version.version_type.replace('_', ' ')}
-                                </Badge>
-                                {version.is_current && (
-                                  <Badge className="bg-blue-600 text-xs">Current</Badge>
+                    {versions.map((version) => {
+                      const state = versionStates[version.id] || {}
+                      const isSelectable = !state.isSelected
+
+                      return (
+                        <motion.div
+                          key={version.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`border-2 rounded-lg p-4 transition-all cursor-pointer ${
+                            state.isSelected
+                              ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                              : state.isLive
+                                ? 'border-blue-300 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                          onClick={() => isSelectable && handleSelectVersion(version.id)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-3">
+                              {/* Selection Indicator */}
+                              <div className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                state.isSelected
+                                  ? 'border-green-500 bg-green-500'
+                                  : state.isLive
+                                    ? 'border-blue-500 bg-blue-500'
+                                    : 'border-gray-300 bg-white'
+                              }`}>
+                                {state.isSelected ? (
+                                  <Check className="w-4 h-4 text-white" />
+                                ) : state.isLive ? (
+                                  <Radio className="w-4 h-4 text-white" />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-gray-300" />
                                 )}
                               </div>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {format(new Date(version.created_at), 'MMM d, yyyy h:mm a')}
-                                {version.revised_by && ` by ${version.revised_by}`}
-                              </p>
-                              {version.changes_summary && (
-                                <p className="text-sm text-gray-600 mt-2">
-                                  {version.changes_summary}
+
+                              {/* Version Info */}
+                              <div className={`p-2 rounded-lg ${
+                                version.version_type === 'original' ? 'bg-gray-100' :
+                                version.version_type === 'ai_revision' ? 'bg-purple-100' :
+                                'bg-blue-100'
+                              }`}>
+                                {version.version_type === 'original' ? (
+                                  <FileText className="w-4 h-4 text-gray-600" />
+                                ) : version.version_type === 'ai_revision' ? (
+                                  <Zap className="w-4 h-4 text-purple-600" />
+                                ) : (
+                                  <Edit3 className="w-4 h-4 text-blue-600" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-gray-900">
+                                    Version {version.version_number}
+                                  </span>
+                                  <Badge variant="secondary" className="text-xs capitalize">
+                                    {version.version_type.replace('_', ' ')}
+                                  </Badge>
+                                  {state.isSelected && (
+                                    <Badge className="bg-green-600 text-xs gap-1">
+                                      <Check className="w-3 h-3" />
+                                      Selected
+                                    </Badge>
+                                  )}
+                                  {state.isLive && (
+                                    <Badge className="bg-blue-600 text-xs gap-1">
+                                      <Radio className="w-3 h-3" />
+                                      Live
+                                    </Badge>
+                                  )}
+                                  {state.isLatest && !state.isSelected && !state.isLive && (
+                                    <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700">
+                                      NEW
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-500 mt-1">
+                                  {format(new Date(version.created_at), 'MMM d, yyyy h:mm a')}
+                                  {version.revised_by && ` by ${version.revised_by}`}
                                 </p>
+                                {version.changes_summary && (
+                                  <p className="text-sm text-gray-600 mt-2">
+                                    {version.changes_summary}
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {version.word_count?.toLocaleString() || 0} words
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setExpandedVersion(
+                                    expandedVersion === version.id ? null : version.id
+                                  )
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                {expandedVersion === version.id ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </Button>
+                              {!state.isSelected && (
+                                <Button
+                                  variant={state.isLive ? "secondary" : "outline"}
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSelectVersion(version.id)
+                                  }}
+                                  disabled={selectVersionMutation.isPending}
+                                  className="gap-1"
+                                >
+                                  {selectVersionMutation.isPending ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Check className="w-3 h-3" />
+                                  )}
+                                  Select
+                                </Button>
                               )}
-                              <p className="text-xs text-gray-400 mt-1">
-                                {version.word_count?.toLocaleString() || 0} words
-                              </p>
+                              {state.isSelected && !state.isLive && (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setIsPublishDialogOpen(true)
+                                  }}
+                                  className="gap-1 bg-green-600 hover:bg-green-700"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  Publish
+                                </Button>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setExpandedVersion(
-                                expandedVersion === version.id ? null : version.id
-                              )}
-                            >
-                              {expandedVersion === version.id ? (
-                                <ChevronUp className="w-4 h-4" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4" />
-                              )}
-                            </Button>
-                            {!version.is_current && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => restoreMutation.mutate(version.id)}
-                                disabled={restoreMutation.isPending}
-                                className="gap-1"
+                          {/* Expanded content preview */}
+                          <AnimatePresence>
+                            {expandedVersion === version.id && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="mt-4 pt-4 border-t overflow-hidden"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <RotateCcw className="w-3 h-3" />
-                                Restore
-                              </Button>
+                                <div
+                                  className="prose prose-sm max-w-none max-h-64 overflow-y-auto p-3 bg-white rounded-lg text-sm"
+                                  dangerouslySetInnerHTML={{
+                                    __html: version.content_html?.substring(0, 5000) || '<p>No content</p>'
+                                  }}
+                                />
+                              </motion.div>
                             )}
-                          </div>
-                        </div>
-
-                        {/* Expanded content preview */}
-                        <AnimatePresence>
-                          {expandedVersion === version.id && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="mt-4 pt-4 border-t overflow-hidden"
-                            >
-                              <div
-                                className="prose prose-sm max-w-none max-h-64 overflow-y-auto p-3 bg-white rounded-lg text-sm"
-                                dangerouslySetInnerHTML={{
-                                  __html: version.content_html?.substring(0, 5000) || '<p>No content</p>'
-                                }}
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    ))}
+                          </AnimatePresence>
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -762,7 +1088,7 @@ export default function CatalogArticleDetail() {
                     <li>A new version will be created (original is preserved)</li>
                     <li>AI will revise content based on your selection</li>
                     <li>Content will be humanized to pass AI detection</li>
-                    <li>You can restore any previous version at any time</li>
+                    <li>The new version will be auto-selected for review</li>
                   </ul>
                 </div>
               </div>
@@ -778,6 +1104,88 @@ export default function CatalogArticleDetail() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Publish Confirmation Dialog */}
+      <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-green-600" />
+              Publish Selected Version
+            </DialogTitle>
+            <DialogDescription>
+              This will make the selected version the live version on WordPress.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {/* Version Info */}
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Check className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-green-900">
+                    Version {effectiveVersionData?.version?.version_number || 'Current'}
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    {effectiveVersionData?.version?.word_count?.toLocaleString() || article?.word_count?.toLocaleString() || 0} words
+                  </p>
+                  {effectiveVersionData?.version?.changes_summary && (
+                    <p className="text-sm text-green-600 mt-2">
+                      {effectiveVersionData.version.changes_summary}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Warning about replacing live */}
+            {article?.current_version_id && article.current_version_id !== article?.selected_version_id && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <p>
+                    This will replace the current live version. The previous version will be preserved in the version history.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsPublishDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleQueueForPublishing}
+              disabled={queueForPublishMutation.isPending}
+              className="gap-2"
+            >
+              {queueForPublishMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ListPlus className="w-4 h-4" />
+              )}
+              Add to Queue
+            </Button>
+            <Button
+              onClick={handlePublishSelected}
+              disabled={publishSelectedMutation.isPending}
+              className="gap-2 bg-green-600 hover:bg-green-700"
+            >
+              {publishSelectedMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Publish Now
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

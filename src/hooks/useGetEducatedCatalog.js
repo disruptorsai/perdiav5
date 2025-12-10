@@ -772,3 +772,248 @@ export function useCancelRevision() {
     },
   })
 }
+
+// ========================================
+// SELECTED VERSION HOOKS
+// ========================================
+
+/**
+ * Select a version for preview/review (separate from live/current version)
+ * This allows users to preview and compare versions before publishing
+ */
+export function useSelectVersion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, versionId }) => {
+      // Use the RPC function for safe selection with validation
+      const { data, error } = await supabase.rpc('select_article_version', {
+        p_article_id: articleId,
+        p_version_id: versionId,
+      })
+
+      if (error) {
+        // Fallback to direct update if RPC not available
+        const { error: updateError } = await supabase
+          .from('geteducated_articles')
+          .update({ selected_version_id: versionId })
+          .eq('id', articleId)
+
+        if (updateError) throw updateError
+      }
+
+      return { success: true, articleId, versionId }
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['article-versions', articleId] })
+    },
+  })
+}
+
+/**
+ * Clear the selected version (revert to showing current/live version)
+ */
+export function useClearSelectedVersion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (articleId) => {
+      // Use the RPC function
+      const { data, error } = await supabase.rpc('clear_selected_version', {
+        p_article_id: articleId,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        const { error: updateError } = await supabase
+          .from('geteducated_articles')
+          .update({ selected_version_id: null })
+          .eq('id', articleId)
+
+        if (updateError) throw updateError
+      }
+
+      return { success: true, articleId }
+    },
+    onSuccess: (_, articleId) => {
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['article-versions', articleId] })
+    },
+  })
+}
+
+/**
+ * Get the effective version to display (selected or current)
+ * Returns the full version data for the version that should be displayed
+ */
+export function useEffectiveVersion(articleId) {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['effective-version', articleId],
+    queryFn: async () => {
+      // Get article with version IDs
+      const { data: article, error: articleError } = await supabase
+        .from('geteducated_articles')
+        .select('id, current_version_id, selected_version_id')
+        .eq('id', articleId)
+        .single()
+
+      if (articleError) throw articleError
+
+      // Determine which version to use
+      const effectiveVersionId = article.selected_version_id || article.current_version_id
+
+      if (!effectiveVersionId) {
+        return {
+          versionSource: 'article',
+          version: null,
+          isSelected: false,
+          isLive: false,
+        }
+      }
+
+      // Fetch the effective version
+      const { data: version, error: versionError } = await supabase
+        .from('geteducated_article_versions')
+        .select('*')
+        .eq('id', effectiveVersionId)
+        .single()
+
+      if (versionError) throw versionError
+
+      return {
+        versionSource: article.selected_version_id ? 'selected' : 'current',
+        version,
+        isSelected: !!article.selected_version_id,
+        isLive: effectiveVersionId === article.current_version_id,
+        selectedVersionId: article.selected_version_id,
+        currentVersionId: article.current_version_id,
+      }
+    },
+    enabled: !!user && !!articleId,
+  })
+}
+
+/**
+ * Publish the selected version to WordPress
+ * This makes the selected version the new "current" version and triggers publishing
+ */
+export function usePublishSelectedVersion() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ articleId, versionId }) => {
+      // Get the version content
+      const { data: version, error: versionError } = await supabase
+        .from('geteducated_article_versions')
+        .select('*')
+        .eq('id', versionId)
+        .single()
+
+      if (versionError) throw versionError
+
+      // Mark all versions as not current
+      await supabase
+        .from('geteducated_article_versions')
+        .update({ is_current: false })
+        .eq('article_id', articleId)
+
+      // Mark this version as current and published
+      await supabase
+        .from('geteducated_article_versions')
+        .update({
+          is_current: true,
+          is_published: true,
+          published_at: new Date().toISOString(),
+        })
+        .eq('id', versionId)
+
+      // Update the main article with version content and clear selection
+      const { data: updatedArticle, error: updateError } = await supabase
+        .from('geteducated_articles')
+        .update({
+          current_version_id: versionId,
+          selected_version_id: null, // Clear selection after publishing
+          title: version.title,
+          meta_description: version.meta_description,
+          content_html: version.content_html,
+          content_text: version.content_text,
+          word_count: version.word_count,
+          faqs: version.faqs,
+          heading_structure: version.heading_structure,
+          internal_links: version.internal_links,
+          external_links: version.external_links,
+          revision_status: 'published',
+          published_at: new Date().toISOString(),
+        })
+        .eq('id', articleId)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+
+      return {
+        article: updatedArticle,
+        version,
+        publishedAt: new Date().toISOString(),
+      }
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-articles'] })
+    },
+  })
+}
+
+/**
+ * Add the selected version to a publishing queue (for batch/scheduled publishing)
+ */
+export function useQueueSelectedVersionForPublishing() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ articleId, versionId, scheduledFor = null, priority = 5 }) => {
+      // Add to publishing queue
+      const { data, error } = await supabase
+        .from('geteducated_revision_queue')
+        .insert({
+          article_id: articleId,
+          revision_type: 'publish',
+          instructions: `Publish version ${versionId}`,
+          priority,
+          scheduled_for: scheduledFor,
+          status: 'pending',
+          requested_by: user?.email || 'system',
+          result_version_id: versionId, // Track which version to publish
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Update article status
+      await supabase
+        .from('geteducated_articles')
+        .update({ revision_status: 'queued_for_publish' })
+        .eq('id', articleId)
+
+      return data
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({ queryKey: ['revision-queue'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['geteducated-articles'] })
+    },
+  })
+}
