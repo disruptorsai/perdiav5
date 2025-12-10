@@ -15,3 +15,6 @@ export { default as CommentableArticle } from './CommentableArticle'
 
 // AI Training
 export { default as AITrainingPanel } from './AITrainingPanel'
+
+// Revision Animation
+export { default as RevisionProgressAnimation } from './RevisionProgressAnimation'

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -43,6 +43,7 @@ import {
   FileText
 } from 'lucide-react'
 import GetEducatedPreview from '@/components/article/GetEducatedPreview'
+import { RevisionProgressAnimation } from '@/components/article'
 
 // Comment categories and severities
 const COMMENT_CATEGORIES = [
@@ -90,7 +91,9 @@ export default function ArticleReview() {
   const [floatingButtonPos, setFloatingButtonPos] = useState({ x: 0, y: 0, show: false })
   const [highlightedCommentId, setHighlightedCommentId] = useState(null)
   const [isRevising, setIsRevising] = useState(false)
-  const [revisionStatus, setRevisionStatus] = useState('')
+  const [revisedContent, setRevisedContent] = useState(null)
+  const [revisionFeedbackItems, setRevisionFeedbackItems] = useState([])
+  const [originalContentSnapshot, setOriginalContentSnapshot] = useState(null)
 
   // Fetch article
   const { data: article, isLoading } = useQuery({
@@ -216,39 +219,95 @@ export default function ArticleReview() {
       return
     }
 
+    // Prepare feedback items for the animation
+    const feedbackItems = revisions
+      .filter(r => r.status === 'pending')
+      .map(r => ({
+        id: r.id,
+        selected_text: r.selected_text,
+        comment: r.comment,
+        category: r.category,
+        severity: r.severity
+      }))
+
+    // Store original content before any changes
+    setOriginalContentSnapshot(article.content)
+
+    // Show animation immediately with feedback items
+    setRevisionFeedbackItems(feedbackItems)
+    setRevisedContent(null)
     setIsRevising(true)
-    setRevisionStatus('Analyzing feedback...')
 
     try {
-      const feedbackItems = revisions
-        .filter(r => r.status === 'pending')
-        .map(r => ({
-          id: r.id,
-          selected_text: r.selected_text,
-          comment: r.comment,
-          category: r.category,
-          severity: r.severity
-        }))
-
-      setRevisionStatus('Generating revised article...')
-
-      await reviseArticle.mutateAsync({
+      // Call the AI revision - the animation will show analyzing/processing phases
+      const result = await reviseArticle.mutateAsync({
         articleId,
         content: article.content,
         feedbackItems
       })
 
-      // Mark all revisions as addressed
-      await bulkMarkAddressed.mutateAsync(articleId)
-
-      setRevisionStatus('')
+      // When content arrives, update state - animation will transition to "writing" phase
+      setRevisedContent(result.content)
     } catch (error) {
       console.error('Revision error:', error)
       alert('Revision failed: ' + error.message)
-    } finally {
       setIsRevising(false)
+      setRevisedContent(null)
+      setRevisionFeedbackItems([])
     }
   }
+
+  // Handler when user accepts the revision
+  const handleAcceptRevision = useCallback(async () => {
+    try {
+      // Invalidate queries to refresh data (revision already saved by mutation)
+      queryClient.invalidateQueries({ queryKey: ['article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] })
+      queryClient.invalidateQueries({ queryKey: ['revisions', articleId] })
+
+      // Close the animation and clear state
+      setIsRevising(false)
+      setRevisedContent(null)
+      setRevisionFeedbackItems([])
+      setOriginalContentSnapshot(null)
+    } catch (error) {
+      console.error('Error accepting revision:', error)
+      alert('Failed to save revision: ' + error.message)
+    }
+  }, [articleId, queryClient])
+
+  // Handler when user cancels/discards the revision
+  const handleCancelRevision = useCallback(async () => {
+    // If content was already generated and saved, revert to original
+    if (revisedContent && originalContentSnapshot) {
+      try {
+        // Revert to original content
+        await supabase
+          .from('articles')
+          .update({ content: originalContentSnapshot })
+          .eq('id', articleId)
+
+        // Reset revision status back to pending
+        await supabase
+          .from('article_revisions')
+          .update({ status: 'pending', ai_revised: false })
+          .eq('article_id', articleId)
+          .eq('status', 'addressed')
+
+        // Invalidate queries
+        queryClient.invalidateQueries({ queryKey: ['article', articleId] })
+        queryClient.invalidateQueries({ queryKey: ['revisions', articleId] })
+      } catch (error) {
+        console.error('Error reverting changes:', error)
+      }
+    }
+
+    setIsRevising(false)
+    setRevisedContent(null)
+    setRevisionFeedbackItems([])
+    setOriginalContentSnapshot(null)
+  }, [revisedContent, originalContentSnapshot, articleId, queryClient])
 
   const handleApprove = () => {
     updateStatusMutation.mutate({ status: 'ready_to_publish' })
@@ -364,40 +423,17 @@ export default function ArticleReview() {
           )}
         </AnimatePresence>
 
-        {/* Loading Overlay for Revision */}
+        {/* Revision Progress Animation */}
         <AnimatePresence>
           {isRevising && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl"
-              >
-                <div className="text-center space-y-6">
-                  <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
-                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      AI Revising Article
-                    </h3>
-                    <p className="text-blue-600 font-medium">
-                      {revisionStatus}
-                    </p>
-                  </div>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p>Analyzing {pendingRevisions.length} editorial comments</p>
-                    <p>Preserving structure and citations</p>
-                  </div>
-                  <p className="text-xs text-gray-500">This takes 30-60 seconds...</p>
-                </div>
-              </motion.div>
-            </motion.div>
+            <RevisionProgressAnimation
+              originalContent={originalContentSnapshot}
+              revisedContent={revisedContent}
+              feedbackItems={revisionFeedbackItems}
+              isLoading={!revisedContent}
+              onAccept={handleAcceptRevision}
+              onCancel={handleCancelRevision}
+            />
           )}
         </AnimatePresence>
 
