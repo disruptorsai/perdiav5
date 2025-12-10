@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow, isPast, differenceInDays, differenceInHours } from 'date-fns'
 import { motion } from 'framer-motion'
@@ -180,11 +180,12 @@ function AutoPublishDeadline({ deadline, humanReviewed }) {
 export default function ReviewQueue() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const location = useLocation()
   const [selectedStatus, setSelectedStatus] = useState('qa_review')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Fetch articles in review statuses (include new GetEducated fields)
-  const { data: articles = [], isLoading } = useQuery({
+  const { data: articles = [], isLoading, refetch } = useQuery({
     queryKey: ['review-articles', selectedStatus],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -197,8 +198,18 @@ export default function ReviewQueue() {
       if (error) throw error
       return data || []
     },
-    enabled: !!user
+    enabled: !!user,
+    refetchOnMount: 'always', // Always refetch when navigating back to this page
+    staleTime: 0 // Consider data immediately stale to ensure fresh data on navigation
   })
+
+  // Refetch when navigating back to this page (handles browser back button)
+  useEffect(() => {
+    // Refetch data when location changes to this page
+    if (location.pathname === '/review') {
+      refetch()
+    }
+  }, [location.key, refetch])
 
   // Calculate articles with urgent deadlines
   const urgentCount = useMemo(() => {

@@ -35,6 +35,8 @@ export function useArticles(filters = {}) {
       return data
     },
     enabled: !!user,
+    refetchOnMount: 'always', // Always refetch when navigating back to ensure fresh data
+    staleTime: 0, // Consider data immediately stale for navigation
   })
 }
 

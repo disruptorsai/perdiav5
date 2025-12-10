@@ -154,6 +154,7 @@ export default function ArticleReview() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
       queryClient.invalidateQueries({ queryKey: ['article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] }) // Invalidate review queue cache
       navigate('/review')
     }
   })
@@ -170,6 +171,7 @@ export default function ArticleReview() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] }) // Invalidate review queue cache
       navigate('/review')
     }
   })
