@@ -80,6 +80,187 @@ class ArticleRevisionService {
   }
 
   /**
+   * Extract media elements (images, videos, iframes) from HTML content
+   * Returns an object with extracted media and their context
+   */
+  extractMediaElements(html) {
+    if (!html) return { images: [], videos: [], iframes: [], embeds: [] }
+
+    const media = {
+      images: [],
+      videos: [],
+      iframes: [],
+      embeds: [],
+    }
+
+    // Extract images with their surrounding context
+    const imgRegex = /<img[^>]*>/gi
+    let match
+    while ((match = imgRegex.exec(html)) !== null) {
+      const imgTag = match[0]
+      // Get surrounding context (text before/after to help with placement)
+      const startPos = Math.max(0, match.index - 200)
+      const endPos = Math.min(html.length, match.index + imgTag.length + 200)
+      const context = html.substring(startPos, endPos)
+
+      // Extract src and alt for matching
+      const srcMatch = imgTag.match(/src=["']([^"']+)["']/i)
+      const altMatch = imgTag.match(/alt=["']([^"']*)["']/i)
+
+      media.images.push({
+        tag: imgTag,
+        src: srcMatch?.[1] || '',
+        alt: altMatch?.[1] || '',
+        context: context.replace(/<[^>]*>/g, ' ').trim().substring(0, 100),
+      })
+    }
+
+    // Extract video elements
+    const videoRegex = /<video[^>]*>[\s\S]*?<\/video>/gi
+    while ((match = videoRegex.exec(html)) !== null) {
+      media.videos.push({
+        tag: match[0],
+        context: html.substring(Math.max(0, match.index - 100), match.index).replace(/<[^>]*>/g, ' ').trim(),
+      })
+    }
+
+    // Extract iframes (YouTube, Vimeo, etc.)
+    const iframeRegex = /<iframe[^>]*>[\s\S]*?<\/iframe>/gi
+    while ((match = iframeRegex.exec(html)) !== null) {
+      const iframeTag = match[0]
+      const srcMatch = iframeTag.match(/src=["']([^"']+)["']/i)
+      media.iframes.push({
+        tag: iframeTag,
+        src: srcMatch?.[1] || '',
+        context: html.substring(Math.max(0, match.index - 100), match.index).replace(/<[^>]*>/g, ' ').trim(),
+      })
+    }
+
+    // Extract embed elements
+    const embedRegex = /<embed[^>]*>/gi
+    while ((match = embedRegex.exec(html)) !== null) {
+      media.embeds.push({
+        tag: match[0],
+        context: html.substring(Math.max(0, match.index - 100), match.index).replace(/<[^>]*>/g, ' ').trim(),
+      })
+    }
+
+    // Also extract figure elements (which may wrap images)
+    const figureRegex = /<figure[^>]*>[\s\S]*?<\/figure>/gi
+    while ((match = figureRegex.exec(html)) !== null) {
+      // Check if this figure contains an image we haven't captured
+      if (match[0].includes('<img')) {
+        const figureTag = match[0]
+        const srcMatch = figureTag.match(/src=["']([^"']+)["']/i)
+        // Only add if not already in images array
+        if (srcMatch && !media.images.some(img => img.src === srcMatch[1])) {
+          media.images.push({
+            tag: figureTag,
+            src: srcMatch[1],
+            alt: '',
+            context: 'figure element',
+            isFigure: true,
+          })
+        }
+      }
+    }
+
+    return media
+  }
+
+  /**
+   * Re-insert media elements into revised content
+   * Tries to place them in contextually appropriate locations
+   */
+  reinsertMediaElements(revisedHtml, originalMedia) {
+    if (!revisedHtml) return revisedHtml
+
+    let content = revisedHtml
+    const allMedia = [
+      ...originalMedia.images,
+      ...originalMedia.videos,
+      ...originalMedia.iframes,
+      ...originalMedia.embeds,
+    ]
+
+    if (allMedia.length === 0) return content
+
+    // Strategy: Insert media after the first relevant heading or paragraph
+    // For each media item, try to find a good insertion point based on context
+
+    for (const media of allMedia) {
+      // Skip if this media tag is already in the content
+      if (content.includes(media.tag)) continue
+
+      // Try to find the best insertion point
+      let inserted = false
+
+      // 1. Try to find matching alt text or context in the new content
+      if (media.alt && media.alt.length > 3) {
+        const altWords = media.alt.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+        for (const word of altWords) {
+          // Find a paragraph containing this word
+          const paragraphRegex = new RegExp(`(<p[^>]*>[^<]*${word}[^<]*<\/p>)`, 'i')
+          const paragraphMatch = content.match(paragraphRegex)
+          if (paragraphMatch) {
+            // Insert after this paragraph
+            content = content.replace(paragraphMatch[1], `${paragraphMatch[1]}\n${media.tag}`)
+            inserted = true
+            break
+          }
+        }
+      }
+
+      // 2. If not inserted yet, try to match context words
+      if (!inserted && media.context) {
+        const contextWords = media.context.toLowerCase().split(/\s+/).filter(w => w.length > 4).slice(0, 5)
+        for (const word of contextWords) {
+          const paragraphRegex = new RegExp(`(<p[^>]*>[^<]*${word}[^<]*<\/p>)`, 'i')
+          const paragraphMatch = content.match(paragraphRegex)
+          if (paragraphMatch) {
+            content = content.replace(paragraphMatch[1], `${paragraphMatch[1]}\n${media.tag}`)
+            inserted = true
+            break
+          }
+        }
+      }
+
+      // 3. If still not inserted, add after the first H2 or at a reasonable position
+      if (!inserted) {
+        // For images/figures: insert after first H2
+        if (media.tag.includes('<img') || media.tag.includes('<figure')) {
+          const h2Match = content.match(/(<h2[^>]*>[\s\S]*?<\/h2>)/i)
+          if (h2Match) {
+            content = content.replace(h2Match[1], `${h2Match[1]}\n${media.tag}`)
+            inserted = true
+          }
+        }
+        // For videos/iframes: insert near the top, after intro
+        else {
+          const firstParagraph = content.match(/(<p[^>]*>[\s\S]*?<\/p>)/i)
+          if (firstParagraph) {
+            content = content.replace(firstParagraph[1], `${firstParagraph[1]}\n${media.tag}`)
+            inserted = true
+          }
+        }
+      }
+
+      // 4. Last resort: append at the end before any FAQ section
+      if (!inserted) {
+        const faqMatch = content.match(/(<h2[^>]*>.*?FAQ.*?<\/h2>)/i)
+        if (faqMatch) {
+          content = content.replace(faqMatch[1], `${media.tag}\n${faqMatch[1]}`)
+        } else {
+          // Just append before closing
+          content = content + `\n${media.tag}`
+        }
+      }
+    }
+
+    return content
+  }
+
+  /**
    * Get revision strategy details
    */
   getRevisionStrategies() {
@@ -230,6 +411,15 @@ class ArticleRevisionService {
       onProgress({ stage: 'version', message: 'Ensuring version history...', progress: 10 })
       await this.ensureOriginalVersion(article)
 
+      // Step 2.5: Extract media elements from original content for preservation
+      onProgress({ stage: 'media', message: 'Extracting media elements...', progress: 12 })
+      const originalMedia = this.extractMediaElements(article.content_html)
+      const mediaCount = originalMedia.images.length + originalMedia.videos.length +
+                        originalMedia.iframes.length + originalMedia.embeds.length
+      if (mediaCount > 0) {
+        console.log(`[RevisionService] Found ${mediaCount} media elements to preserve`)
+      }
+
       // Step 3: Analyze the article
       onProgress({ stage: 'analyze', message: 'Analyzing content...', progress: 15 })
       const analysis = await this.analyzeArticle(article)
@@ -252,6 +442,13 @@ class ArticleRevisionService {
         onProgress({ stage: 'humanize', message: 'Humanizing content...', progress: 60 })
         finalContent = await this.humanizeContent(revisedContent.content)
         revisedContent.content = finalContent
+      }
+
+      // Step 6.5: Re-insert preserved media elements
+      if (mediaCount > 0) {
+        onProgress({ stage: 'media_insert', message: 'Re-inserting media elements...', progress: 70 })
+        revisedContent.content = this.reinsertMediaElements(revisedContent.content, originalMedia)
+        console.log(`[RevisionService] Re-inserted media elements into revised content`)
       }
 
       // Step 7: Update internal links
