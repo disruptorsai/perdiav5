@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -84,6 +84,7 @@ import {
   Info,
   Radio,
 } from 'lucide-react'
+import { CatalogRevisionAnimation } from '@/components/article'
 
 export default function CatalogArticleDetail() {
   const { articleId } = useParams()
@@ -99,6 +100,11 @@ export default function CatalogArticleDetail() {
   const [revisionProgress, setRevisionProgress] = useState(null)
   const [expandedVersion, setExpandedVersion] = useState(null)
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false)
+  // Animation state
+  const [showRevisionAnimation, setShowRevisionAnimation] = useState(false)
+  const [revisedContent, setRevisedContent] = useState(null)
+  const [revisionError, setRevisionError] = useState(null)
+  const [originalContentSnapshot, setOriginalContentSnapshot] = useState(null)
 
   // Fetch article
   const { data: article, isLoading, error } = useQuery({
@@ -158,21 +164,31 @@ export default function CatalogArticleDetail() {
         revisionType,
         customInstructions,
         humanize: true,
-        onProgress: (progress) => setRevisionProgress(progress),
+        onProgress: (progress) => {
+          setRevisionProgress(progress)
+          // When content is ready from the service, capture it for the animation
+          if (progress.content) {
+            setRevisedContent(progress.content)
+          }
+        },
       })
     },
     onSuccess: (newVersion) => {
+      // Capture the final content for the typing animation
+      if (newVersion?.content_html) {
+        setRevisedContent(newVersion.content_html)
+      }
       queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
       queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
       // Auto-select the new revision for preview
       if (newVersion?.id) {
         selectVersionMutation.mutate({ articleId, versionId: newVersion.id })
       }
-      setIsRevisionDialogOpen(false)
-      setRevisionProgress(null)
+      // Don't close animation yet - let user see the result
     },
     onError: (error) => {
       console.error('Revision failed:', error)
+      setRevisionError(error.message)
       setRevisionProgress({ stage: 'error', message: error.message })
     },
   })
@@ -193,9 +209,38 @@ export default function CatalogArticleDetail() {
 
   // Handle start revision
   const handleStartRevision = () => {
+    // Store original content for comparison
+    setOriginalContentSnapshot(article?.content_html)
+    // Reset state
+    setRevisedContent(null)
+    setRevisionError(null)
     setRevisionProgress({ stage: 'starting', message: 'Starting revision...', progress: 0 })
+    // Close dialog and show animation
+    setIsRevisionDialogOpen(false)
+    setShowRevisionAnimation(true)
+    // Start the mutation
     revisionMutation.mutate({ revisionType, customInstructions })
   }
+
+  // Handle animation accept
+  const handleAnimationAccept = useCallback(() => {
+    setShowRevisionAnimation(false)
+    setRevisionProgress(null)
+    setRevisedContent(null)
+    setOriginalContentSnapshot(null)
+    setRevisionError(null)
+    // Switch to versions tab to see the new version
+    setActiveTab('versions')
+  }, [])
+
+  // Handle animation cancel/close
+  const handleAnimationClose = useCallback(() => {
+    setShowRevisionAnimation(false)
+    setRevisionProgress(null)
+    setRevisedContent(null)
+    setOriginalContentSnapshot(null)
+    setRevisionError(null)
+  }, [])
 
   // Handle version selection
   const handleSelectVersion = (versionId) => {
@@ -1188,6 +1233,24 @@ export default function CatalogArticleDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Revision Animation */}
+      <AnimatePresence>
+        {showRevisionAnimation && (
+          <CatalogRevisionAnimation
+            originalContent={originalContentSnapshot}
+            revisedContent={revisedContent}
+            articleTitle={article?.title}
+            revisionType={revisionType}
+            progress={revisionProgress?.progress || 0}
+            stage={revisionProgress?.stage}
+            isComplete={revisionMutation.isSuccess && revisedContent}
+            onAccept={handleAnimationAccept}
+            onCancel={handleAnimationClose}
+            error={revisionError}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

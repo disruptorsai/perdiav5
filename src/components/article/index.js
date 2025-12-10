@@ -18,3 +18,4 @@ export { default as AITrainingPanel } from './AITrainingPanel'
 
 // Revision Animation
 export { default as RevisionProgressAnimation } from './RevisionProgressAnimation'
+export { default as CatalogRevisionAnimation } from './CatalogRevisionAnimation'
