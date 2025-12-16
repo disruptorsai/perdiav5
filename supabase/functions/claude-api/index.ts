@@ -311,6 +311,120 @@ Generate the patterns now:`
         break
       }
 
+      case 'analyzeIdeaFeedback': {
+        const { approvedIdeas, rejectedIdeas, customNotes } = payload
+
+        console.log('Analyzing idea feedback patterns...')
+
+        const approvedContext = approvedIdeas.length > 0
+          ? `APPROVED IDEAS (what works well):
+${approvedIdeas.map((idea: any, i: number) => `${i + 1}. Title: "${idea.title}"
+   Description: ${idea.description || 'N/A'}
+   Source: ${idea.source || 'N/A'}
+   Content Type: ${idea.contentType || 'N/A'}
+   Keywords: ${idea.keywords?.join(', ') || 'N/A'}
+   Notes: ${idea.notes || 'N/A'}`).join('\n\n')}`
+          : ''
+
+        const rejectedContext = rejectedIdeas.length > 0
+          ? `REJECTED IDEAS (what to avoid):
+${rejectedIdeas.map((idea: any, i: number) => `${i + 1}. Title: "${idea.title}"
+   Description: ${idea.description || 'N/A'}
+   Source: ${idea.source || 'N/A'}
+   Content Type: ${idea.contentType || 'N/A'}
+   Keywords: ${idea.keywords?.join(', ') || 'N/A'}
+   Rejection Category: ${idea.category || 'N/A'}
+   Rejection Reason: ${idea.reason || 'N/A'}
+   Notes: ${idea.notes || 'N/A'}`).join('\n\n')}`
+          : ''
+
+        const customContext = customNotes
+          ? `USER NOTES: ${customNotes}`
+          : ''
+
+        const prompt = `You are an AI content strategist analyzing user feedback on content ideas to improve future idea generation.
+
+${approvedContext}
+
+${rejectedContext}
+
+${customContext}
+
+TASK:
+Analyze the patterns in the approved and rejected ideas to extract learnings that can improve future idea generation. Focus on:
+1. What types of topics/titles get approved vs rejected
+2. Common characteristics of good vs bad ideas
+3. Content types that work better
+4. Keywords and sources that are preferred
+5. Specific patterns in rejection reasons
+
+OUTPUT AS JSON:
+{
+  "patterns": {
+    "goodPatterns": ["Pattern 1 from approved ideas", "Pattern 2"],
+    "badPatterns": ["Pattern to avoid from rejected ideas", "Another pattern to avoid"],
+    "preferredTopics": ["Topic area 1", "Topic area 2"],
+    "avoidTopics": ["Topic to avoid 1", "Topic to avoid 2"],
+    "titlePatterns": {
+      "good": ["Good title pattern example", "Another good pattern"],
+      "bad": ["Bad title pattern to avoid", "Another bad pattern"]
+    },
+    "preferredContentTypes": ["guide", "career_guide"],
+    "preferredSources": ["reddit", "trends"],
+    "recommendations": [
+      "Actionable recommendation 1",
+      "Actionable recommendation 2",
+      "Actionable recommendation 3"
+    ]
+  },
+  "improvedPromptAdditions": "A paragraph of additional prompt instructions to add to the idea generator to incorporate these learnings"
+}
+
+Analyze now and provide the JSON:`
+
+        const response = await client.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: 3000,
+          temperature: 0.6,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+
+        try {
+          // Clean up the response - remove markdown code blocks if present
+          let responseText = response.content[0].text.trim()
+          if (responseText.startsWith('```json')) {
+            responseText = responseText.slice(7)
+          } else if (responseText.startsWith('```')) {
+            responseText = responseText.slice(3)
+          }
+          if (responseText.endsWith('```')) {
+            responseText = responseText.slice(0, -3)
+          }
+          responseText = responseText.trim()
+
+          result = JSON.parse(responseText)
+        } catch {
+          // If JSON parsing fails, return a structured error response
+          result = {
+            patterns: {
+              goodPatterns: [],
+              badPatterns: [],
+              preferredTopics: [],
+              avoidTopics: [],
+              titlePatterns: { good: [], bad: [] },
+              recommendations: ['Analysis completed but could not parse patterns. Raw response available.']
+            },
+            rawResponse: response.content[0].text
+          }
+        }
+        break
+      }
+
       case 'addInternalLinks': {
         const { content, siteArticles } = payload
 
@@ -355,7 +469,7 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
       }
 
       default:
-        throw new Error(`Unknown action: ${action}. Valid actions: humanize, autoFixQualityIssues, reviseWithFeedback, extractLearningPatterns, addInternalLinks`)
+        throw new Error(`Unknown action: ${action}. Valid actions: humanize, autoFixQualityIssues, reviseWithFeedback, extractLearningPatterns, analyzeIdeaFeedback, addInternalLinks`)
     }
 
     return new Response(

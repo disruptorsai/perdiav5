@@ -98,16 +98,30 @@ class ClaudeClient {
 
   /**
    * Extract learning patterns from feedback for AI training
+   * Supports both content revision and idea feedback analysis
    */
-  async extractLearningPatterns(originalContent, revisedContent, feedbackItems) {
+  async extractLearningPatterns(params) {
     try {
-      const result = await this.callEdgeFunction('extractLearningPatterns', {
-        originalContent,
-        revisedContent,
-        feedbackItems,
-      })
+      // Determine the type of analysis based on parameters
+      const isIdeaFeedback = params.approvedIdeas || params.rejectedIdeas
 
-      return result
+      if (isIdeaFeedback) {
+        // Analyze idea feedback patterns for idea generator training
+        const result = await this.callEdgeFunction('analyzeIdeaFeedback', {
+          approvedIdeas: params.approvedIdeas || [],
+          rejectedIdeas: params.rejectedIdeas || [],
+          customNotes: params.customNotes || '',
+        })
+        return result
+      } else {
+        // Original content revision pattern extraction
+        const result = await this.callEdgeFunction('extractLearningPatterns', {
+          originalContent: params.originalContent || params,
+          revisedContent: params.revisedContent,
+          feedbackItems: params.feedbackItems,
+        })
+        return result
+      }
 
     } catch (error) {
       console.error('Claude pattern extraction error:', error)

@@ -6,14 +6,105 @@
  * - Current news and trends
  * - Google Trends data
  * - General topic exploration
+ *
+ * Incorporates learned patterns from user feedback for improved idea generation.
  */
 
 // Use Edge Function client for secure server-side API calls
 import GrokClient from './ai/grokClient.edge'
+import { supabase } from './supabaseClient'
 
 class IdeaDiscoveryService {
   constructor() {
     this.grokClient = new GrokClient()
+    this.learnedPatterns = null
+  }
+
+  /**
+   * Load active learning session patterns
+   */
+  async loadLearnedPatterns() {
+    try {
+      const { data, error } = await supabase
+        .from('ai_learning_sessions')
+        .select('learned_patterns, improved_prompt, improvement_notes')
+        .eq('session_type', 'idea_generation')
+        .eq('is_active', true)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.warn('Failed to load learning session:', error)
+        return null
+      }
+
+      this.learnedPatterns = data
+      return data
+    } catch (error) {
+      console.warn('Error loading learned patterns:', error)
+      return null
+    }
+  }
+
+  /**
+   * Build learning context for the prompt
+   */
+  buildLearningContext(patterns) {
+    if (!patterns?.learned_patterns) return ''
+
+    const lp = patterns.learned_patterns
+    let context = '\n\n=== LEARNED PREFERENCES FROM USER FEEDBACK ===\n'
+
+    // Good patterns
+    if (lp.goodPatterns?.length > 0) {
+      context += `\nWHAT WORKS WELL (prioritize these patterns):\n`
+      lp.goodPatterns.forEach(p => { context += `- ${p}\n` })
+    }
+
+    // Bad patterns
+    if (lp.badPatterns?.length > 0) {
+      context += `\nWHAT TO AVOID (do not suggest ideas with these patterns):\n`
+      lp.badPatterns.forEach(p => { context += `- ${p}\n` })
+    }
+
+    // Preferred topics
+    if (lp.preferredTopics?.length > 0) {
+      context += `\nPREFERRED TOPIC AREAS:\n`
+      context += lp.preferredTopics.join(', ')
+      context += '\n'
+    }
+
+    // Topics to avoid
+    if (lp.avoidTopics?.length > 0) {
+      context += `\nTOPICS TO AVOID:\n`
+      context += lp.avoidTopics.join(', ')
+      context += '\n'
+    }
+
+    // Title patterns
+    if (lp.titlePatterns) {
+      if (lp.titlePatterns.good?.length > 0) {
+        context += `\nGOOD TITLE PATTERNS:\n`
+        lp.titlePatterns.good.forEach(p => { context += `- ${p}\n` })
+      }
+      if (lp.titlePatterns.bad?.length > 0) {
+        context += `\nBAD TITLE PATTERNS (avoid):\n`
+        lp.titlePatterns.bad.forEach(p => { context += `- ${p}\n` })
+      }
+    }
+
+    // Preferred content types
+    if (lp.preferredContentTypes?.length > 0) {
+      context += `\nPREFERRED CONTENT TYPES: ${lp.preferredContentTypes.join(', ')}\n`
+    }
+
+    // Custom prompt additions
+    if (patterns.improved_prompt) {
+      context += `\nADDITIONAL INSTRUCTIONS:\n${patterns.improved_prompt}\n`
+    }
+
+    context += '\n=== END LEARNED PREFERENCES ===\n'
+
+    return context
   }
 
   /**
@@ -33,8 +124,16 @@ class IdeaDiscoveryService {
     existingTopics = [],
     coveredKeywords = [],
     topPerformingArticles = [],
-    niche = 'higher education, online degrees, career development'
+    niche = 'higher education, online degrees, career development',
+    useLearnedPatterns = true
   }) {
+    // Load learned patterns if enabled
+    let learningContext = ''
+    if (useLearnedPatterns) {
+      const patterns = await this.loadLearnedPatterns()
+      learningContext = this.buildLearningContext(patterns)
+    }
+
     const currentDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -80,6 +179,7 @@ ${customTopicContext}
 ${topArticlesContext}
 ${existingTopicsContext}
 ${coveredKeywordsContext}
+${learningContext}
 
 REQUIREMENTS FOR EACH IDEA:
 1. Must be TIMELY and RELEVANT to current trends/discussions

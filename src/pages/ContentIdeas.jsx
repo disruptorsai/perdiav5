@@ -10,6 +10,12 @@ import {
 } from '../hooks/useContentIdeas'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import {
+  useRecordFeedback,
+  useUntrainedFeedback,
+  useFeedbackStats,
+  REJECTION_CATEGORIES,
+} from '../hooks/useIdeaFeedbackHistory'
+import {
   Plus,
   Loader2,
   CheckCircle,
@@ -20,20 +26,16 @@ import {
   ThumbsUp,
   ThumbsDown,
   MessageSquare,
+  History,
+  Brain,
+  ChevronRight,
+  BarChart3,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
-
-// Rejection categories for AI training
-const REJECTION_CATEGORIES = {
-  off_topic: { label: 'Off Topic', description: 'Not relevant to GetEducated content areas' },
-  duplicate: { label: 'Duplicate', description: 'Similar idea or article already exists' },
-  low_quality: { label: 'Low Quality', description: 'Poorly formed idea, unclear topic' },
-  wrong_audience: { label: 'Wrong Audience', description: "Doesn't match target audience" },
-  not_actionable: { label: 'Not Actionable', description: "Can't be turned into useful content" },
-  competitive: { label: 'Too Competitive', description: 'Topic dominated by competitors' },
-  outdated: { label: 'Outdated', description: 'Topic no longer relevant' },
-  other: { label: 'Other', description: 'Custom reason' },
-}
+import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
+import AILearningModal from '../components/ideas/AILearningModal'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Badge } from '../components/ui/badge'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: FileText },
@@ -47,6 +49,8 @@ function ContentIdeas() {
   const [filterStatus, setFilterStatus] = useState(null)
   const [generatingIdea, setGeneratingIdea] = useState(null)
   const [rejectModalIdea, setRejectModalIdea] = useState(null) // For rejection reason modal
+  const [activeTab, setActiveTab] = useState('ideas') // ideas, history
+  const [learningModalOpen, setLearningModalOpen] = useState(false)
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
@@ -59,6 +63,9 @@ function ContentIdeas() {
   const ideaFeedback = useIdeaFeedback()
   const rejectWithReason = useRejectIdeaWithReason()
   const approveWithFeedback = useApproveIdeaWithFeedback()
+  const recordFeedback = useRecordFeedback()
+  const { data: untrainedFeedback = [] } = useUntrainedFeedback(100)
+  const { data: feedbackStats } = useFeedbackStats()
 
   const handleCreateIdea = async (formData) => {
     try {
@@ -74,6 +81,11 @@ function ContentIdeas() {
       await updateIdea.mutateAsync({
         ideaId,
         updates: { status: 'approved' },
+      })
+      // Record feedback for AI learning
+      await recordFeedback.mutateAsync({
+        ideaId,
+        decision: 'approved',
       })
     } catch (error) {
       alert('Failed to approve idea: ' + error.message)
@@ -92,6 +104,14 @@ function ContentIdeas() {
         ideaId: rejectModalIdea.id,
         ...rejectionData,
       })
+      // Record feedback for AI learning
+      await recordFeedback.mutateAsync({
+        ideaId: rejectModalIdea.id,
+        decision: 'rejected',
+        rejectionCategory: rejectionData.rejectionCategory,
+        rejectionReason: rejectionData.rejectionReason,
+        feedbackNotes: rejectionData.feedbackNotes,
+      })
       setRejectModalIdea(null)
     } catch (error) {
       alert('Failed to reject idea: ' + error.message)
@@ -102,6 +122,11 @@ function ContentIdeas() {
   const handleQuickFeedback = async (ideaId, isPositive) => {
     try {
       await ideaFeedback.mutateAsync({ ideaId, isPositive })
+      // Record feedback for AI learning
+      await recordFeedback.mutateAsync({
+        ideaId,
+        decision: isPositive ? 'thumbs_up' : 'thumbs_down',
+      })
     } catch (error) {
       alert('Failed to submit feedback: ' + error.message)
     }
@@ -172,76 +197,122 @@ function ContentIdeas() {
   return (
     <div className="p-8 min-h-screen overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Content Ideas</h1>
           <p className="text-gray-600 mt-1">Manage and generate content ideas</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          New Idea
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setFilterStatus(null)}
-          className={`px-4 py-2 rounded-lg ${
-            filterStatus === null
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          All ({ideas.length})
-        </button>
-        {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-          <button
-            key={status}
-            onClick={() => setFilterStatus(status)}
-            className={`px-4 py-2 rounded-lg ${
-              filterStatus === status
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {config.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Ideas Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {ideas.map((idea) => (
-          <IdeaCard
-            key={idea.id}
-            idea={idea}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onDelete={handleDelete}
-            onGenerate={handleGenerate}
-            onQuickFeedback={handleQuickFeedback}
-            isGenerating={generatingIdea === idea.id}
-          />
-        ))}
-      </div>
-
-      {ideas.length === 0 && (
-        <div className="text-center py-16">
-          <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No ideas yet</h3>
-          <p className="text-gray-600 mb-4">Create your first content idea to get started</p>
+        <div className="flex items-center gap-3">
+          {/* Stats Badge */}
+          {feedbackStats && feedbackStats.total > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm">
+              <BarChart3 className="w-4 h-4 text-gray-500" />
+              <span className="text-gray-700">{feedbackStats.approvalRate}% approval</span>
+            </div>
+          )}
+          {/* Train AI Badge */}
+          {untrainedFeedback.length > 0 && (
+            <button
+              onClick={() => setLearningModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm hover:bg-purple-200 transition-colors"
+            >
+              <Brain className="w-4 h-4" />
+              <span>Train AI</span>
+              <Badge className="bg-purple-600 text-white text-xs">
+                {untrainedFeedback.length}
+              </Badge>
+            </button>
+          )}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
-            Create Idea
+            <Plus className="w-5 h-5" />
+            New Idea
           </button>
         </div>
-      )}
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="ideas" className="gap-2">
+            <FileText className="w-4 h-4" />
+            Ideas
+            <Badge variant="secondary" className="ml-1">{ideas.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2">
+            <History className="w-4 h-4" />
+            Feedback History
+            {feedbackStats && (
+              <Badge variant="secondary" className="ml-1">{feedbackStats.total}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ideas" className="mt-0">
+          {/* Filters */}
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setFilterStatus(null)}
+              className={`px-4 py-2 rounded-lg ${
+                filterStatus === null
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All ({ideas.length})
+            </button>
+            {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-4 py-2 rounded-lg ${
+                  filterStatus === status
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {config.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Ideas Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {ideas.map((idea) => (
+              <IdeaCard
+                key={idea.id}
+                idea={idea}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onDelete={handleDelete}
+                onGenerate={handleGenerate}
+                onQuickFeedback={handleQuickFeedback}
+                isGenerating={generatingIdea === idea.id}
+              />
+            ))}
+          </div>
+
+          {ideas.length === 0 && (
+            <div className="text-center py-16">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No ideas yet</h3>
+              <p className="text-gray-600 mb-4">Create your first content idea to get started</p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Create Idea
+              </button>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-0">
+          <IdeaFeedbackHistory onStartLearning={() => setLearningModalOpen(true)} />
+        </TabsContent>
+      </Tabs>
 
       {/* Create Idea Modal */}
       {isModalOpen && (
@@ -265,6 +336,12 @@ function ContentIdeas() {
           isSubmitting={rejectWithReason.isPending}
         />
       )}
+
+      {/* AI Learning Modal */}
+      <AILearningModal
+        open={learningModalOpen}
+        onOpenChange={setLearningModalOpen}
+      />
     </div>
   )
 }
