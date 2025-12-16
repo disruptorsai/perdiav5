@@ -4,8 +4,10 @@
  * Pipeline: Grok Draft → StealthGPT Humanize → Quality Check → Auto-Fix Loop → Save
  */
 
-import GrokClient from './ai/grokClient'
-import ClaudeClient from './ai/claudeClient'
+// Use Edge Function clients for secure server-side API calls
+// API keys are stored in Supabase secrets, not exposed to browser
+import GrokClient from './ai/grokClient.edge'
+import ClaudeClient from './ai/claudeClient.edge'
 import StealthGptClient from './ai/stealthGptClient'
 import { supabase } from './supabaseClient'
 import IdeaDiscoveryService from './ideaDiscoveryService'

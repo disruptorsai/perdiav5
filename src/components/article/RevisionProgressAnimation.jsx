@@ -9,7 +9,10 @@ import {
   FileText,
   MessageSquare,
   Pencil,
-  Zap
+  Zap,
+  Minimize2,
+  Maximize2,
+  Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -373,6 +376,40 @@ function ArticlePreview({ content, dimmed = false, title = 'Article' }) {
 }
 
 /**
+ * MinimizedRevisionIndicator - Shows when revision is minimized
+ */
+function MinimizedRevisionIndicator({ phase, feedbackCount, onRestore }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, y: 20 }}
+      className="fixed bottom-4 right-4 z-50"
+    >
+      <button
+        onClick={onRestore}
+        className="flex items-center gap-3 px-4 py-3 rounded-full shadow-lg border transition-all hover:scale-105 bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+        title="Click to show revision progress"
+      >
+        {phase === 'complete' ? (
+          <Check className="w-5 h-5" />
+        ) : (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        )}
+        <div className="flex flex-col items-start">
+          <span className="text-sm font-medium">
+            {phase === 'complete' ? 'Revision Ready' : 'Revising Article...'}
+          </span>
+          <span className="text-xs opacity-80">
+            {feedbackCount} feedback items
+          </span>
+        </div>
+      </button>
+    </motion.div>
+  )
+}
+
+/**
  * RevisionProgressAnimation - Main component for the revision progress display
  *
  * Phases:
@@ -388,9 +425,11 @@ export default function RevisionProgressAnimation({
   isLoading,
   onAccept,
   onCancel,
+  allowMinimize = true,
 }) {
   const [phase, setPhase] = useState('analyzing')
   const [showDiff, setShowDiff] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
 
   // Transition from analyzing to processing after cycling through feedback
   useEffect(() => {
@@ -413,11 +452,36 @@ export default function RevisionProgressAnimation({
     setPhase('complete')
   }, [])
 
+  const handleMinimize = useCallback(() => {
+    setIsMinimized(true)
+  }, [])
+
+  const handleRestore = useCallback(() => {
+    setIsMinimized(false)
+  }, [])
+
+  // Show minimized indicator when minimized
+  if (isMinimized) {
+    return (
+      <MinimizedRevisionIndicator
+        phase={phase}
+        feedbackCount={feedbackItems.length}
+        onRestore={handleRestore}
+      />
+    )
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={(e) => {
+        // Allow clicking backdrop to minimize (only when not complete)
+        if (e.target === e.currentTarget && allowMinimize && phase !== 'complete') {
+          handleMinimize()
+        }
+      }}
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     >
       <motion.div
@@ -458,6 +522,11 @@ export default function RevisionProgressAnimation({
                 {phase === 'writing' && 'Applying changes to your article'}
                 {phase === 'complete' && 'Review the changes and accept when ready'}
               </p>
+              {phase !== 'complete' && allowMinimize && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Click outside or minimize to continue working — revision runs in background
+                </p>
+              )}
             </div>
           </div>
 
@@ -478,12 +547,27 @@ export default function RevisionProgressAnimation({
               ))}
             </div>
 
+            {/* Minimize button */}
+            {phase !== 'complete' && allowMinimize && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleMinimize}
+                className="text-gray-500 hover:text-gray-700"
+                title="Minimize - revision continues in background"
+              >
+                <Minimize2 className="w-4 h-4" />
+              </Button>
+            )}
+
+            {/* Close/Cancel button */}
             {phase !== 'complete' && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onCancel}
+                onClick={allowMinimize ? handleMinimize : onCancel}
                 className="text-gray-500 hover:text-gray-700"
+                title={allowMinimize ? "Close - revision continues in background" : "Cancel revision"}
               >
                 <X className="w-4 h-4" />
               </Button>

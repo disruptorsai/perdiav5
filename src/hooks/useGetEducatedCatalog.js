@@ -1017,3 +1017,203 @@ export function useQueueSelectedVersionForPublishing() {
     },
   })
 }
+
+// ========================================
+// VERSION NOTES & TAGS HOOKS
+// ========================================
+
+/**
+ * Update version notes
+ */
+export function useUpdateVersionNotes() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ versionId, notes }) => {
+      const { data, error } = await supabase.rpc('update_version_notes', {
+        p_version_id: versionId,
+        p_notes: notes,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        const { error: updateError } = await supabase
+          .from('geteducated_article_versions')
+          .update({ notes })
+          .eq('id', versionId)
+
+        if (updateError) throw updateError
+      }
+
+      return { success: true }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['article-versions'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions'] })
+    },
+  })
+}
+
+/**
+ * Add a tag to a version
+ */
+export function useAddVersionTag() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ versionId, tag }) => {
+      const { data, error } = await supabase.rpc('add_version_tag', {
+        p_version_id: versionId,
+        p_tag: tag,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        const { data: version } = await supabase
+          .from('geteducated_article_versions')
+          .select('tags')
+          .eq('id', versionId)
+          .single()
+
+        const currentTags = version?.tags || []
+        if (!currentTags.includes(tag)) {
+          await supabase
+            .from('geteducated_article_versions')
+            .update({ tags: [...currentTags, tag] })
+            .eq('id', versionId)
+        }
+      }
+
+      return { success: true, tags: data }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['article-versions'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions'] })
+    },
+  })
+}
+
+/**
+ * Remove a tag from a version
+ */
+export function useRemoveVersionTag() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ versionId, tag }) => {
+      const { data, error } = await supabase.rpc('remove_version_tag', {
+        p_version_id: versionId,
+        p_tag: tag,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        const { data: version } = await supabase
+          .from('geteducated_article_versions')
+          .select('tags')
+          .eq('id', versionId)
+          .single()
+
+        const currentTags = version?.tags || []
+        await supabase
+          .from('geteducated_article_versions')
+          .update({ tags: currentTags.filter(t => t !== tag) })
+          .eq('id', versionId)
+      }
+
+      return { success: true, tags: data }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['article-versions'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions'] })
+    },
+  })
+}
+
+/**
+ * Toggle starred status for a version
+ */
+export function useToggleVersionStarred() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (versionId) => {
+      const { data, error } = await supabase.rpc('toggle_version_starred', {
+        p_version_id: versionId,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        const { data: version } = await supabase
+          .from('geteducated_article_versions')
+          .select('is_starred')
+          .eq('id', versionId)
+          .single()
+
+        const { data: updated } = await supabase
+          .from('geteducated_article_versions')
+          .update({ is_starred: !version?.is_starred })
+          .eq('id', versionId)
+          .select('is_starred')
+          .single()
+
+        return updated?.is_starred
+      }
+
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['article-versions'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions'] })
+    },
+  })
+}
+
+/**
+ * Set a version as the baseline for comparison
+ */
+export function useSetVersionBaseline() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, versionId }) => {
+      const { data, error } = await supabase.rpc('set_version_as_baseline', {
+        p_article_id: articleId,
+        p_version_id: versionId,
+      })
+
+      if (error) {
+        // Fallback to direct update
+        await supabase
+          .from('geteducated_article_versions')
+          .update({ is_baseline: false })
+          .eq('article_id', articleId)
+
+        await supabase
+          .from('geteducated_article_versions')
+          .update({ is_baseline: true })
+          .eq('id', versionId)
+      }
+
+      return { success: true }
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({ queryKey: ['article-versions', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+    },
+  })
+}
+
+/**
+ * Predefined version tags
+ */
+export const VERSION_TAGS = [
+  { value: 'approved', label: 'Approved', color: 'green' },
+  { value: 'needs-review', label: 'Needs Review', color: 'yellow' },
+  { value: 'rejected', label: 'Rejected', color: 'red' },
+  { value: 'baseline', label: 'Baseline', color: 'blue' },
+  { value: 'best-version', label: 'Best Version', color: 'purple' },
+  { value: 'draft', label: 'Draft', color: 'gray' },
+  { value: 'seo-optimized', label: 'SEO Optimized', color: 'cyan' },
+  { value: 'human-edited', label: 'Human Edited', color: 'orange' },
+]

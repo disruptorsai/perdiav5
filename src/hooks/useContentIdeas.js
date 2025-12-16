@@ -151,3 +151,108 @@ export function useGenerateIdeasFromKeywords() {
     },
   })
 }
+
+/**
+ * Quick feedback on idea (thumbs up/down)
+ * Updates feedback_score: +1 for thumbs up, -1 for thumbs down
+ */
+export function useIdeaFeedback() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ ideaId, isPositive }) => {
+      // First get current score
+      const { data: current, error: fetchError } = await supabase
+        .from('content_ideas')
+        .select('feedback_score')
+        .eq('id', ideaId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      const newScore = (current.feedback_score || 0) + (isPositive ? 1 : -1)
+
+      const { data, error } = await supabase
+        .from('content_ideas')
+        .update({
+          feedback_score: newScore,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', ideaId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+    },
+  })
+}
+
+/**
+ * Reject idea with detailed reason (for AI training)
+ */
+export function useRejectIdeaWithReason() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ ideaId, rejectionCategory, rejectionReason, feedbackNotes }) => {
+      const { data, error } = await supabase
+        .from('content_ideas')
+        .update({
+          status: 'rejected',
+          rejection_category: rejectionCategory,
+          rejection_reason: rejectionReason,
+          feedback_notes: feedbackNotes,
+          feedback_score: -1, // Rejection counts as negative feedback
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', ideaId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+    },
+  })
+}
+
+/**
+ * Approve idea with optional positive notes
+ */
+export function useApproveIdeaWithFeedback() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ ideaId, feedbackNotes }) => {
+      const { data, error } = await supabase
+        .from('content_ideas')
+        .update({
+          status: 'approved',
+          feedback_notes: feedbackNotes,
+          feedback_score: 1, // Approval counts as positive feedback
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', ideaId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+    },
+  })
+}

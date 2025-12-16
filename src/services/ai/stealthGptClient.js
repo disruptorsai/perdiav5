@@ -26,9 +26,9 @@ class StealthGptClient {
       ? `${this.supabaseUrl}/functions/v1/stealthgpt-humanize`
       : null
 
-    // Determine if we should use the Edge Function
-    // Use Edge Function in production OR if explicitly requested
-    this.useEdgeFunction = import.meta.env.PROD || import.meta.env.VITE_USE_EDGE_FUNCTIONS === 'true'
+    // ALWAYS use Edge Function for security - API keys are stored in Supabase secrets
+    // This keeps API keys secure on the server-side, never exposed to browser
+    this.useEdgeFunction = true
 
     // Track CORS failures to auto-switch to Edge Function
     this.corsFailureDetected = false
@@ -55,16 +55,12 @@ class StealthGptClient {
   }
 
   /**
-   * Check if API key is configured
-   * In production, the Edge Function has its own API key, so we only need Supabase URL
+   * Check if Edge Function is configured
+   * We ALWAYS use Edge Function - API key is stored securely in Supabase secrets
    */
   isConfigured() {
-    // If using Edge Function, we just need Supabase URL
-    if (this.shouldUseEdgeFunction()) {
-      return !!this.edgeFunctionUrl
-    }
-    // Direct API mode requires API key
-    return this.apiKey && this.apiKey !== 'undefined' && this.apiKey.length > 10
+    // We only need Supabase URL since API key is in Supabase secrets
+    return !!this.edgeFunctionUrl
   }
 
   /**

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, CheckCircle2, XCircle, Sparkles } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Sparkles, X, Minimize2 } from 'lucide-react'
 import { Progress } from './progress'
+import { Button } from './button'
 
 /**
  * ProgressModal - A reusable modal for displaying multi-step process progress
@@ -14,7 +15,9 @@ import { Progress } from './progress'
  * @param {Array<{text: string, status: 'pending' | 'active' | 'completed' | 'error'}>} steps - Array of step objects
  * @param {string} status - Overall status: 'running' | 'completed' | 'error'
  * @param {string} errorMessage - Error message if status is 'error'
- * @param {function} onClose - Callback when modal should close (only available when completed or errored)
+ * @param {function} onClose - Callback when modal should close
+ * @param {function} onMinimize - Callback when modal should minimize (process continues in background)
+ * @param {boolean} allowDismissWhileRunning - Whether to allow closing/minimizing while running (default: true)
  */
 export function ProgressModal({
   isOpen,
@@ -26,6 +29,8 @@ export function ProgressModal({
   status = 'running',
   errorMessage = '',
   onClose,
+  onMinimize,
+  allowDismissWhileRunning = true,
 }) {
   const [displayedSteps, setDisplayedSteps] = useState([])
   const [typingStep, setTypingStep] = useState(null)
@@ -105,12 +110,31 @@ export function ProgressModal({
 
   if (!isOpen) return null
 
+  const canDismiss = allowDismissWhileRunning || status !== 'running'
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget && canDismiss && onMinimize) {
+      onMinimize()
+    }
+  }
+
+  const handleClose = () => {
+    if (canDismiss) {
+      if (status === 'running' && onMinimize) {
+        onMinimize()
+      } else if (onClose) {
+        onClose()
+      }
+    }
+  }
+
   return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        onClick={handleBackdropClick}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       >
         <motion.div
@@ -118,11 +142,37 @@ export function ProgressModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+          className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden relative"
         >
+          {/* Close/Minimize Button - Always visible when allowed */}
+          {canDismiss && (
+            <div className="absolute top-3 right-3 z-10 flex gap-1">
+              {status === 'running' && onMinimize && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onMinimize}
+                  className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/20 rounded-full"
+                  title="Minimize - process continues in background"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClose}
+                className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/20 rounded-full"
+                title={status === 'running' ? 'Close - process continues in background' : 'Close'}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+
           {/* Header with gradient */}
           <div className={`bg-gradient-to-r ${getStatusColor()} p-6 text-white`}>
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-2 pr-16">
               {status === 'running' ? (
                 <motion.div
                   animate={{ rotate: 360 }}
@@ -139,6 +189,11 @@ export function ProgressModal({
             </div>
             {subtitle && (
               <p className="text-white/80 text-sm">{subtitle}</p>
+            )}
+            {status === 'running' && canDismiss && (
+              <p className="text-white/60 text-xs mt-2">
+                Click outside or press X to continue working — process runs in background
+              </p>
             )}
           </div>
 
@@ -266,6 +321,7 @@ export function ProgressModal({
  */
 export function useProgressModal() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [title, setTitle] = useState('')
   const [subtitle, setSubtitle] = useState('')
   const [progress, setProgress] = useState(0)
@@ -276,6 +332,7 @@ export function useProgressModal() {
 
   const start = (titleText, subtitleText = '') => {
     setIsOpen(true)
+    setIsMinimized(false)
     setTitle(titleText)
     setSubtitle(subtitleText)
     setProgress(0)
@@ -283,6 +340,14 @@ export function useProgressModal() {
     setSteps([])
     setStatus('running')
     setErrorMessage('')
+  }
+
+  const minimize = () => {
+    setIsMinimized(true)
+  }
+
+  const restore = () => {
+    setIsMinimized(false)
   }
 
   const addStep = (text) => {
@@ -328,6 +393,7 @@ export function useProgressModal() {
 
   const reset = () => {
     setIsOpen(false)
+    setIsMinimized(false)
     setTitle('')
     setSubtitle('')
     setProgress(0)
@@ -340,7 +406,7 @@ export function useProgressModal() {
   return {
     // Modal props to spread
     modalProps: {
-      isOpen,
+      isOpen: isOpen && !isMinimized,
       title,
       subtitle,
       progress,
@@ -349,6 +415,16 @@ export function useProgressModal() {
       status,
       errorMessage,
       onClose: close,
+      onMinimize: minimize,
+      allowDismissWhileRunning: true,
+    },
+    // Minimized indicator props
+    minimizedProps: {
+      isVisible: isOpen && isMinimized,
+      title,
+      progress,
+      status,
+      onRestore: restore,
     },
     // Control methods
     start,
@@ -360,9 +436,74 @@ export function useProgressModal() {
     error,
     close,
     reset,
+    minimize,
+    restore,
     // State getters
     isOpen,
+    isMinimized,
+    isRunning: status === 'running' && isOpen,
   }
+}
+
+/**
+ * MinimizedProgressIndicator - Small floating indicator shown when progress modal is minimized
+ * Shows progress status and allows restoring the full modal
+ */
+export function MinimizedProgressIndicator({
+  isVisible,
+  title,
+  progress,
+  status,
+  onRestore,
+}) {
+  if (!isVisible) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, y: 20 }}
+      className="fixed bottom-4 right-4 z-50"
+    >
+      <button
+        onClick={onRestore}
+        className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg border transition-all hover:scale-105 ${
+          status === 'running'
+            ? 'bg-blue-600 border-blue-500 text-white'
+            : status === 'completed'
+            ? 'bg-green-600 border-green-500 text-white'
+            : 'bg-red-600 border-red-500 text-white'
+        }`}
+        title="Click to show progress"
+      >
+        {status === 'running' ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : status === 'completed' ? (
+          <CheckCircle2 className="w-5 h-5" />
+        ) : (
+          <XCircle className="w-5 h-5" />
+        )}
+        <div className="flex flex-col items-start">
+          <span className="text-sm font-medium truncate max-w-32">
+            {title || 'Processing...'}
+          </span>
+          <span className="text-xs opacity-80">
+            {status === 'running' ? `${Math.round(progress)}%` : status === 'completed' ? 'Done!' : 'Error'}
+          </span>
+        </div>
+        {status === 'running' && (
+          <div className="w-12 h-1.5 bg-white/30 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-white rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
+        )}
+      </button>
+    </motion.div>
+  )
 }
 
 export default ProgressModal

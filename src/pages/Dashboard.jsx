@@ -12,7 +12,7 @@ import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical,
 import SourceSelector from '../components/ideas/SourceSelector'
 import IdeaDiscoveryService from '../services/ideaDiscoveryService'
 import { useToast } from '../components/ui/toast'
-import { ProgressModal, useProgressModal } from '../components/ui/progress-modal'
+import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import {
   DndContext,
   closestCenter,
@@ -864,6 +864,7 @@ function Dashboard() {
 
       {/* Progress Modal for Article Generation */}
       <ProgressModal {...progressModal.modalProps} />
+      <MinimizedProgressIndicator {...progressModal.minimizedProps} />
       </motion.div>
     </DndContext>
   )

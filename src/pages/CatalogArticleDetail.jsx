@@ -12,6 +12,7 @@ import {
   useEffectiveVersion,
   usePublishSelectedVersion,
   useQueueSelectedVersionForPublishing,
+  useRestoreVersion,
 } from '@/hooks/useGetEducatedCatalog'
 
 // UI Components
@@ -83,8 +84,9 @@ import {
   ListPlus,
   Info,
   Radio,
+  GitCompare,
 } from 'lucide-react'
-import { CatalogRevisionAnimation } from '@/components/article'
+import { CatalogRevisionAnimation, VersionHistoryPanel, VersionComparisonTool, CompareButton } from '@/components/article'
 
 export default function CatalogArticleDetail() {
   const { articleId } = useParams()
@@ -105,6 +107,11 @@ export default function CatalogArticleDetail() {
   const [revisedContent, setRevisedContent] = useState(null)
   const [revisionError, setRevisionError] = useState(null)
   const [originalContentSnapshot, setOriginalContentSnapshot] = useState(null)
+  // Undo state
+  const [previousVersionId, setPreviousVersionId] = useState(null)
+  const [isUndoing, setIsUndoing] = useState(false)
+  // Comparison state
+  const [showComparisonTool, setShowComparisonTool] = useState(false)
 
   // Fetch article
   const { data: article, isLoading, error } = useQuery({
@@ -146,6 +153,7 @@ export default function CatalogArticleDetail() {
   const clearSelectionMutation = useClearSelectedVersion()
   const publishSelectedMutation = usePublishSelectedVersion()
   const queueForPublishMutation = useQueueSelectedVersionForPublishing()
+  const restoreVersionMutation = useRestoreVersion()
 
   // Analyze article
   const { data: analysis } = useQuery({
@@ -211,15 +219,48 @@ export default function CatalogArticleDetail() {
   const handleStartRevision = () => {
     // Store original content for comparison
     setOriginalContentSnapshot(article?.content_html)
+    // Store current version ID for potential undo
+    setPreviousVersionId(article?.current_version_id)
     // Reset state
     setRevisedContent(null)
     setRevisionError(null)
+    setIsUndoing(false)
     setRevisionProgress({ stage: 'starting', message: 'Starting revision...', progress: 0 })
     // Close dialog and show animation
     setIsRevisionDialogOpen(false)
     setShowRevisionAnimation(true)
     // Start the mutation
     revisionMutation.mutate({ revisionType, customInstructions })
+  }
+
+  // Handle undo revision (restore previous version)
+  const handleUndoRevision = async () => {
+    if (!previousVersionId) return
+    setIsUndoing(true)
+    try {
+      await restoreVersionMutation.mutateAsync({ articleId, versionId: previousVersionId })
+      // Close the animation and refresh
+      setShowRevisionAnimation(false)
+      setRevisionProgress(null)
+      setRevisedContent(null)
+      setOriginalContentSnapshot(null)
+      setRevisionError(null)
+      setPreviousVersionId(null)
+      setIsUndoing(false)
+      setActiveTab('versions')
+    } catch (error) {
+      console.error('Undo failed:', error)
+      setIsUndoing(false)
+    }
+  }
+
+  // Handle restore version from history
+  const handleRestoreVersion = async (versionId) => {
+    try {
+      await restoreVersionMutation.mutateAsync({ articleId, versionId })
+    } catch (error) {
+      console.error('Restore failed:', error)
+    }
   }
 
   // Handle animation accept
@@ -240,6 +281,8 @@ export default function CatalogArticleDetail() {
     setRevisedContent(null)
     setOriginalContentSnapshot(null)
     setRevisionError(null)
+    setPreviousVersionId(null)
+    setIsUndoing(false)
   }, [])
 
   // Handle version selection
@@ -743,221 +786,29 @@ export default function CatalogArticleDetail() {
             </Card>
           </TabsContent>
 
-          {/* Versions Tab - With Selection UI */}
+          {/* Versions Tab - With Enhanced Version History Panel */}
           <TabsContent value="versions">
             <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Version History</CardTitle>
-                <CardDescription>
-                  Select a version to preview it in the Content tab. The selected version can then be published.
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg">Version History</CardTitle>
+                  <CardDescription>
+                    Select a version to preview it in the Content tab. Star important versions and add notes for reference.
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
-                {/* Legend */}
-                <div className="flex flex-wrap gap-4 mb-4 pb-4 border-b text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border-2 border-green-500 bg-green-50 flex items-center justify-center">
-                      <Check className="w-3 h-3 text-green-600" />
-                    </div>
-                    <span className="text-gray-600">Selected for Review</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border-2 border-blue-500 bg-blue-50 flex items-center justify-center">
-                      <Radio className="w-3 h-3 text-blue-600" />
-                    </div>
-                    <span className="text-gray-600">Live on WordPress</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700">
-                      NEW
-                    </Badge>
-                    <span className="text-gray-600">Latest Version</span>
-                  </div>
-                </div>
-
-                {versionsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
-                      <Skeleton key={i} className="h-20 w-full" />
-                    ))}
-                  </div>
-                ) : versions.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <History className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No version history available yet.</p>
-                    <p className="text-sm mt-1">Revise the article to create versions.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {versions.map((version) => {
-                      const state = versionStates[version.id] || {}
-                      const isSelectable = !state.isSelected
-
-                      return (
-                        <motion.div
-                          key={version.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`border-2 rounded-lg p-4 transition-all cursor-pointer ${
-                            state.isSelected
-                              ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                              : state.isLive
-                                ? 'border-blue-300 bg-blue-50'
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
-                          onClick={() => isSelectable && handleSelectVersion(version.id)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3">
-                              {/* Selection Indicator */}
-                              <div className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                                state.isSelected
-                                  ? 'border-green-500 bg-green-500'
-                                  : state.isLive
-                                    ? 'border-blue-500 bg-blue-500'
-                                    : 'border-gray-300 bg-white'
-                              }`}>
-                                {state.isSelected ? (
-                                  <Check className="w-4 h-4 text-white" />
-                                ) : state.isLive ? (
-                                  <Radio className="w-4 h-4 text-white" />
-                                ) : (
-                                  <Circle className="w-4 h-4 text-gray-300" />
-                                )}
-                              </div>
-
-                              {/* Version Info */}
-                              <div className={`p-2 rounded-lg ${
-                                version.version_type === 'original' ? 'bg-gray-100' :
-                                version.version_type === 'ai_revision' ? 'bg-purple-100' :
-                                'bg-blue-100'
-                              }`}>
-                                {version.version_type === 'original' ? (
-                                  <FileText className="w-4 h-4 text-gray-600" />
-                                ) : version.version_type === 'ai_revision' ? (
-                                  <Zap className="w-4 h-4 text-purple-600" />
-                                ) : (
-                                  <Edit3 className="w-4 h-4 text-blue-600" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-gray-900">
-                                    Version {version.version_number}
-                                  </span>
-                                  <Badge variant="secondary" className="text-xs capitalize">
-                                    {version.version_type.replace('_', ' ')}
-                                  </Badge>
-                                  {state.isSelected && (
-                                    <Badge className="bg-green-600 text-xs gap-1">
-                                      <Check className="w-3 h-3" />
-                                      Selected
-                                    </Badge>
-                                  )}
-                                  {state.isLive && (
-                                    <Badge className="bg-blue-600 text-xs gap-1">
-                                      <Radio className="w-3 h-3" />
-                                      Live
-                                    </Badge>
-                                  )}
-                                  {state.isLatest && !state.isSelected && !state.isLive && (
-                                    <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700">
-                                      NEW
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-500 mt-1">
-                                  {format(new Date(version.created_at), 'MMM d, yyyy h:mm a')}
-                                  {version.revised_by && ` by ${version.revised_by}`}
-                                </p>
-                                {version.changes_summary && (
-                                  <p className="text-sm text-gray-600 mt-2">
-                                    {version.changes_summary}
-                                  </p>
-                                )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {version.word_count?.toLocaleString() || 0} words
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setExpandedVersion(
-                                    expandedVersion === version.id ? null : version.id
-                                  )
-                                }}
-                              >
-                                <Eye className="w-4 h-4 mr-1" />
-                                {expandedVersion === version.id ? (
-                                  <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                  <ChevronDown className="w-4 h-4" />
-                                )}
-                              </Button>
-                              {!state.isSelected && (
-                                <Button
-                                  variant={state.isLive ? "secondary" : "outline"}
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleSelectVersion(version.id)
-                                  }}
-                                  disabled={selectVersionMutation.isPending}
-                                  className="gap-1"
-                                >
-                                  {selectVersionMutation.isPending ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Check className="w-3 h-3" />
-                                  )}
-                                  Select
-                                </Button>
-                              )}
-                              {state.isSelected && !state.isLive && (
-                                <Button
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setIsPublishDialogOpen(true)
-                                  }}
-                                  className="gap-1 bg-green-600 hover:bg-green-700"
-                                >
-                                  <Send className="w-3 h-3" />
-                                  Publish
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Expanded content preview */}
-                          <AnimatePresence>
-                            {expandedVersion === version.id && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="mt-4 pt-4 border-t overflow-hidden"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div
-                                  className="prose prose-sm max-w-none max-h-64 overflow-y-auto p-3 bg-white rounded-lg text-sm"
-                                  dangerouslySetInnerHTML={{
-                                    __html: version.content_html?.substring(0, 5000) || '<p>No content</p>'
-                                  }}
-                                />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </motion.div>
-                      )
-                    })}
-                  </div>
-                )}
+                <VersionHistoryPanel
+                  articleId={articleId}
+                  versions={versions}
+                  currentVersionId={article?.current_version_id}
+                  selectedVersionId={article?.selected_version_id}
+                  isLoading={versionsLoading}
+                  onSelectVersion={handleSelectVersion}
+                  onRestoreVersion={handleRestoreVersion}
+                  onPublish={() => setIsPublishDialogOpen(true)}
+                  isRestoring={restoreVersionMutation.isPending}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -1247,6 +1098,9 @@ export default function CatalogArticleDetail() {
             isComplete={revisionMutation.isSuccess && revisedContent}
             onAccept={handleAnimationAccept}
             onCancel={handleAnimationClose}
+            onUndo={handleUndoRevision}
+            isUndoing={isUndoing}
+            previousVersionId={previousVersionId}
             error={revisionError}
           />
         )}

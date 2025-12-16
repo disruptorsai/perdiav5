@@ -8,7 +8,8 @@
  * - General topic exploration
  */
 
-import GrokClient from './ai/grokClient'
+// Use Edge Function client for secure server-side API calls
+import GrokClient from './ai/grokClient.edge'
 
 class IdeaDiscoveryService {
   constructor() {

@@ -14,10 +14,17 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
+  RotateCcw,
+  ArrowLeftRight,
+  Plus,
+  Minus,
+  Eye,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { diffWords } from 'diff'
 
 // Revision strategy info for display
 const STRATEGY_INFO = {
@@ -319,6 +326,78 @@ function TypingReveal({ htmlContent, onComplete, speed = 'normal' }) {
 }
 
 /**
+ * Strip HTML for text comparison
+ */
+function stripHtml(html) {
+  if (!html) return ''
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Calculate diff statistics
+ */
+function calculateDiffStats(oldHtml, newHtml) {
+  const oldText = stripHtml(oldHtml)
+  const newText = stripHtml(newHtml)
+  const diff = diffWords(oldText, newText)
+
+  let added = 0
+  let removed = 0
+  let unchanged = 0
+
+  diff.forEach(part => {
+    const wordCount = part.value.split(/\s+/).filter(w => w.length > 0).length
+    if (part.added) {
+      added += wordCount
+    } else if (part.removed) {
+      removed += wordCount
+    } else {
+      unchanged += wordCount
+    }
+  })
+
+  const total = added + removed + unchanged
+  const changePercentage = total > 0 ? Math.round(((added + removed) / (unchanged + removed)) * 100) : 0
+
+  return { added, removed, unchanged, total, changePercentage, diff }
+}
+
+/**
+ * DiffStatsBar - Visual summary of changes
+ */
+function DiffStatsBar({ stats }) {
+  if (!stats || stats.total === 0) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-6 px-4 py-2 bg-gray-100 rounded-lg"
+    >
+      <div className="flex items-center gap-2">
+        <Plus className="w-4 h-4 text-green-600" />
+        <span className="text-sm font-medium text-green-700">{stats.added} added</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Minus className="w-4 h-4 text-red-600" />
+        <span className="text-sm font-medium text-red-700">{stats.removed} removed</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <ArrowLeftRight className="w-4 h-4 text-gray-500" />
+        <span className="text-sm text-gray-600">{stats.changePercentage}% changed</span>
+      </div>
+    </motion.div>
+  )
+}
+
+/**
  * ArticlePreview - Shows article content
  */
 function ArticlePreview({ content, title, dimmed = false }) {
@@ -351,10 +430,22 @@ export default function CatalogRevisionAnimation({
   isComplete: externalIsComplete,
   onAccept,
   onCancel,
+  onUndo,
+  isUndoing = false,
+  previousVersionId = null,
   error,
 }) {
   const [phase, setPhase] = useState('analyzing')
   const [writingComplete, setWritingComplete] = useState(false)
+  const [showDiffView, setShowDiffView] = useState(false)
+
+  // Calculate diff stats when complete
+  const diffStats = useMemo(() => {
+    if (phase === 'complete' && originalContent && revisedContent) {
+      return calculateDiffStats(originalContent, revisedContent)
+    }
+    return null
+  }, [phase, originalContent, revisedContent])
 
   // Determine phase based on progress
   useEffect(() => {
@@ -533,26 +624,97 @@ export default function CatalogRevisionAnimation({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="px-6 py-4 border-t bg-gradient-to-r from-gray-50 to-white flex items-center justify-between"
+            className="px-6 py-4 border-t bg-gradient-to-r from-gray-50 to-white"
           >
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              <span className="flex items-center gap-1">
-                <Check className="w-4 h-4 text-green-500" />
-                New version created
-              </span>
+            {/* Diff Stats */}
+            <div className="flex items-center justify-between mb-4">
+              <DiffStatsBar stats={diffStats} />
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDiffView(!showDiffView)}
+                  className="gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  {showDiffView ? 'Hide' : 'Show'} Diff View
+                </Button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={onCancel}>
-                Close
-              </Button>
-              <Button
-                onClick={onAccept}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 gap-2"
-              >
-                <Check className="w-4 h-4" />
-                View New Version
-              </Button>
+            {/* Diff Preview (collapsed by default) */}
+            <AnimatePresence>
+              {showDiffView && diffStats && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="mb-4 overflow-hidden"
+                >
+                  <div className="max-h-48 overflow-y-auto border rounded-lg p-4 bg-white text-sm">
+                    {diffStats.diff.map((part, i) => (
+                      <span
+                        key={i}
+                        className={
+                          part.added
+                            ? 'bg-green-100 text-green-800'
+                            : part.removed
+                              ? 'bg-red-100 text-red-800 line-through'
+                              : 'text-gray-700'
+                        }
+                      >
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <span className="flex items-center gap-1">
+                  <Check className="w-4 h-4 text-green-500" />
+                  New version created
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Undo Button */}
+                {onUndo && previousVersionId && (
+                  <Button
+                    variant="outline"
+                    onClick={onUndo}
+                    disabled={isUndoing}
+                    className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                  >
+                    {isUndoing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Undoing...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-4 h-4" />
+                        Undo Revision
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                <Button variant="outline" onClick={onCancel}>
+                  Close
+                </Button>
+                <Button
+                  onClick={onAccept}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  View New Version
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}

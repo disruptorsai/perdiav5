@@ -19,3 +19,8 @@ export { default as AITrainingPanel } from './AITrainingPanel'
 // Revision Animation
 export { default as RevisionProgressAnimation } from './RevisionProgressAnimation'
 export { default as CatalogRevisionAnimation } from './CatalogRevisionAnimation'
+
+// Version Management
+export { default as VersionDiff, QuickDiff } from './VersionDiff'
+export { default as VersionComparisonTool, CompareButton } from './VersionComparisonTool'
+export { default as VersionHistoryPanel } from './VersionHistoryPanel'
