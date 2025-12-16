@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { format } from 'date-fns'
 import {
   ArrowLeftRight,
@@ -40,7 +39,6 @@ import {
   AlertDescription,
 } from '@/components/ui/alert'
 import VersionDiff from './VersionDiff'
-import { cn } from '@/lib/utils'
 
 /**
  * Get version type icon and color

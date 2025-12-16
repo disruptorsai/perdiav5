@@ -393,8 +393,6 @@ export default function VersionDiff({
               className="h-full p-4"
             >
               <SideBySideView
-                oldContent={oldContent}
-                newContent={newContent}
                 diff={diff}
                 showAdditions={showAdditions}
                 showDeletions={showDeletions}
@@ -436,21 +434,28 @@ export default function VersionDiff({
  * QuickDiff - Compact diff preview for version history
  */
 export function QuickDiff({ oldContent, newContent, maxLength = 200 }) {
-  const { diff, stats } = useMemo(() => {
+  const { diff, stats, truncatedDiff, isTruncated } = useMemo(() => {
     const oldText = stripHtml(oldContent).substring(0, maxLength * 2)
     const newText = stripHtml(newContent).substring(0, maxLength * 2)
     const diff = diffWords(oldText, newText)
     const stats = calculateDiffStats(diff)
-    return { diff, stats }
-  }, [oldContent, newContent, maxLength])
 
-  // Show first few changes
-  let charCount = 0
-  const truncatedDiff = diff.filter(part => {
-    if (charCount >= maxLength) return false
-    charCount += part.value.length
-    return true
-  })
+    // Show first few changes
+    let charCount = 0
+    const truncatedDiff = []
+    let isTruncated = false
+
+    for (const part of diff) {
+      if (charCount >= maxLength) {
+        isTruncated = true
+        break
+      }
+      truncatedDiff.push(part)
+      charCount += part.value.length
+    }
+
+    return { diff, stats, truncatedDiff, isTruncated }
+  }, [oldContent, newContent, maxLength])
 
   return (
     <div className="space-y-2">
@@ -471,7 +476,7 @@ export function QuickDiff({ oldContent, newContent, maxLength = 200 }) {
             {part.value}
           </span>
         ))}
-        {charCount >= maxLength && '...'}
+        {isTruncated && '...'}
       </div>
     </div>
   )

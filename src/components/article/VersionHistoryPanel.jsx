@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { format } from 'date-fns'
+import { motion } from 'framer-motion'
 import {
   History,
   Check,
@@ -257,7 +258,6 @@ function VersionTags({ versionId, tags = [], onTagAdd, onTagRemove }) {
 function VersionCard({
   version,
   state,
-  article,
   previousVersion,
   onSelect,
   onPublish,
@@ -699,7 +699,6 @@ export default function VersionHistoryPanel({
               key={version.id}
               version={version}
               state={versionStates[version.id] || {}}
-              article={{ id: articleId }}
               previousVersion={getPreviousVersion(version)}
               onSelect={onSelectVersion}
               onPublish={onPublish}
