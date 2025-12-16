@@ -4,14 +4,35 @@
  *
  * Current Implementation: POST to n8n webhook
  * Future: Direct WordPress REST API integration
+ *
+ * IMPORTANT: This service enforces pre-publish validation including:
+ * - Monetization shortcode requirements
+ * - Unknown shortcode blocking
+ * - Author authorization
+ * - Link compliance
  */
 
 import { supabase } from './supabaseClient'
-import { validateForPublish } from './validation/prePublishValidation'
+import { validateForPublish, validateForPublishAsync } from './validation/prePublishValidation'
 import { AUTHOR_DISPLAY_NAMES } from '../hooks/useContributors'
 
-// Webhook endpoint for n8n WordPress publishing
-const WEBHOOK_URL = 'https://willdisrupt.app.n8n.cloud/webhook-test/144c3e6f-63e7-4bca-b029-0a470f2e3f79'
+// Webhook endpoints for n8n WordPress publishing
+// Use environment variables with fallback to development URL
+const WEBHOOK_URL_STAGING = import.meta.env.VITE_N8N_PUBLISH_WEBHOOK_STAGING ||
+  'https://willdisrupt.app.n8n.cloud/webhook-test/144c3e6f-63e7-4bca-b029-0a470f2e3f79'
+const WEBHOOK_URL_PRODUCTION = import.meta.env.VITE_N8N_PUBLISH_WEBHOOK_PRODUCTION || WEBHOOK_URL_STAGING
+
+// Default to staging for safety
+const DEFAULT_ENVIRONMENT = 'staging'
+
+/**
+ * Get the webhook URL for the specified environment
+ * @param {string} environment - 'staging' or 'production'
+ * @returns {string} Webhook URL
+ */
+export function getWebhookUrl(environment = DEFAULT_ENVIRONMENT) {
+  return environment === 'production' ? WEBHOOK_URL_PRODUCTION : WEBHOOK_URL_STAGING
+}
 
 /**
  * Publish an article via webhook
@@ -24,27 +45,45 @@ export async function publishArticle(article, options = {}) {
     status = 'draft', // 'draft' or 'publish'
     validateFirst = true,
     updateDatabase = true,
+    environment = DEFAULT_ENVIRONMENT, // 'staging' or 'production'
+    requireMonetization = true,        // Enforce monetization shortcodes
+    blockUnknownShortcodes = true,     // Block unknown/hallucinated shortcodes
+    useAsyncValidation = true,         // Use database-backed validation
   } = options
 
-  // Run pre-publish validation
+  // Run pre-publish validation (async for full DB validation)
   if (validateFirst) {
-    const validation = validateForPublish(article)
+    const validationOptions = {
+      requireMonetization,
+      blockUnknownShortcodes,
+    }
+
+    const validation = useAsyncValidation
+      ? await validateForPublishAsync(article, validationOptions)
+      : validateForPublish(article, validationOptions)
+
     if (!validation.canPublish) {
       return {
         success: false,
         error: 'Validation failed',
         blockingIssues: validation.blockingIssues,
         validation,
+        environment,
       }
     }
   }
 
   // Prepare payload for webhook
-  const payload = buildWebhookPayload(article, status)
+  const payload = buildWebhookPayload(article, status, environment)
+
+  // Get the appropriate webhook URL
+  const webhookUrl = getWebhookUrl(environment)
+
+  console.log(`[PublishService] Publishing to ${environment}: ${webhookUrl}`)
 
   try {
     // POST to webhook
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -120,9 +159,10 @@ export async function publishArticle(article, options = {}) {
  * Build the webhook payload from an article
  * @param {Object} article - The article object
  * @param {string} status - 'draft' or 'publish'
+ * @param {string} environment - 'staging' or 'production'
  * @returns {Object} Webhook payload
  */
-export function buildWebhookPayload(article, status = 'draft') {
+export function buildWebhookPayload(article, status = 'draft', environment = DEFAULT_ENVIRONMENT) {
   const authorName = article.contributor_name || article.article_contributors?.name
   const displayName = AUTHOR_DISPLAY_NAMES[authorName] || authorName
 
@@ -150,6 +190,7 @@ export function buildWebhookPayload(article, status = 'draft') {
 
     // Publishing settings
     status: status,
+    environment: environment, // NEW: Include environment in payload for n8n routing
     published_at: new Date().toISOString(),
 
     // Quality metrics (for reference)
@@ -384,5 +425,9 @@ export default {
   checkPublishEligibility,
   retryPublish,
   syncToGetEducatedCatalog,
-  WEBHOOK_URL,
+  getWebhookUrl,
+  // Environment constants
+  WEBHOOK_URL_STAGING,
+  WEBHOOK_URL_PRODUCTION,
+  DEFAULT_ENVIRONMENT,
 }

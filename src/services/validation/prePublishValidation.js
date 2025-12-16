@@ -13,7 +13,13 @@
 import { validateContent, canPublish as checkLinkPublish } from './linkValidator'
 import { assessRisk, checkAutoPublishEligibility } from './riskAssessment'
 import { APPROVED_AUTHORS } from '../../hooks/useContributors'
-import { extractShortcodes, validateShortcodeParams, checkMonetizationCompliance, SHORTCODE_TYPES } from '../shortcodeService'
+import {
+  extractShortcodes,
+  validateShortcodeParams,
+  checkMonetizationCompliance,
+  validateNoUnknownShortcodes,
+  SHORTCODE_TYPES,
+} from '../shortcodeService'
 
 /**
  * Validation result structure
@@ -31,6 +37,7 @@ const createValidationResult = () => ({
     quality: { passed: false, message: '' },
     content: { passed: false, message: '' },
     shortcodes: { passed: false, message: '' },
+    unknownShortcodes: { passed: false, message: '' },
   }
 })
 
@@ -46,6 +53,8 @@ export function validateForPublish(article, options = {}) {
     blockHighRisk = true,
     enforceApprovedAuthors = true,
     checkLinks = true,
+    requireMonetization = true,      // NEW: Make missing monetization a blocking issue
+    blockUnknownShortcodes = true,   // NEW: Block publish if unknown shortcodes found
   } = options
 
   const result = createValidationResult()
@@ -176,19 +185,29 @@ export function validateForPublish(article, options = {}) {
     })
   }
 
-  // 6. Shortcode Validation
+  // 6. Shortcode Validation (monetization)
   if (article.content) {
     const monetizationCheck = checkMonetizationCompliance(article.content)
     const shortcodes = extractShortcodes(article.content)
 
-    // Check for monetization shortcodes (not strictly required, but recommended)
+    // Check for monetization shortcodes - NOW BLOCKING BY DEFAULT
     if (!monetizationCheck.hasMonetization) {
       result.checks.shortcodes.passed = false
       result.checks.shortcodes.message = 'No monetization shortcodes found'
-      result.warnings.push({
-        type: 'missing_shortcode',
-        message: 'Article has no monetization shortcodes. Consider adding degree_table or degree_offer shortcodes.',
-      })
+
+      if (requireMonetization) {
+        // BLOCKING: Cannot publish without monetization
+        result.blockingIssues.push({
+          type: 'missing_monetization',
+          message: 'Article requires at least one monetization shortcode (degree_table or degree_offer). Cannot publish without monetization.',
+        })
+      } else {
+        // Non-blocking warning (for backwards compatibility if disabled)
+        result.warnings.push({
+          type: 'missing_shortcode',
+          message: 'Article has no monetization shortcodes. Consider adding degree_table or degree_offer shortcodes.',
+        })
+      }
     } else {
       // Validate each shortcode's parameters
       const shortcodeIssues = []
@@ -230,8 +249,50 @@ export function validateForPublish(article, options = {}) {
       }
     }
   } else {
-    result.checks.shortcodes.passed = true
+    result.checks.shortcodes.passed = false
     result.checks.shortcodes.message = 'No content to check'
+    if (requireMonetization) {
+      result.blockingIssues.push({
+        type: 'no_content',
+        message: 'Article has no content. Cannot validate monetization.',
+      })
+    }
+  }
+
+  // 7. Unknown Shortcode Detection - BLOCKING CHECK
+  if (article.content) {
+    const unknownCheck = validateNoUnknownShortcodes(article.content, {
+      blockOnUnknown: blockUnknownShortcodes,
+    })
+
+    if (unknownCheck.isValid) {
+      result.checks.unknownShortcodes.passed = true
+      result.checks.unknownShortcodes.message = 'All shortcodes are valid'
+    } else {
+      result.checks.unknownShortcodes.passed = false
+      result.checks.unknownShortcodes.message = unknownCheck.message
+      result.checks.unknownShortcodes.details = unknownCheck.details
+
+      if (blockUnknownShortcodes) {
+        // BLOCKING: Unknown shortcodes prevent publishing
+        result.blockingIssues.push({
+          type: 'unknown_shortcode',
+          message: unknownCheck.message,
+          details: unknownCheck.details,
+          uniqueTags: unknownCheck.uniqueTags,
+        })
+      } else {
+        // Non-blocking warning
+        result.warnings.push({
+          type: 'unknown_shortcode_warning',
+          message: unknownCheck.message,
+          details: unknownCheck.details,
+        })
+      }
+    }
+  } else {
+    result.checks.unknownShortcodes.passed = true
+    result.checks.unknownShortcodes.message = 'No content to check'
   }
 
   // Determine if can publish

@@ -24,6 +24,27 @@ export const SHORTCODE_TYPES = {
 }
 
 /**
+ * Allowlist of valid shortcode tags
+ * These are the ONLY shortcodes that should appear in content
+ * Add any WordPress-native shortcodes here if Tony confirms they're allowed
+ */
+export const ALLOWED_SHORTCODE_TAGS = [
+  // GetEducated custom shortcodes
+  'ge_monetization',
+  'degree_table',
+  'degree_offer',
+  'ge_internal_link',
+  'ge_external_cited',
+  // WordPress native shortcodes (uncomment if Tony confirms these are OK)
+  // 'caption',
+  // 'gallery',
+  // 'audio',
+  // 'video',
+  // 'playlist',
+  // 'embed',
+]
+
+/**
  * Generate a monetization shortcode from parameters (legacy format)
  * @param {Object} params - Shortcode parameters
  * @returns {string} The formatted shortcode
@@ -560,8 +581,88 @@ export function isMonetizationType(type) {
   return getMonetizationTypes().includes(type)
 }
 
+/**
+ * Extract ALL shortcode-like tokens from content
+ * This catches any pattern that looks like a shortcode: [tag ...] or [/tag]
+ * Used to detect unknown/hallucinated shortcodes that aren't in our allowlist
+ * @param {string} content - HTML content
+ * @returns {Array} Array of token objects with tag, raw, isClosing, position
+ */
+export function extractAllShortcodeLikeTokens(content) {
+  if (!content) return []
+
+  const tokens = []
+  // Match patterns like [tag], [tag attr="val"], [/tag]
+  // This regex captures: opening/closing slash, tag name, and attributes
+  const shortcodeRegex = /\[(\/?)([\w-]+)([^\]]*)\]/gi
+  let match
+
+  while ((match = shortcodeRegex.exec(content)) !== null) {
+    tokens.push({
+      raw: match[0],
+      tag: match[2].toLowerCase(),
+      isClosing: match[1] === '/',
+      attributes: match[3].trim(),
+      position: match.index,
+    })
+  }
+
+  return tokens
+}
+
+/**
+ * Find unknown/invalid shortcodes in content
+ * These are shortcode-like patterns that are NOT in our allowlist
+ * @param {string} content - HTML content
+ * @param {Array} customAllowlist - Optional additional allowed tags
+ * @returns {Array} Array of unknown shortcode tokens
+ */
+export function findUnknownShortcodes(content, customAllowlist = []) {
+  const allTokens = extractAllShortcodeLikeTokens(content)
+  const allowedTags = [...ALLOWED_SHORTCODE_TAGS, ...customAllowlist].map(t => t.toLowerCase())
+
+  return allTokens.filter(token => !allowedTags.includes(token.tag))
+}
+
+/**
+ * Validate that content contains no unknown shortcodes
+ * Returns a structured validation result for use in pre-publish checks
+ * @param {string} content - HTML content
+ * @param {Object} options - Validation options
+ * @returns {Object} Validation result with isValid, unknownShortcodes, message
+ */
+export function validateNoUnknownShortcodes(content, options = {}) {
+  const { customAllowlist = [], blockOnUnknown = true } = options
+
+  const unknownShortcodes = findUnknownShortcodes(content, customAllowlist)
+
+  if (unknownShortcodes.length === 0) {
+    return {
+      isValid: true,
+      unknownShortcodes: [],
+      message: 'All shortcodes are valid',
+    }
+  }
+
+  // Get unique unknown tags for the message
+  const uniqueTags = [...new Set(unknownShortcodes.map(s => s.tag))]
+
+  return {
+    isValid: !blockOnUnknown,
+    unknownShortcodes,
+    uniqueTags,
+    message: `Found ${unknownShortcodes.length} unknown shortcode(s): ${uniqueTags.join(', ')}`,
+    details: unknownShortcodes.map(s => ({
+      tag: s.tag,
+      raw: s.raw.substring(0, 100) + (s.raw.length > 100 ? '...' : ''),
+      position: s.position,
+    })),
+  }
+}
+
 export default {
   SHORTCODE_TYPES,
+  ALLOWED_SHORTCODE_TAGS,
   generateShortcode,
   generateDegreeTableShortcode,
   generateDegreeOfferShortcode,
@@ -575,4 +676,7 @@ export default {
   checkMonetizationCompliance,
   getMonetizationTypes,
   isMonetizationType,
+  extractAllShortcodeLikeTokens,
+  findUnknownShortcodes,
+  validateNoUnknownShortcodes,
 }
