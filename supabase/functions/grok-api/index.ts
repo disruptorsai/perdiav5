@@ -12,7 +12,8 @@ const corsHeaders = {
 }
 
 const GROK_BASE_URL = 'https://api.x.ai/v1'
-const GROK_MODEL = 'grok-beta'
+// Use grok-3 - grok-beta was deprecated on 2025-09-15
+const GROK_MODEL = 'grok-3'
 
 interface GrokMessage {
   role: string
@@ -24,6 +25,9 @@ interface GrokOptions {
   max_tokens?: number
 }
 
+// Model fallback variants - try these in order if primary fails with 404
+const MODEL_VARIANTS = [GROK_MODEL, 'grok-2-latest', 'grok-2', 'grok-beta', 'grok-2-1212']
+
 async function makeGrokRequest(messages: GrokMessage[], options: GrokOptions = {}) {
   const grokApiKey = Deno.env.get('GROK_API_KEY')
 
@@ -31,30 +35,62 @@ async function makeGrokRequest(messages: GrokMessage[], options: GrokOptions = {
     throw new Error('GROK_API_KEY not configured in Edge Function secrets')
   }
 
-  const { temperature = 0.8, max_tokens = 4000 } = options
+  const { temperature = 0.8, max_tokens = 8000 } = options
 
-  const response = await fetch(`${GROK_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${grokApiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROK_MODEL,
-      messages,
-      temperature,
-      max_tokens,
-      stream: false,
-    }),
-  })
+  let lastError: Error | null = null
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(`Grok API error: ${error.error?.message || 'Unknown error'}`)
+  for (const modelName of MODEL_VARIANTS) {
+    try {
+      console.log(`[Grok Edge] Trying model: ${modelName}`)
+
+      const response = await fetch(`${GROK_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${grokApiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages,
+          temperature,
+          max_tokens,
+          stream: false,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`[Grok Edge] Successfully used model: ${modelName}`)
+        return data.choices[0].message.content
+      }
+
+      // If not 404, don't try other models - it's a real error
+      if (response.status !== 404) {
+        const errorText = await response.text()
+        let errorMessage = 'Unknown error'
+        try {
+          const error = JSON.parse(errorText)
+          errorMessage = error.error?.message || error.message || errorText
+        } catch {
+          errorMessage = errorText || `HTTP ${response.status}`
+        }
+        throw new Error(`Grok API error (${response.status}): ${errorMessage}`)
+      }
+
+      // 404 means model not found, try next
+      console.warn(`[Grok Edge] Model ${modelName} returned 404, trying next...`)
+      lastError = new Error(`Model '${modelName}' not found`)
+
+    } catch (error) {
+      if (error instanceof Error && !error.message.includes('404') && !error.message.includes('not found')) {
+        throw error
+      }
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
   }
 
-  const data = await response.json()
-  return data.choices[0].message.content
+  console.error('[Grok Edge] All model variants failed:', MODEL_VARIANTS)
+  throw lastError || new Error('Failed to connect to Grok API with any known model name')
 }
 
 function getStructureForContentType(contentType: string): string {
