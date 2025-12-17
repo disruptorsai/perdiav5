@@ -2,125 +2,217 @@
  * Shortcode Service for GetEducated
  * Handles monetization shortcode generation, validation, and placement
  *
- * Shortcode formats:
- * - [ge_monetization category_id="X" concentration_id="Y" level="Z"] - Legacy format
- * - [degree_table category="X" concentration="Y" level="Z" max="5" sponsored_first="true"] - Block table
- * - [degree_offer program_id="X" school_id="Y" highlight="true"] - Single program highlight
- * - [ge_internal_link url="/path"]text[/ge_internal_link] - Internal link
- * - [ge_external_cited url="https://..."]text[/ge_external_cited] - External citation
+ * ACTUAL GetEducated WordPress Shortcode Formats (from Tony's email 2025-12-15):
+ *
+ * 1. GE Picks (degree table):
+ *    [su_ge-picks category="8" concentration="18" level="2" header="GetEducated's Picks" cta-button="View More Degrees" cta-url="/online-degrees/bachelor/art-liberal-arts/art-architecture/"][/su_ge-picks]
+ *
+ * 2. School Link:
+ *    [su_ge-cta type="link" cta-copy="SNHU" school="22742"]SNHU[/su_ge-cta]
+ *
+ * 3. Degree Link:
+ *    [su_ge-cta type="link" cta-copy="SNHU's MBA in Athletic Administration" school="22742" degree="315964"]SNHU's MBA in Athletic Administration[/su_ge-cta]
+ *
+ * 4. Internal Link:
+ *    [su_ge-cta type="link" cta-copy="internal link example" url="/online-college-ratings-and-rankings/"]internal link example[/su_ge-cta]
+ *
+ * 5. External Link:
+ *    [su_ge-cta type="link" cta-copy="external link example" url="https://www.aacsb.edu/" target="blank"]external link example[/su_ge-cta]
+ *
+ * 6. Quick Degree Find:
+ *    [su_ge-qdf type="simple" header="Browse Now"][/su_ge-qdf]
  */
 
 import { supabase } from './supabaseClient'
 
 /**
- * Shortcode type constants
+ * Shortcode type constants - Updated to match actual GetEducated shortcodes
  */
 export const SHORTCODE_TYPES = {
-  MONETIZATION: 'monetization',      // Legacy ge_monetization
-  DEGREE_TABLE: 'degree_table',      // Block table shortcode
-  DEGREE_OFFER: 'degree_offer',      // Single program highlight
-  INTERNAL_LINK: 'internal_link',    // Internal link shortcode
-  EXTERNAL_CITED: 'external_cited',  // External citation shortcode
+  GE_PICKS: 'ge_picks',           // [su_ge-picks] - Degree table/picks display
+  GE_CTA_SCHOOL: 'ge_cta_school', // [su_ge-cta] with school param - School link
+  GE_CTA_DEGREE: 'ge_cta_degree', // [su_ge-cta] with school+degree params - Degree link
+  GE_CTA_INTERNAL: 'ge_cta_internal', // [su_ge-cta] with url param (internal) - Internal link
+  GE_CTA_EXTERNAL: 'ge_cta_external', // [su_ge-cta] with url+target params - External link
+  GE_QDF: 'ge_qdf',               // [su_ge-qdf] - Quick Degree Find widget
 }
 
 /**
  * Allowlist of valid shortcode tags
- * These are the ONLY shortcodes that should appear in content
- * Add any WordPress-native shortcodes here if Tony confirms they're allowed
+ * These are the ACTUAL GetEducated WordPress shortcodes
  */
 export const ALLOWED_SHORTCODE_TAGS = [
-  // GetEducated custom shortcodes
+  // GetEducated custom shortcodes (ACTUAL WordPress shortcodes)
+  'su_ge-picks',    // Degree table/picks
+  'su_ge-cta',      // All link types (school, degree, internal, external)
+  'su_ge-qdf',      // Quick Degree Find
+]
+
+/**
+ * Legacy shortcode tags that we previously generated incorrectly
+ * These should be flagged for migration
+ */
+export const LEGACY_SHORTCODE_TAGS = [
   'ge_monetization',
   'degree_table',
   'degree_offer',
   'ge_internal_link',
   'ge_external_cited',
-  // WordPress native shortcodes (uncomment if Tony confirms these are OK)
-  // 'caption',
-  // 'gallery',
-  // 'audio',
-  // 'video',
-  // 'playlist',
-  // 'embed',
 ]
 
-/**
- * Generate a monetization shortcode from parameters (legacy format)
- * @param {Object} params - Shortcode parameters
- * @returns {string} The formatted shortcode
- */
-export function generateShortcode(params) {
-  const { categoryId, concentrationId, levelCode } = params
-
-  if (!categoryId || !concentrationId) {
-    throw new Error('categoryId and concentrationId are required')
-  }
-
-  let shortcode = `[ge_monetization category_id="${categoryId}" concentration_id="${concentrationId}"`
-
-  if (levelCode) {
-    shortcode += ` level="${levelCode}"`
-  }
-
-  shortcode += ']'
-
-  return shortcode
-}
+// ============================================================================
+// SHORTCODE GENERATION FUNCTIONS - Correct GetEducated Format
+// ============================================================================
 
 /**
- * Generate a degree_table shortcode (block table format from spec)
+ * Generate a GE Picks shortcode (degree table)
+ * This displays a table of degrees matching the category/concentration/level
+ *
  * @param {Object} params - Shortcode parameters
+ * @param {number} params.category - Category ID from monetization_categories
+ * @param {number} params.concentration - Concentration ID from monetization_categories
+ * @param {number} params.level - Level code from monetization_levels (optional)
+ * @param {string} params.header - Header text (default: "GetEducated's Picks")
+ * @param {string} params.ctaButton - CTA button text (default: "View More Degrees")
+ * @param {string} params.ctaUrl - CTA URL path (e.g., "/online-degrees/bachelor/business/")
  * @returns {string} The formatted shortcode
  */
-export function generateDegreeTableShortcode(params) {
+export function generateGePicksShortcode(params) {
   const {
-    categoryId,
-    concentrationId,
-    levelCode,
-    maxPrograms = 5,
-    sponsoredFirst = true,
+    category,
+    concentration,
+    level,
+    header = "GetEducated's Picks",
+    ctaButton = "View More Degrees",
+    ctaUrl,
   } = params
 
-  if (!categoryId || !concentrationId) {
-    throw new Error('categoryId and concentrationId are required')
+  if (!category || !concentration) {
+    throw new Error('category and concentration are required for su_ge-picks')
   }
 
-  let shortcode = `[degree_table category="${categoryId}" concentration="${concentrationId}"`
+  let shortcode = `[su_ge-picks category="${category}" concentration="${concentration}"`
 
-  if (levelCode) {
-    shortcode += ` level="${levelCode}"`
+  if (level) {
+    shortcode += ` level="${level}"`
   }
 
-  shortcode += ` max="${maxPrograms}"`
-  shortcode += ` sponsored_first="${sponsoredFirst}"`
-  shortcode += ']'
+  shortcode += ` header="${header}"`
+  shortcode += ` cta-button="${ctaButton}"`
+
+  if (ctaUrl) {
+    shortcode += ` cta-url="${ctaUrl}"`
+  }
+
+  shortcode += `][/su_ge-picks]`
 
   return shortcode
 }
 
 /**
- * Generate a degree_offer shortcode (single program highlight)
+ * Generate a GE CTA shortcode for school link
+ * Links to a school's page on GetEducated
+ *
  * @param {Object} params - Shortcode parameters
+ * @param {string} params.schoolId - WordPress school ID (e.g., "22742")
+ * @param {string} params.anchorText - Link text (e.g., "SNHU")
  * @returns {string} The formatted shortcode
  */
-export function generateDegreeOfferShortcode(params) {
-  const { programId, schoolId, highlight = true } = params
+export function generateSchoolLinkShortcode(params) {
+  const { schoolId, anchorText } = params
 
-  if (!programId) {
-    throw new Error('programId is required')
+  if (!schoolId || !anchorText) {
+    throw new Error('schoolId and anchorText are required for school link')
   }
 
-  let shortcode = `[degree_offer program_id="${programId}"`
-
-  if (schoolId) {
-    shortcode += ` school_id="${schoolId}"`
-  }
-
-  shortcode += ` highlight="${highlight}"`
-  shortcode += ']'
-
-  return shortcode
+  return `[su_ge-cta type="link" cta-copy="${anchorText}" school="${schoolId}"]${anchorText}[/su_ge-cta]`
 }
+
+/**
+ * Generate a GE CTA shortcode for degree link
+ * Links to a specific degree program
+ *
+ * @param {Object} params - Shortcode parameters
+ * @param {string} params.schoolId - WordPress school ID (e.g., "22742")
+ * @param {string} params.degreeId - WordPress degree ID (e.g., "315964")
+ * @param {string} params.anchorText - Link text (e.g., "SNHU's MBA in Athletic Administration")
+ * @returns {string} The formatted shortcode
+ */
+export function generateDegreeLinkShortcode(params) {
+  const { schoolId, degreeId, anchorText } = params
+
+  if (!schoolId || !degreeId || !anchorText) {
+    throw new Error('schoolId, degreeId, and anchorText are required for degree link')
+  }
+
+  return `[su_ge-cta type="link" cta-copy="${anchorText}" school="${schoolId}" degree="${degreeId}"]${anchorText}[/su_ge-cta]`
+}
+
+/**
+ * Generate a GE CTA shortcode for internal link
+ * Links to internal GetEducated pages
+ *
+ * @param {Object} params - Shortcode parameters
+ * @param {string} params.url - Internal URL path (e.g., "/online-college-ratings-and-rankings/")
+ * @param {string} params.anchorText - Link text
+ * @returns {string} The formatted shortcode
+ */
+export function generateInternalLinkShortcode(params) {
+  const { url, anchorText } = params
+
+  if (!url || !anchorText) {
+    throw new Error('url and anchorText are required for internal link')
+  }
+
+  // Ensure URL is relative (internal)
+  let cleanUrl = url
+  if (url.includes('geteducated.com')) {
+    cleanUrl = url.replace(/https?:\/\/(www\.)?geteducated\.com/, '')
+  }
+
+  return `[su_ge-cta type="link" cta-copy="${anchorText}" url="${cleanUrl}"]${anchorText}[/su_ge-cta]`
+}
+
+/**
+ * Generate a GE CTA shortcode for external link
+ * Links to external sites (BLS, government, etc.)
+ *
+ * @param {Object} params - Shortcode parameters
+ * @param {string} params.url - External URL (full URL with https://)
+ * @param {string} params.anchorText - Link text
+ * @returns {string} The formatted shortcode
+ */
+export function generateExternalLinkShortcode(params) {
+  const { url, anchorText } = params
+
+  if (!url || !anchorText) {
+    throw new Error('url and anchorText are required for external link')
+  }
+
+  return `[su_ge-cta type="link" cta-copy="${anchorText}" url="${url}" target="blank"]${anchorText}[/su_ge-cta]`
+}
+
+/**
+ * Generate a Quick Degree Find shortcode
+ * Displays a degree search widget
+ *
+ * @param {Object} params - Shortcode parameters
+ * @param {string} params.type - Widget type (default: "simple")
+ * @param {string} params.header - Header text (default: "Browse Now")
+ * @returns {string} The formatted shortcode
+ */
+export function generateQuickDegreeFindShortcode(params = {}) {
+  const {
+    type = 'simple',
+    header = 'Browse Now',
+  } = params
+
+  return `[su_ge-qdf type="${type}" header="${header}"][/su_ge-qdf]`
+}
+
+// ============================================================================
+// SHORTCODE PARSING FUNCTIONS
+// ============================================================================
 
 /**
  * Parse a shortcode string into its parameters
@@ -130,87 +222,80 @@ export function generateDegreeOfferShortcode(params) {
 export function parseShortcode(shortcode) {
   const result = {
     type: null,
-    categoryId: null,
-    concentrationId: null,
-    levelCode: null,
     isValid: false,
+    params: {},
+    raw: shortcode,
   }
 
   if (!shortcode || typeof shortcode !== 'string') {
     return result
   }
 
-  // Match ge_monetization shortcode (legacy)
-  const monetizationMatch = shortcode.match(
-    /\[ge_monetization\s+category_id="(\d+)"\s+concentration_id="(\d+)"(?:\s+level="(\d+)")?\]/i
+  // Match su_ge-picks shortcode
+  const gePicksMatch = shortcode.match(
+    /\[su_ge-picks\s+([^\]]+)\]\[\/su_ge-picks\]/i
   )
-
-  if (monetizationMatch) {
-    result.type = SHORTCODE_TYPES.MONETIZATION
-    result.categoryId = parseInt(monetizationMatch[1], 10)
-    result.concentrationId = parseInt(monetizationMatch[2], 10)
-    result.levelCode = monetizationMatch[3] ? parseInt(monetizationMatch[3], 10) : null
+  if (gePicksMatch) {
+    result.type = SHORTCODE_TYPES.GE_PICKS
+    result.params = parseShortcodeAttributes(gePicksMatch[1])
     result.isValid = true
     return result
   }
 
-  // Match degree_table shortcode (new format from spec)
-  const degreeTableMatch = shortcode.match(
-    /\[degree_table\s+category="(\d+)"\s+concentration="(\d+)"(?:\s+level="(\d+)")?(?:\s+max="(\d+)")?(?:\s+sponsored_first="(true|false)")?\]/i
+  // Match su_ge-cta shortcode (various types)
+  const geCtaMatch = shortcode.match(
+    /\[su_ge-cta\s+([^\]]+)\]([^\[]*)\[\/su_ge-cta\]/i
   )
+  if (geCtaMatch) {
+    result.params = parseShortcodeAttributes(geCtaMatch[1])
+    result.params.innerText = geCtaMatch[2]
 
-  if (degreeTableMatch) {
-    result.type = SHORTCODE_TYPES.DEGREE_TABLE
-    result.categoryId = parseInt(degreeTableMatch[1], 10)
-    result.concentrationId = parseInt(degreeTableMatch[2], 10)
-    result.levelCode = degreeTableMatch[3] ? parseInt(degreeTableMatch[3], 10) : null
-    result.maxPrograms = degreeTableMatch[4] ? parseInt(degreeTableMatch[4], 10) : 5
-    result.sponsoredFirst = degreeTableMatch[5] !== 'false'
-    result.isValid = true
+    // Determine CTA type based on params
+    if (result.params.school && result.params.degree) {
+      result.type = SHORTCODE_TYPES.GE_CTA_DEGREE
+    } else if (result.params.school) {
+      result.type = SHORTCODE_TYPES.GE_CTA_SCHOOL
+    } else if (result.params.url && result.params.target === 'blank') {
+      result.type = SHORTCODE_TYPES.GE_CTA_EXTERNAL
+    } else if (result.params.url) {
+      result.type = SHORTCODE_TYPES.GE_CTA_INTERNAL
+    }
+
+    result.isValid = result.type !== null
     return result
   }
 
-  // Match degree_offer shortcode (single program highlight)
-  const degreeOfferMatch = shortcode.match(
-    /\[degree_offer\s+program_id="([^"]+)"(?:\s+school_id="([^"]+)")?(?:\s+highlight="(true|false)")?\]/i
+  // Match su_ge-qdf shortcode
+  const geQdfMatch = shortcode.match(
+    /\[su_ge-qdf\s+([^\]]+)\]\[\/su_ge-qdf\]/i
   )
-
-  if (degreeOfferMatch) {
-    result.type = SHORTCODE_TYPES.DEGREE_OFFER
-    result.programId = degreeOfferMatch[1]
-    result.schoolId = degreeOfferMatch[2] || null
-    result.highlight = degreeOfferMatch[3] !== 'false'
-    result.isValid = true
-    return result
-  }
-
-  // Match ge_internal_link shortcode
-  const internalLinkMatch = shortcode.match(
-    /\[ge_internal_link\s+url="([^"]+)"\]([^[]*)\[\/ge_internal_link\]/i
-  )
-
-  if (internalLinkMatch) {
-    result.type = SHORTCODE_TYPES.INTERNAL_LINK
-    result.url = internalLinkMatch[1]
-    result.anchorText = internalLinkMatch[2]
-    result.isValid = true
-    return result
-  }
-
-  // Match ge_external_cited shortcode
-  const externalLinkMatch = shortcode.match(
-    /\[ge_external_cited\s+url="([^"]+)"\]([^[]*)\[\/ge_external_cited\]/i
-  )
-
-  if (externalLinkMatch) {
-    result.type = SHORTCODE_TYPES.EXTERNAL_CITED
-    result.url = externalLinkMatch[1]
-    result.anchorText = externalLinkMatch[2]
+  if (geQdfMatch) {
+    result.type = SHORTCODE_TYPES.GE_QDF
+    result.params = parseShortcodeAttributes(geQdfMatch[1])
     result.isValid = true
     return result
   }
 
   return result
+}
+
+/**
+ * Parse shortcode attributes string into object
+ * @param {string} attrString - Attribute string (e.g., 'category="8" level="2"')
+ * @returns {Object} Parsed attributes
+ */
+function parseShortcodeAttributes(attrString) {
+  const attrs = {}
+  const regex = /([\w-]+)="([^"]*)"/g
+  let match
+
+  while ((match = regex.exec(attrString)) !== null) {
+    // Convert kebab-case to camelCase for JS usage
+    const key = match[1].replace(/-([a-z])/g, (g) => g[1].toUpperCase())
+    attrs[key] = match[2]
+  }
+
+  return attrs
 }
 
 /**
@@ -222,11 +307,11 @@ export function extractShortcodes(content) {
   if (!content) return []
 
   const shortcodes = []
+
+  // Find all su_ge-picks shortcodes
+  const gePicksRegex = /\[su_ge-picks\s+[^\]]+\]\[\/su_ge-picks\]/gi
   let match
-
-  // Find all ge_monetization shortcodes (legacy)
-  const monetizationRegex = /\[ge_monetization[^\]]+\]/gi
-  while ((match = monetizationRegex.exec(content)) !== null) {
+  while ((match = gePicksRegex.exec(content)) !== null) {
     const parsed = parseShortcode(match[0])
     if (parsed.isValid) {
       shortcodes.push({
@@ -237,9 +322,9 @@ export function extractShortcodes(content) {
     }
   }
 
-  // Find all degree_table shortcodes (new format)
-  const degreeTableRegex = /\[degree_table[^\]]+\]/gi
-  while ((match = degreeTableRegex.exec(content)) !== null) {
+  // Find all su_ge-cta shortcodes
+  const geCtaRegex = /\[su_ge-cta\s+[^\]]+\][^\[]*\[\/su_ge-cta\]/gi
+  while ((match = geCtaRegex.exec(content)) !== null) {
     const parsed = parseShortcode(match[0])
     if (parsed.isValid) {
       shortcodes.push({
@@ -250,35 +335,9 @@ export function extractShortcodes(content) {
     }
   }
 
-  // Find all degree_offer shortcodes (single program highlight)
-  const degreeOfferRegex = /\[degree_offer[^\]]+\]/gi
-  while ((match = degreeOfferRegex.exec(content)) !== null) {
-    const parsed = parseShortcode(match[0])
-    if (parsed.isValid) {
-      shortcodes.push({
-        ...parsed,
-        raw: match[0],
-        position: match.index,
-      })
-    }
-  }
-
-  // Find all ge_internal_link shortcodes
-  const internalRegex = /\[ge_internal_link[^\]]+\][^[]*\[\/ge_internal_link\]/gi
-  while ((match = internalRegex.exec(content)) !== null) {
-    const parsed = parseShortcode(match[0])
-    if (parsed.isValid) {
-      shortcodes.push({
-        ...parsed,
-        raw: match[0],
-        position: match.index,
-      })
-    }
-  }
-
-  // Find all ge_external_cited shortcodes
-  const externalRegex = /\[ge_external_cited[^\]]+\][^[]*\[\/ge_external_cited\]/gi
-  while ((match = externalRegex.exec(content)) !== null) {
+  // Find all su_ge-qdf shortcodes
+  const geQdfRegex = /\[su_ge-qdf\s+[^\]]+\]\[\/su_ge-qdf\]/gi
+  while ((match = geQdfRegex.exec(content)) !== null) {
     const parsed = parseShortcode(match[0])
     if (parsed.isValid) {
       shortcodes.push({
@@ -292,13 +351,17 @@ export function extractShortcodes(content) {
   return shortcodes
 }
 
+// ============================================================================
+// VALIDATION FUNCTIONS
+// ============================================================================
+
 /**
  * Validate shortcode parameters against database
  * @param {Object} params - Shortcode parameters
  * @returns {Object} Validation result
  */
 export async function validateShortcodeParams(params) {
-  const { categoryId, concentrationId, levelCode } = params
+  const { category, concentration, level } = params
   const result = {
     isValid: true,
     errors: [],
@@ -307,33 +370,35 @@ export async function validateShortcodeParams(params) {
   }
 
   // Validate category and concentration exist
-  const { data: category, error: categoryError } = await supabase
-    .from('monetization_categories')
-    .select('*')
-    .eq('category_id', categoryId)
-    .eq('concentration_id', concentrationId)
-    .single()
+  if (category && concentration) {
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('monetization_categories')
+      .select('*')
+      .eq('category_id', category)
+      .eq('concentration_id', concentration)
+      .single()
 
-  if (categoryError || !category) {
-    result.isValid = false
-    result.errors.push(`Invalid category_id (${categoryId}) or concentration_id (${concentrationId})`)
-  } else {
-    result.category = category
+    if (categoryError || !categoryData) {
+      result.isValid = false
+      result.errors.push(`Invalid category (${category}) or concentration (${concentration})`)
+    } else {
+      result.category = categoryData
+    }
   }
 
   // Validate level code if provided
-  if (levelCode) {
-    const { data: level, error: levelError } = await supabase
+  if (level) {
+    const { data: levelData, error: levelError } = await supabase
       .from('monetization_levels')
       .select('*')
-      .eq('level_code', levelCode)
+      .eq('level_code', level)
       .single()
 
-    if (levelError || !level) {
+    if (levelError || !levelData) {
       result.isValid = false
-      result.errors.push(`Invalid level code: ${levelCode}`)
+      result.errors.push(`Invalid level code: ${level}`)
     } else {
-      result.level = level
+      result.level = levelData
     }
   }
 
@@ -341,10 +406,218 @@ export async function validateShortcodeParams(params) {
 }
 
 /**
+ * Extract ALL shortcode-like tokens from content
+ * This catches any pattern that looks like a shortcode: [tag ...] or [/tag]
+ * Used to detect unknown/hallucinated shortcodes that aren't in our allowlist
+ * @param {string} content - HTML content
+ * @returns {Array} Array of token objects with tag, raw, isClosing, position
+ */
+export function extractAllShortcodeLikeTokens(content) {
+  if (!content) return []
+
+  const tokens = []
+  // Match patterns like [tag], [tag attr="val"], [/tag]
+  // This regex captures: opening/closing slash, tag name, and attributes
+  const shortcodeRegex = /\[(\/?)([\w-]+)([^\]]*)\]/gi
+  let match
+
+  while ((match = shortcodeRegex.exec(content)) !== null) {
+    tokens.push({
+      raw: match[0],
+      tag: match[2].toLowerCase(),
+      isClosing: match[1] === '/',
+      attributes: match[3].trim(),
+      position: match.index,
+    })
+  }
+
+  return tokens
+}
+
+/**
+ * Find unknown/invalid shortcodes in content
+ * These are shortcode-like patterns that are NOT in our allowlist
+ * @param {string} content - HTML content
+ * @param {Array} customAllowlist - Optional additional allowed tags
+ * @returns {Array} Array of unknown shortcode tokens
+ */
+export function findUnknownShortcodes(content, customAllowlist = []) {
+  const allTokens = extractAllShortcodeLikeTokens(content)
+  const allowedTags = [...ALLOWED_SHORTCODE_TAGS, ...customAllowlist].map(t => t.toLowerCase())
+
+  return allTokens.filter(token => !allowedTags.includes(token.tag))
+}
+
+/**
+ * Find legacy shortcodes that need to be migrated
+ * @param {string} content - HTML content
+ * @returns {Array} Array of legacy shortcode tokens
+ */
+export function findLegacyShortcodes(content) {
+  const allTokens = extractAllShortcodeLikeTokens(content)
+  const legacyTags = LEGACY_SHORTCODE_TAGS.map(t => t.toLowerCase())
+
+  return allTokens.filter(token => legacyTags.includes(token.tag))
+}
+
+/**
+ * Validate that content contains no unknown shortcodes
+ * Returns a structured validation result for use in pre-publish checks
+ * @param {string} content - HTML content
+ * @param {Object} options - Validation options
+ * @returns {Object} Validation result with isValid, unknownShortcodes, message
+ */
+export function validateNoUnknownShortcodes(content, options = {}) {
+  const { customAllowlist = [], blockOnUnknown = true } = options
+
+  const unknownShortcodes = findUnknownShortcodes(content, customAllowlist)
+  const legacyShortcodes = findLegacyShortcodes(content)
+
+  if (unknownShortcodes.length === 0 && legacyShortcodes.length === 0) {
+    return {
+      isValid: true,
+      unknownShortcodes: [],
+      legacyShortcodes: [],
+      message: 'All shortcodes are valid',
+    }
+  }
+
+  // Get unique unknown tags for the message
+  const uniqueUnknownTags = [...new Set(unknownShortcodes.map(s => s.tag))]
+  const uniqueLegacyTags = [...new Set(legacyShortcodes.map(s => s.tag))]
+
+  const messages = []
+  if (unknownShortcodes.length > 0) {
+    messages.push(`Found ${unknownShortcodes.length} unknown shortcode(s): ${uniqueUnknownTags.join(', ')}`)
+  }
+  if (legacyShortcodes.length > 0) {
+    messages.push(`Found ${legacyShortcodes.length} legacy shortcode(s) that need migration: ${uniqueLegacyTags.join(', ')}`)
+  }
+
+  return {
+    isValid: !blockOnUnknown && legacyShortcodes.length === 0,
+    unknownShortcodes,
+    legacyShortcodes,
+    uniqueUnknownTags,
+    uniqueLegacyTags,
+    message: messages.join('. '),
+    details: [
+      ...unknownShortcodes.map(s => ({
+        tag: s.tag,
+        raw: s.raw.substring(0, 100) + (s.raw.length > 100 ? '...' : ''),
+        position: s.position,
+        type: 'unknown',
+      })),
+      ...legacyShortcodes.map(s => ({
+        tag: s.tag,
+        raw: s.raw.substring(0, 100) + (s.raw.length > 100 ? '...' : ''),
+        position: s.position,
+        type: 'legacy',
+      })),
+    ],
+  }
+}
+
+// ============================================================================
+// MONETIZATION COMPLIANCE FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if content has required monetization shortcodes
+ * @param {string} content - HTML content
+ * @returns {Object} Check result
+ */
+export function checkMonetizationCompliance(content) {
+  const shortcodes = extractShortcodes(content)
+
+  const gePicksCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.GE_PICKS).length
+  const schoolLinkCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.GE_CTA_SCHOOL).length
+  const degreeLinkCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.GE_CTA_DEGREE).length
+  const qdfCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.GE_QDF).length
+
+  // Monetization = GE Picks or QDF (displays degree offers)
+  const hasMonetization = gePicksCount > 0 || qdfCount > 0
+
+  return {
+    hasMonetization,
+    monetizationCount: gePicksCount + qdfCount,
+    shortcodes,
+    isCompliant: hasMonetization,
+    breakdown: {
+      gePicks: gePicksCount,
+      schoolLinks: schoolLinkCount,
+      degreeLinks: degreeLinkCount,
+      quickDegreeFind: qdfCount,
+    },
+    recommendation: !hasMonetization
+      ? 'Add at least one [su_ge-picks] or [su_ge-qdf] shortcode to display degree offers'
+      : null,
+  }
+}
+
+// ============================================================================
+// URL BUILDING HELPERS
+// ============================================================================
+
+/**
+ * Build a CTA URL for degree offerings based on category/concentration/level
+ * Format: /online-degrees/{level}/{category-slug}/{concentration-slug}/
+ *
+ * @param {Object} params - URL parameters
+ * @param {string} params.levelSlug - Level slug (e.g., "bachelor", "master")
+ * @param {string} params.categorySlug - Category slug (e.g., "business")
+ * @param {string} params.concentrationSlug - Concentration slug (e.g., "accounting")
+ * @returns {string} The CTA URL
+ */
+export function buildCtaUrl(params) {
+  const { levelSlug, categorySlug, concentrationSlug } = params
+
+  let url = '/online-degrees/'
+
+  if (levelSlug) {
+    url += `${levelSlug}/`
+  }
+  if (categorySlug) {
+    url += `${categorySlug}/`
+  }
+  if (concentrationSlug) {
+    url += `${concentrationSlug}/`
+  }
+
+  return url
+}
+
+/**
+ * Build a school page URL
+ * Format: /online-schools/{school-slug}/
+ *
+ * @param {string} schoolSlug - School slug
+ * @returns {string} The school URL
+ */
+export function buildSchoolUrl(schoolSlug) {
+  return `/online-schools/${schoolSlug}/`
+}
+
+/**
+ * Build a ranking report URL
+ * Format: /online-college-ratings-and-rankings/best-buy-lists/{report-slug}/
+ *
+ * @param {string} reportSlug - Ranking report slug
+ * @returns {string} The ranking report URL
+ */
+export function buildRankingReportUrl(reportSlug) {
+  return `/online-college-ratings-and-rankings/best-buy-lists/${reportSlug}/`
+}
+
+// ============================================================================
+// TOPIC MATCHING FUNCTIONS
+// ============================================================================
+
+/**
  * Match an article topic to the best monetization category
  * @param {string} topic - Article topic/title
  * @param {string} degreeLevel - Degree level (optional)
- * @returns {Object} Best matching category and shortcode
+ * @returns {Object} Best matching category and shortcode params
  */
 export async function matchTopicToMonetization(topic, degreeLevel = null) {
   if (!topic) {
@@ -409,33 +682,44 @@ export async function matchTopicToMonetization(topic, degreeLevel = null) {
 
   // Get level code if degree level provided
   let levelCode = null
+  let levelSlug = null
   if (degreeLevel) {
     const { data: level } = await supabase
       .from('monetization_levels')
-      .select('level_code')
+      .select('level_code, level_name')
       .ilike('level_name', `%${degreeLevel}%`)
       .single()
 
     if (level) {
       levelCode = level.level_code
+      levelSlug = level.level_name.toLowerCase().replace(/\s+/g, '-')
     }
   }
 
-  // Generate the shortcode
-  const shortcode = generateShortcode({
-    categoryId: bestMatch.category_id,
-    concentrationId: bestMatch.concentration_id,
-    levelCode,
+  // Build the CTA URL
+  const categorySlug = bestMatch.category.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  const concentrationSlug = bestMatch.concentration.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+
+  const ctaUrl = buildCtaUrl({
+    levelSlug,
+    categorySlug,
+    concentrationSlug,
   })
 
   return {
     matched: true,
     category: bestMatch,
+    categoryId: bestMatch.category_id,
+    concentrationId: bestMatch.concentration_id,
     levelCode,
-    shortcode,
+    ctaUrl,
     confidence: bestMatch.score > 50 ? 'high' : bestMatch.score > 20 ? 'medium' : 'low',
   }
 }
+
+// ============================================================================
+// SHORTCODE INSERTION FUNCTIONS
+// ============================================================================
 
 /**
  * Insert a shortcode into content at specified position
@@ -499,184 +783,107 @@ export function insertShortcodeInContent(content, shortcode, position = 'after_i
   }
 }
 
+// ============================================================================
+// LEGACY COMPATIBILITY - Deprecated functions
+// These are kept for backward compatibility but should not be used
+// ============================================================================
+
 /**
- * Create an internal link shortcode
- * @param {string} url - GetEducated URL path
- * @param {string} anchorText - Link text
- * @returns {string} Internal link shortcode
+ * @deprecated Use generateGePicksShortcode instead
+ */
+export function generateShortcode(params) {
+  console.warn('generateShortcode is deprecated. Use generateGePicksShortcode for correct GetEducated format.')
+  return generateGePicksShortcode({
+    category: params.categoryId,
+    concentration: params.concentrationId,
+    level: params.levelCode,
+  })
+}
+
+/**
+ * @deprecated Use generateGePicksShortcode instead
+ */
+export function generateDegreeTableShortcode(params) {
+  console.warn('generateDegreeTableShortcode is deprecated. Use generateGePicksShortcode for correct GetEducated format.')
+  return generateGePicksShortcode({
+    category: params.categoryId,
+    concentration: params.concentrationId,
+    level: params.levelCode,
+  })
+}
+
+/**
+ * @deprecated Use generateDegreeLinkShortcode instead
+ */
+export function generateDegreeOfferShortcode(params) {
+  console.warn('generateDegreeOfferShortcode is deprecated. Use generateDegreeLinkShortcode for correct GetEducated format.')
+  // This is a breaking change - we need school/degree WordPress IDs which we don't have
+  throw new Error('generateDegreeOfferShortcode requires WordPress school/degree IDs. Use generateDegreeLinkShortcode with proper IDs.')
+}
+
+/**
+ * @deprecated Use generateInternalLinkShortcode instead
  */
 export function createInternalLinkShortcode(url, anchorText) {
-  // Ensure URL is relative and on GetEducated
-  let cleanUrl = url
-  if (url.includes('geteducated.com')) {
-    cleanUrl = url.replace(/https?:\/\/(www\.)?geteducated\.com/, '')
-  }
-
-  return `[ge_internal_link url="${cleanUrl}"]${anchorText}[/ge_internal_link]`
+  console.warn('createInternalLinkShortcode is deprecated. Use generateInternalLinkShortcode for correct GetEducated format.')
+  return generateInternalLinkShortcode({ url, anchorText })
 }
 
 /**
- * Create an external citation shortcode
- * @param {string} url - External URL (must be on approved list)
- * @param {string} anchorText - Link text
- * @returns {string} External citation shortcode
+ * @deprecated Use generateExternalLinkShortcode instead
  */
 export function createExternalCitationShortcode(url, anchorText) {
-  return `[ge_external_cited url="${url}"]${anchorText}[/ge_external_cited]`
+  console.warn('createExternalCitationShortcode is deprecated. Use generateExternalLinkShortcode for correct GetEducated format.')
+  return generateExternalLinkShortcode({ url, anchorText })
 }
 
-/**
- * Check if content has required monetization shortcodes
- * @param {string} content - HTML content
- * @returns {Object} Check result
- */
-export function checkMonetizationCompliance(content) {
-  const shortcodes = extractShortcodes(content)
-
-  // All monetization-related shortcode types
-  const monetizationTypes = [
-    SHORTCODE_TYPES.MONETIZATION,
-    SHORTCODE_TYPES.DEGREE_TABLE,
-    SHORTCODE_TYPES.DEGREE_OFFER,
-  ]
-
-  const monetizationShortcodes = shortcodes.filter(s => monetizationTypes.includes(s.type))
-  const degreeTableCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.DEGREE_TABLE).length
-  const degreeOfferCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.DEGREE_OFFER).length
-  const legacyCount = shortcodes.filter(s => s.type === SHORTCODE_TYPES.MONETIZATION).length
-
-  return {
-    hasMonetization: monetizationShortcodes.length > 0,
-    monetizationCount: monetizationShortcodes.length,
-    shortcodes: monetizationShortcodes,
-    isCompliant: monetizationShortcodes.length >= 1,
-    breakdown: {
-      degreeTable: degreeTableCount,
-      degreeOffer: degreeOfferCount,
-      legacy: legacyCount,
-    },
-    recommendation: monetizationShortcodes.length === 0
-      ? 'Add at least one monetization shortcode (degree_table or degree_offer recommended)'
-      : legacyCount > 0 && degreeTableCount === 0 && degreeOfferCount === 0
-        ? 'Consider upgrading legacy ge_monetization shortcodes to degree_table or degree_offer format'
-        : null,
-  }
-}
-
-/**
- * Get all monetization shortcode types (for filtering)
- */
-export function getMonetizationTypes() {
-  return [
-    SHORTCODE_TYPES.MONETIZATION,
-    SHORTCODE_TYPES.DEGREE_TABLE,
-    SHORTCODE_TYPES.DEGREE_OFFER,
-  ]
-}
-
-/**
- * Check if a shortcode type is a monetization type
- */
-export function isMonetizationType(type) {
-  return getMonetizationTypes().includes(type)
-}
-
-/**
- * Extract ALL shortcode-like tokens from content
- * This catches any pattern that looks like a shortcode: [tag ...] or [/tag]
- * Used to detect unknown/hallucinated shortcodes that aren't in our allowlist
- * @param {string} content - HTML content
- * @returns {Array} Array of token objects with tag, raw, isClosing, position
- */
-export function extractAllShortcodeLikeTokens(content) {
-  if (!content) return []
-
-  const tokens = []
-  // Match patterns like [tag], [tag attr="val"], [/tag]
-  // This regex captures: opening/closing slash, tag name, and attributes
-  const shortcodeRegex = /\[(\/?)([\w-]+)([^\]]*)\]/gi
-  let match
-
-  while ((match = shortcodeRegex.exec(content)) !== null) {
-    tokens.push({
-      raw: match[0],
-      tag: match[2].toLowerCase(),
-      isClosing: match[1] === '/',
-      attributes: match[3].trim(),
-      position: match.index,
-    })
-  }
-
-  return tokens
-}
-
-/**
- * Find unknown/invalid shortcodes in content
- * These are shortcode-like patterns that are NOT in our allowlist
- * @param {string} content - HTML content
- * @param {Array} customAllowlist - Optional additional allowed tags
- * @returns {Array} Array of unknown shortcode tokens
- */
-export function findUnknownShortcodes(content, customAllowlist = []) {
-  const allTokens = extractAllShortcodeLikeTokens(content)
-  const allowedTags = [...ALLOWED_SHORTCODE_TAGS, ...customAllowlist].map(t => t.toLowerCase())
-
-  return allTokens.filter(token => !allowedTags.includes(token.tag))
-}
-
-/**
- * Validate that content contains no unknown shortcodes
- * Returns a structured validation result for use in pre-publish checks
- * @param {string} content - HTML content
- * @param {Object} options - Validation options
- * @returns {Object} Validation result with isValid, unknownShortcodes, message
- */
-export function validateNoUnknownShortcodes(content, options = {}) {
-  const { customAllowlist = [], blockOnUnknown = true } = options
-
-  const unknownShortcodes = findUnknownShortcodes(content, customAllowlist)
-
-  if (unknownShortcodes.length === 0) {
-    return {
-      isValid: true,
-      unknownShortcodes: [],
-      message: 'All shortcodes are valid',
-    }
-  }
-
-  // Get unique unknown tags for the message
-  const uniqueTags = [...new Set(unknownShortcodes.map(s => s.tag))]
-
-  return {
-    isValid: !blockOnUnknown,
-    unknownShortcodes,
-    uniqueTags,
-    message: `Found ${unknownShortcodes.length} unknown shortcode(s): ${uniqueTags.join(', ')}`,
-    details: unknownShortcodes.map(s => ({
-      tag: s.tag,
-      raw: s.raw.substring(0, 100) + (s.raw.length > 100 ? '...' : ''),
-      position: s.position,
-    })),
-  }
-}
+// ============================================================================
+// EXPORTS
+// ============================================================================
 
 export default {
+  // Constants
   SHORTCODE_TYPES,
   ALLOWED_SHORTCODE_TAGS,
+  LEGACY_SHORTCODE_TAGS,
+
+  // Generation functions (NEW - correct format)
+  generateGePicksShortcode,
+  generateSchoolLinkShortcode,
+  generateDegreeLinkShortcode,
+  generateInternalLinkShortcode,
+  generateExternalLinkShortcode,
+  generateQuickDegreeFindShortcode,
+
+  // Parsing functions
+  parseShortcode,
+  extractShortcodes,
+
+  // Validation functions
+  validateShortcodeParams,
+  extractAllShortcodeLikeTokens,
+  findUnknownShortcodes,
+  findLegacyShortcodes,
+  validateNoUnknownShortcodes,
+
+  // Compliance functions
+  checkMonetizationCompliance,
+
+  // URL building functions
+  buildCtaUrl,
+  buildSchoolUrl,
+  buildRankingReportUrl,
+
+  // Topic matching
+  matchTopicToMonetization,
+
+  // Content manipulation
+  insertShortcodeInContent,
+
+  // Legacy (deprecated)
   generateShortcode,
   generateDegreeTableShortcode,
   generateDegreeOfferShortcode,
-  parseShortcode,
-  extractShortcodes,
-  validateShortcodeParams,
-  matchTopicToMonetization,
-  insertShortcodeInContent,
   createInternalLinkShortcode,
   createExternalCitationShortcode,
-  checkMonetizationCompliance,
-  getMonetizationTypes,
-  isMonetizationType,
-  extractAllShortcodeLikeTokens,
-  findUnknownShortcodes,
-  validateNoUnknownShortcodes,
 }

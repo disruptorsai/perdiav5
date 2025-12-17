@@ -30,6 +30,8 @@ import {
   Brain,
   ChevronRight,
   BarChart3,
+  DollarSign,
+  TrendingUp,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
@@ -47,6 +49,7 @@ const STATUS_CONFIG = {
 function ContentIdeas() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState(null)
+  const [filterMonetization, setFilterMonetization] = useState(null) // high, medium, low, or null for all
   const [generatingIdea, setGeneratingIdea] = useState(null)
   const [rejectModalIdea, setRejectModalIdea] = useState(null) // For rejection reason modal
   const [activeTab, setActiveTab] = useState('ideas') // ideas, history
@@ -252,7 +255,7 @@ function ContentIdeas() {
 
         <TabsContent value="ideas" className="mt-0">
           {/* Filters */}
-          <div className="flex gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => setFilterStatus(null)}
               className={`px-4 py-2 rounded-lg ${
@@ -278,9 +281,58 @@ function ContentIdeas() {
             ))}
           </div>
 
-          {/* Ideas Grid */}
+          {/* Monetization Filters */}
+          <div className="flex gap-2 mb-6">
+            <span className="text-sm text-gray-500 flex items-center gap-1 mr-2">
+              <DollarSign className="w-4 h-4" /> Revenue:
+            </span>
+            <button
+              onClick={() => setFilterMonetization(null)}
+              className={`px-3 py-1.5 rounded-lg text-sm ${
+                filterMonetization === null
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterMonetization('high')}
+              className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${
+                filterMonetization === 'high'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+              }`}
+            >
+              <TrendingUp className="w-3 h-3" /> High $
+            </button>
+            <button
+              onClick={() => setFilterMonetization('medium')}
+              className={`px-3 py-1.5 rounded-lg text-sm ${
+                filterMonetization === 'medium'
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+              }`}
+            >
+              Med $
+            </button>
+            <button
+              onClick={() => setFilterMonetization('low')}
+              className={`px-3 py-1.5 rounded-lg text-sm ${
+                filterMonetization === 'low'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+              }`}
+            >
+              Low $
+            </button>
+          </div>
+
+          {/* Ideas Grid - filtered by monetization */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {ideas.map((idea) => (
+            {ideas
+              .filter(idea => !filterMonetization || idea.monetization_confidence === filterMonetization)
+              .map((idea) => (
               <IdeaCard
                 key={idea.id}
                 idea={idea}
@@ -351,14 +403,44 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
   const StatusIcon = statusConfig.icon
   const feedbackScore = idea.feedback_score || 0
 
+  // Monetization score badge configuration
+  const getMonetizationBadge = () => {
+    const confidence = idea.monetization_confidence || 'unscored'
+    const score = idea.monetization_score || 0
+
+    if (confidence === 'unscored' || confidence === null) {
+      return null // Don't show badge for unscored ideas
+    }
+
+    const configs = {
+      high: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', label: 'High $' },
+      medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', label: 'Med $' },
+      low: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Low $' },
+    }
+
+    return configs[confidence] || null
+  }
+
+  const monetizationBadge = getMonetizationBadge()
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow">
-      {/* Header: Status Badge + Quick Feedback + Delete */}
+      {/* Header: Status Badge + Monetization + Quick Feedback + Delete */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
             {statusConfig.label}
           </span>
+          {/* Monetization Score Badge */}
+          {monetizationBadge && (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${monetizationBadge.bg} ${monetizationBadge.text} border ${monetizationBadge.border}`}
+              title={`Monetization potential: ${idea.monetization_confidence} (score: ${idea.monetization_score})`}
+            >
+              <DollarSign className="w-3 h-3" />
+              {monetizationBadge.label}
+            </span>
+          )}
           {/* Feedback Score Badge */}
           {feedbackScore !== 0 && (
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -415,19 +497,24 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
         </div>
       )}
 
-      {/* Topics */}
-      {idea.seed_topics && idea.seed_topics.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {idea.seed_topics.slice(0, 3).map((topic, i) => (
-            <span
-              key={i}
-              className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
-            >
-              {topic}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* Degree Level + Topics */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {/* Degree Level Badge */}
+        {idea.monetization_degree_level && (
+          <span className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded border border-purple-200">
+            {idea.monetization_degree_level}
+          </span>
+        )}
+        {/* Topics */}
+        {idea.seed_topics && idea.seed_topics.slice(0, 3).map((topic, i) => (
+          <span
+            key={i}
+            className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+          >
+            {topic}
+          </span>
+        ))}
+      </div>
 
       {/* Actions */}
       <div className="flex gap-2 mt-4">

@@ -7,10 +7,20 @@
  * - Where they appear in the article
  * - That all complies with GetEducated business rules
  *
- * Implements the full spec from perdia_geteducated_content_monetization_spec.md
+ * IMPORTANT: Uses ACTUAL GetEducated WordPress shortcodes (updated 2025-12-17):
+ * - [su_ge-picks] for degree tables/picks
+ * - [su_ge-cta] for links (school, degree, internal, external)
+ * - [su_ge-qdf] for Quick Degree Find widget
+ *
+ * See shortcodeService.js for full shortcode documentation.
  */
 
 import { supabase } from './supabaseClient'
+import {
+  generateGePicksShortcode,
+  generateQuickDegreeFindShortcode,
+  buildCtaUrl,
+} from './shortcodeService'
 
 /**
  * Default configuration for monetization engine
@@ -35,22 +45,28 @@ const DEFAULT_CONFIG = {
 
 /**
  * Slot type definitions
+ * Updated to use correct GetEducated shortcodes
  */
 const SLOT_TYPES = {
   table: {
-    shortcodeType: 'degree_table',
+    shortcodeType: 'su_ge-picks',  // Was: 'degree_table'
     defaultMax: 5,
     minPrograms: 3,
   },
   hero: {
-    shortcodeType: 'degree_offer',
+    shortcodeType: 'su_ge-picks',  // Was: 'degree_offer' - GE Picks can show single item
     defaultMax: 1,
     minPrograms: 1,
   },
   compact: {
-    shortcodeType: 'degree_table',
+    shortcodeType: 'su_ge-picks',  // Was: 'degree_table'
     defaultMax: 3,
     minPrograms: 2,
+  },
+  qdf: {
+    shortcodeType: 'su_ge-qdf',    // Quick Degree Find widget
+    defaultMax: null,
+    minPrograms: 0,
   },
 }
 
@@ -426,52 +442,73 @@ export class MonetizationEngine {
 
   /**
    * Generate shortcode for a slot
+   * Updated to use correct GetEducated WordPress shortcodes
    */
-  generateSlotShortcode({ type, categoryId, concentrationId, degreeLevelCode, maxPrograms, programs }) {
+  generateSlotShortcode({ type, categoryId, concentrationId, degreeLevelCode, maxPrograms, programs, category }) {
     const slotType = SLOT_TYPES[type] || SLOT_TYPES.table
 
-    if (slotType.shortcodeType === 'degree_offer' && programs.length > 0) {
-      // Single program highlight shortcode
-      const heroProgram = programs[0]
-      return this.generateDegreeOfferShortcode({
-        programId: heroProgram.id,
-        schoolId: heroProgram.school_id,
-        highlight: true,
-      })
-    } else {
-      // Table shortcode
-      return this.generateDegreeTableShortcode({
-        categoryId,
-        concentrationId,
-        degreeLevelCode,
-        maxPrograms,
-        sponsoredFirst: true,
+    // Quick Degree Find widget
+    if (slotType.shortcodeType === 'su_ge-qdf') {
+      return generateQuickDegreeFindShortcode({
+        type: 'simple',
+        header: 'Find Your Degree',
       })
     }
-  }
 
-  /**
-   * Generate [degree_table] shortcode
-   */
-  generateDegreeTableShortcode({ categoryId, concentrationId, degreeLevelCode, maxPrograms, sponsoredFirst = true }) {
-    let shortcode = `[degree_table category="${categoryId}" concentration="${concentrationId}"`
-
+    // GE Picks shortcode (correct GetEducated format)
+    // Build the CTA URL from category/concentration/level
+    let ctaUrl = '/online-degrees/'
     if (degreeLevelCode) {
-      shortcode += ` level="${degreeLevelCode}"`
+      // Map level code to slug (this is approximate - may need adjustment)
+      const levelSlugs = {
+        1: 'associate',
+        2: 'bachelor',
+        3: 'bachelor', // bachelor completion
+        4: 'master',
+        5: 'doctorate',
+        6: 'certificate',
+      }
+      const levelSlug = levelSlugs[degreeLevelCode] || ''
+      if (levelSlug) ctaUrl += `${levelSlug}/`
+    }
+    if (category) {
+      const categorySlug = category.category?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || ''
+      const concentrationSlug = category.concentration?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || ''
+      if (categorySlug) ctaUrl += `${categorySlug}/`
+      if (concentrationSlug) ctaUrl += `${concentrationSlug}/`
     }
 
-    shortcode += ` max="${maxPrograms}"`
-    shortcode += ` sponsored_first="${sponsoredFirst}"`
-    shortcode += ']'
-
-    return shortcode
+    return generateGePicksShortcode({
+      category: categoryId,
+      concentration: concentrationId,
+      level: degreeLevelCode,
+      header: "GetEducated's Picks",
+      ctaButton: 'View More Degrees',
+      ctaUrl,
+    })
   }
 
   /**
-   * Generate [degree_offer] shortcode (single program highlight)
+   * @deprecated Use generateGePicksShortcode from shortcodeService.js
+   * Kept for backward compatibility
    */
-  generateDegreeOfferShortcode({ programId, schoolId, highlight = true }) {
-    return `[degree_offer program_id="${programId}" school_id="${schoolId}" highlight="${highlight}"]`
+  generateDegreeTableShortcode({ categoryId, concentrationId, degreeLevelCode }) {
+    console.warn('MonetizationEngine.generateDegreeTableShortcode is deprecated. Use generateGePicksShortcode.')
+    return generateGePicksShortcode({
+      category: categoryId,
+      concentration: concentrationId,
+      level: degreeLevelCode,
+    })
+  }
+
+  /**
+   * @deprecated Single program highlight requires WordPress IDs we don't have
+   * Use generateGePicksShortcode with limited results instead
+   */
+  generateDegreeOfferShortcode({ programId, schoolId }) {
+    console.warn('MonetizationEngine.generateDegreeOfferShortcode is deprecated. WordPress school/degree IDs required.')
+    // Return a GE Picks shortcode as fallback (will need proper IDs later)
+    throw new Error('generateDegreeOfferShortcode requires WordPress school/degree IDs. Contact Tony for ID mapping.')
   }
 
   /**

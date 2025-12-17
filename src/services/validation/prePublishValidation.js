@@ -18,7 +18,9 @@ import {
   validateShortcodeParams,
   checkMonetizationCompliance,
   validateNoUnknownShortcodes,
+  findLegacyShortcodes,
   SHORTCODE_TYPES,
+  LEGACY_SHORTCODE_TAGS,
 } from '../shortcodeService'
 
 /**
@@ -38,6 +40,7 @@ const createValidationResult = () => ({
     content: { passed: false, message: '' },
     shortcodes: { passed: false, message: '' },
     unknownShortcodes: { passed: false, message: '' },
+    legacyShortcodes: { passed: false, message: '' },
   }
 })
 
@@ -53,8 +56,9 @@ export function validateForPublish(article, options = {}) {
     blockHighRisk = true,
     enforceApprovedAuthors = true,
     checkLinks = true,
-    requireMonetization = true,      // NEW: Make missing monetization a blocking issue
-    blockUnknownShortcodes = true,   // NEW: Block publish if unknown shortcodes found
+    requireMonetization = true,      // Make missing monetization a blocking issue
+    blockUnknownShortcodes = true,   // Block publish if unknown shortcodes found
+    blockLegacyShortcodes = true,    // Block publish if legacy (incorrect) shortcodes found
   } = options
 
   const result = createValidationResult()
@@ -186,11 +190,15 @@ export function validateForPublish(article, options = {}) {
   }
 
   // 6. Shortcode Validation (monetization)
+  // Updated 2025-12-17: Now validates against CORRECT GetEducated shortcodes:
+  // - [su_ge-picks] for degree tables/picks
+  // - [su_ge-cta] for links
+  // - [su_ge-qdf] for Quick Degree Find
   if (article.content) {
     const monetizationCheck = checkMonetizationCompliance(article.content)
     const shortcodes = extractShortcodes(article.content)
 
-    // Check for monetization shortcodes - NOW BLOCKING BY DEFAULT
+    // Check for monetization shortcodes - BLOCKING BY DEFAULT
     if (!monetizationCheck.hasMonetization) {
       result.checks.shortcodes.passed = false
       result.checks.shortcodes.message = 'No monetization shortcodes found'
@@ -199,29 +207,30 @@ export function validateForPublish(article, options = {}) {
         // BLOCKING: Cannot publish without monetization
         result.blockingIssues.push({
           type: 'missing_monetization',
-          message: 'Article requires at least one monetization shortcode (degree_table or degree_offer). Cannot publish without monetization.',
+          message: 'Article requires at least one monetization shortcode ([su_ge-picks] or [su_ge-qdf]). Cannot publish without monetization.',
         })
       } else {
         // Non-blocking warning (for backwards compatibility if disabled)
         result.warnings.push({
           type: 'missing_shortcode',
-          message: 'Article has no monetization shortcodes. Consider adding degree_table or degree_offer shortcodes.',
+          message: 'Article has no monetization shortcodes. Consider adding [su_ge-picks] or [su_ge-qdf] shortcodes.',
         })
       }
     } else {
       // Validate each shortcode's parameters
       const shortcodeIssues = []
-      const monetizationTypes = [SHORTCODE_TYPES.MONETIZATION, SHORTCODE_TYPES.DEGREE_TABLE, SHORTCODE_TYPES.DEGREE_OFFER]
+      // Updated to use correct GetEducated shortcode types
+      const monetizationTypes = [SHORTCODE_TYPES.GE_PICKS, SHORTCODE_TYPES.GE_QDF]
 
       for (const shortcode of shortcodes) {
-        if (monetizationTypes.includes(shortcode.type) && shortcode.categoryId && shortcode.concentrationId) {
-          // Note: validateShortcodeParams is async, but we're doing sync validation here
-          // For full async validation, use validateForPublishAsync
-          if (shortcode.categoryId <= 0 || shortcode.concentrationId <= 0) {
-            shortcodeIssues.push(`Invalid shortcode parameters: category=${shortcode.categoryId}, concentration=${shortcode.concentrationId}`)
-          }
-          if (shortcode.levelCode !== null && shortcode.levelCode !== undefined && shortcode.levelCode <= 0) {
-            shortcodeIssues.push(`Invalid level code: ${shortcode.levelCode}`)
+        if (monetizationTypes.includes(shortcode.type)) {
+          // Validate GE Picks parameters
+          if (shortcode.type === SHORTCODE_TYPES.GE_PICKS) {
+            const category = shortcode.params?.category
+            const concentration = shortcode.params?.concentration
+            if (!category || !concentration) {
+              shortcodeIssues.push(`Missing required parameters in [su_ge-picks]: category and concentration required`)
+            }
           }
         }
       }
@@ -237,9 +246,9 @@ export function validateForPublish(article, options = {}) {
         })
       } else {
         result.checks.shortcodes.passed = true
-        result.checks.shortcodes.message = `${monetizationCheck.monetizationCount} shortcode(s) found`
+        result.checks.shortcodes.message = `${monetizationCheck.monetizationCount} shortcode(s) found (${monetizationCheck.breakdown.gePicks} picks, ${monetizationCheck.breakdown.quickDegreeFind} QDF)`
 
-        // Add recommendation if using legacy format
+        // Add recommendation if any
         if (monetizationCheck.recommendation) {
           result.warnings.push({
             type: 'shortcode_recommendation',
@@ -257,6 +266,46 @@ export function validateForPublish(article, options = {}) {
         message: 'Article has no content. Cannot validate monetization.',
       })
     }
+  }
+
+  // 6b. Legacy Shortcode Detection - BLOCKING CHECK
+  // Detects our OLD incorrect shortcode formats that need migration
+  if (article.content) {
+    const legacyShortcodes = findLegacyShortcodes(article.content)
+
+    if (legacyShortcodes.length === 0) {
+      result.checks.legacyShortcodes.passed = true
+      result.checks.legacyShortcodes.message = 'No legacy shortcodes detected'
+    } else {
+      result.checks.legacyShortcodes.passed = false
+      const uniqueLegacyTags = [...new Set(legacyShortcodes.map(s => s.tag))]
+      result.checks.legacyShortcodes.message = `Found ${legacyShortcodes.length} legacy shortcode(s): ${uniqueLegacyTags.join(', ')}`
+      result.checks.legacyShortcodes.details = legacyShortcodes.map(s => ({
+        tag: s.tag,
+        raw: s.raw.substring(0, 100) + (s.raw.length > 100 ? '...' : ''),
+        position: s.position,
+      }))
+
+      if (blockLegacyShortcodes) {
+        // BLOCKING: Legacy shortcodes must be migrated
+        result.blockingIssues.push({
+          type: 'legacy_shortcode',
+          message: `Article contains ${legacyShortcodes.length} legacy shortcode(s) that will not work in WordPress: ${uniqueLegacyTags.join(', ')}. These must be replaced with correct GetEducated shortcodes ([su_ge-picks], [su_ge-cta], [su_ge-qdf]).`,
+          details: result.checks.legacyShortcodes.details,
+          legacyTags: uniqueLegacyTags,
+        })
+      } else {
+        // Non-blocking warning
+        result.warnings.push({
+          type: 'legacy_shortcode_warning',
+          message: `Article contains legacy shortcodes that should be migrated: ${uniqueLegacyTags.join(', ')}`,
+          details: result.checks.legacyShortcodes.details,
+        })
+      }
+    }
+  } else {
+    result.checks.legacyShortcodes.passed = true
+    result.checks.legacyShortcodes.message = 'No content to check'
   }
 
   // 7. Unknown Shortcode Detection - BLOCKING CHECK

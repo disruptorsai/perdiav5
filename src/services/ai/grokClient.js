@@ -349,11 +349,18 @@ REQUIREMENTS:
    - Help readers make informed decisions about their education
 
 5. STRUCTURE REQUIREMENTS:
-   - DO NOT include school recommendation sections (these will be added via shortcodes)
+   - DO NOT include school recommendation sections (these will be added via shortcodes later)
    - Include article navigation suggestions (anchor links to major sections)
    - Minimum 3 FAQ items relevant to the topic with COMPLETE answers (no truncation)
    - Include a "How we researched this" note mentioning GetEducated's methodology
    - ALWAYS include a proper conclusion section - never end the article abruptly
+
+6. SHORTCODES - CRITICAL:
+   - DO NOT generate any shortcodes in the content - they will be added programmatically later
+   - DO NOT use these fake shortcode formats: [degree_table], [degree_offer], [ge_monetization], [ge_internal_link], [ge_external_cited]
+   - The REAL GetEducated shortcodes are: [su_ge-picks], [su_ge-cta], [su_ge-qdf]
+   - If you need to indicate where a degree list should go, just write: <!-- MONETIZATION BLOCK: degree picks for [topic] -->
+   - Links to ranking reports, schools, and degrees will be added via shortcodes AFTER generation
 
 === END GETEDUCATED RULES ===
 
