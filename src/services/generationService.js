@@ -34,6 +34,10 @@ class GenerationService {
     this.processingQueue = []
     this.currentTask = null
 
+    // Content rules configuration (loaded from database)
+    this.contentRules = null
+    this.contentRulesLoadedAt = null
+
     // Humanization settings - optimized for maximum AI detection bypass
     this.humanizationProvider = 'stealthgpt' // 'stealthgpt' or 'claude'
     this.stealthGptSettings = {
@@ -45,9 +49,257 @@ class GenerationService {
     }
   }
 
+  // ========================================
+  // CONTENT RULES CONFIGURATION
+  // ========================================
+
+  /**
+   * Load content rules from database
+   * Caches for 5 minutes to avoid repeated queries
+   */
+  async loadContentRules() {
+    // Return cached rules if still fresh (5 minutes)
+    if (this.contentRules && this.contentRulesLoadedAt &&
+        (Date.now() - this.contentRulesLoadedAt) < 5 * 60 * 1000) {
+      return this.contentRules
+    }
+
+    try {
+      // Try RPC function first
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_content_rules')
+
+      if (!rpcError && rpcData) {
+        this.contentRules = rpcData
+        this.contentRulesLoadedAt = Date.now()
+        console.log('[Generation] Loaded content rules from RPC, version:', rpcData.version)
+        return this.contentRules
+      }
+
+      // Fallback to direct query
+      const { data, error } = await supabase
+        .from('content_rules_config')
+        .select('*')
+        .eq('is_active', true)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn('[Generation] No content rules config found, using defaults')
+          this.contentRules = this.getDefaultContentRules()
+        } else {
+          throw error
+        }
+      } else {
+        this.contentRules = data
+        console.log('[Generation] Loaded content rules, version:', data.version)
+      }
+
+      this.contentRulesLoadedAt = Date.now()
+      return this.contentRules
+
+    } catch (error) {
+      console.error('[Generation] Error loading content rules:', error)
+      // Return defaults on error
+      this.contentRules = this.getDefaultContentRules()
+      return this.contentRules
+    }
+  }
+
+  /**
+   * Default content rules (fallback if database has no config)
+   */
+  getDefaultContentRules() {
+    return {
+      version: 0,
+      hard_rules: {
+        authors: { approved_authors: ['Tony Huffman', 'Kayleigh Gilbert', 'Sara', 'Charity'], require_author_assignment: true, enforce_approved_only: true },
+        links: { blocked_domains: ['onlineu.com', 'usnews.com', 'niche.com'], blocked_patterns: [], block_edu_links: true, block_competitor_links: true },
+        external_sources: { allowed_domains: ['bls.gov', 'ed.gov', 'nces.ed.gov'], require_whitelist: true },
+        monetization: { require_monetization_shortcode: true, block_unknown_shortcodes: true, block_legacy_shortcodes: true },
+        publishing: { require_human_review: true, block_high_risk: true, block_critical_risk: true },
+      },
+      guidelines: {
+        word_count: { minimum: 1500, target: 2000, maximum: 2500 },
+        structure: { min_h2_headings: 3, max_h2_headings: 8 },
+        faqs: { minimum: 3, target: 5 },
+        links: { internal_links_min: 3, internal_links_target: 5, external_citations_min: 2 },
+        quality: { minimum_score_to_publish: 70, minimum_score_auto_publish: 80, target_score: 85 },
+        readability: { target_flesch_score: 60, max_avg_sentence_length: 25 },
+      },
+      tone_voice: {
+        overall_style: { tone: 'conversational', formality: 'professional but approachable' },
+        banned_phrases: ['utilize', 'in order to', 'at the end of the day', 'synergy', 'leverage'],
+        preferred_phrases: ['use', 'to', 'ultimately', 'work together', 'apply'],
+        sentence_variety: { vary_length: true, avoid_starting_with_same_word: true },
+        anti_hallucination: { require_citations_for_statistics: true, no_invented_data: true },
+      },
+      pipeline_steps: [
+        { id: 'draft', name: 'Draft Generation', enabled: true, provider: 'grok' },
+        { id: 'humanize', name: 'Humanization', enabled: true, provider: 'stealthgpt' },
+        { id: 'internal_links', name: 'Internal Linking', enabled: true },
+        { id: 'monetization', name: 'Monetization', enabled: true },
+        { id: 'quality_check', name: 'Quality Check', enabled: true },
+      ],
+      author_content_mapping: {},
+      shortcode_rules: { allowed_shortcodes: [], legacy_shortcodes_blocked: [] },
+    }
+  }
+
+  /**
+   * Build content rules context for AI prompts
+   * This injects hard rules and guidelines into the AI prompt
+   */
+  buildContentRulesPromptSection(rules) {
+    if (!rules) return ''
+
+    let section = '\n\n=== CONTENT RULES (MUST FOLLOW) ===\n'
+
+    // Hard Rules
+    const hr = rules.hard_rules || {}
+
+    // Authors
+    if (hr.authors?.approved_authors?.length > 0) {
+      section += `\nAPPROVED AUTHORS ONLY: ${hr.authors.approved_authors.join(', ')}\n`
+    }
+
+    // Link rules
+    if (hr.links) {
+      section += '\nLINK RULES:\n'
+      if (hr.links.block_edu_links) {
+        section += '- NEVER link directly to .edu domains (use GetEducated school pages instead)\n'
+      }
+      if (hr.links.block_competitor_links && hr.links.blocked_domains?.length > 0) {
+        section += `- NEVER link to competitors: ${hr.links.blocked_domains.join(', ')}\n`
+      }
+    }
+
+    // External sources
+    if (hr.external_sources?.allowed_domains?.length > 0) {
+      section += `\nALLOWED EXTERNAL SOURCES: ${hr.external_sources.allowed_domains.join(', ')}\n`
+      section += '- Only cite these domains for external data\n'
+    }
+
+    // Guidelines (soft rules)
+    const gl = rules.guidelines || {}
+
+    section += '\n\nCONTENT GUIDELINES:\n'
+
+    if (gl.word_count) {
+      section += `- Word count: ${gl.word_count.minimum}-${gl.word_count.maximum} words (target: ${gl.word_count.target})\n`
+    }
+
+    if (gl.structure) {
+      section += `- Use ${gl.structure.min_h2_headings}-${gl.structure.max_h2_headings} H2 headings\n`
+    }
+
+    if (gl.faqs) {
+      section += `- Include ${gl.faqs.minimum}-${gl.faqs.target} FAQs\n`
+    }
+
+    if (gl.links) {
+      section += `- Include ${gl.links.internal_links_min}-${gl.links.internal_links_target} internal links\n`
+      section += `- Include at least ${gl.links.external_citations_min} external citations\n`
+    }
+
+    // Tone and voice
+    const tv = rules.tone_voice || {}
+
+    if (tv.overall_style) {
+      section += `\nWRITING STYLE: ${tv.overall_style.tone}, ${tv.overall_style.formality}\n`
+    }
+
+    if (tv.banned_phrases?.length > 0) {
+      section += `\nBANNED PHRASES (never use): ${tv.banned_phrases.slice(0, 10).join(', ')}\n`
+    }
+
+    if (tv.preferred_phrases?.length > 0) {
+      section += `\nPREFERRED PHRASES: ${tv.preferred_phrases.slice(0, 10).join(', ')}\n`
+    }
+
+    if (tv.anti_hallucination?.require_citations_for_statistics) {
+      section += '\n- Cite sources for all statistics and data\n'
+      section += '- Do NOT invent or estimate data points\n'
+    }
+
+    section += '\n=== END CONTENT RULES ===\n'
+
+    return section
+  }
+
+  /**
+   * Build tone/voice context for humanization
+   */
+  buildToneVoiceContext(rules) {
+    if (!rules?.tone_voice) return null
+
+    const tv = rules.tone_voice
+    return {
+      tone: tv.overall_style?.tone || 'conversational',
+      formality: tv.overall_style?.formality || 'professional',
+      bannedPhrases: tv.banned_phrases || [],
+      preferredPhrases: tv.preferred_phrases || [],
+      sentenceVariety: tv.sentence_variety || {},
+    }
+  }
+
+  /**
+   * Get quality thresholds from content rules
+   */
+  getQualityThresholds(rules) {
+    const defaults = {
+      minWordCount: 1500,
+      maxWordCount: 2500,
+      targetWordCount: 2000,
+      minInternalLinks: 3,
+      minExternalLinks: 2,
+      minFaqs: 3,
+      minH2Headings: 3,
+      maxAvgSentenceLength: 25,
+      minScoreToPublish: 70,
+      minScoreAutoPublish: 80,
+      targetScore: 85,
+    }
+
+    if (!rules?.guidelines) return defaults
+
+    const gl = rules.guidelines
+    return {
+      minWordCount: gl.word_count?.minimum || defaults.minWordCount,
+      maxWordCount: gl.word_count?.maximum || defaults.maxWordCount,
+      targetWordCount: gl.word_count?.target || defaults.targetWordCount,
+      minInternalLinks: gl.links?.internal_links_min || defaults.minInternalLinks,
+      minExternalLinks: gl.links?.external_citations_min || defaults.minExternalLinks,
+      minFaqs: gl.faqs?.minimum || defaults.minFaqs,
+      minH2Headings: gl.structure?.min_h2_headings || defaults.minH2Headings,
+      maxAvgSentenceLength: gl.readability?.max_avg_sentence_length || defaults.maxAvgSentenceLength,
+      minScoreToPublish: gl.quality?.minimum_score_to_publish || defaults.minScoreToPublish,
+      minScoreAutoPublish: gl.quality?.minimum_score_auto_publish || defaults.minScoreAutoPublish,
+      targetScore: gl.quality?.target_score || defaults.targetScore,
+    }
+  }
+
+  /**
+   * Check if a pipeline step is enabled
+   */
+  isPipelineStepEnabled(rules, stepId) {
+    if (!rules?.pipeline_steps) return true // Default to enabled
+    const step = rules.pipeline_steps.find(s => s.id === stepId)
+    return step ? step.enabled !== false : true
+  }
+
+  /**
+   * Get pipeline step config
+   */
+  getPipelineStepConfig(rules, stepId) {
+    if (!rules?.pipeline_steps) return {}
+    const step = rules.pipeline_steps.find(s => s.id === stepId)
+    return step?.config || {}
+  }
+
   /**
    * Generate complete article from content idea with full quality assurance
    * Includes auto-fix loop with up to 3 retry attempts
+   * Now integrates Content Rules from database for dynamic configuration
    */
   async generateArticleComplete(idea, options = {}, onProgress) {
     const {
@@ -61,6 +313,17 @@ class GenerationService {
     } = options
 
     try {
+      // STAGE -1: Load content rules configuration
+      this.updateProgress(onProgress, 'Loading content rules configuration...', 2)
+      const contentRules = await this.loadContentRules()
+      const qualityThresholds = this.getQualityThresholds(contentRules)
+      const contentRulesPrompt = this.buildContentRulesPromptSection(contentRules)
+
+      console.log(`[Generation] Content rules loaded (version ${contentRules?.version || 0})`)
+
+      // Use target word count from content rules if available
+      const effectiveTargetWordCount = targetWordCount || qualityThresholds.targetWordCount
+
       // Update progress
       this.updateProgress(onProgress, 'Fetching cost data from ranking reports...', 5)
 
@@ -84,13 +347,19 @@ class GenerationService {
 
       this.updateProgress(onProgress, 'Generating draft with Grok AI...', 20)
 
-      // STAGE 2: Generate draft with Grok (includes cost data AND author profile)
+      // Check if draft generation is enabled in pipeline
+      if (!this.isPipelineStepEnabled(contentRules, 'draft')) {
+        throw new Error('Draft generation step is disabled in pipeline configuration')
+      }
+
+      // STAGE 2: Generate draft with Grok (includes cost data, author profile, AND content rules)
       const draftData = await this.grok.generateDraft(idea, {
         contentType,
-        targetWordCount,
+        targetWordCount: effectiveTargetWordCount,
         costDataContext: costContext.promptText, // Pass cost data to prompt
         authorProfile: authorPrompt, // Pass comprehensive author profile
         authorName: contributor?.name,
+        contentRulesContext: contentRulesPrompt, // NEW: Pass content rules to AI
       })
 
       this.updateProgress(onProgress, 'Validating draft content...', 30)
@@ -138,117 +407,139 @@ class GenerationService {
 
       this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
 
+      // Check if humanization is enabled in pipeline
+      const humanizeEnabled = this.isPipelineStepEnabled(contentRules, 'humanize')
+
+      // Get tone/voice settings from content rules
+      const toneVoiceContext = this.buildToneVoiceContext(contentRules)
+
       // STAGE 3: Humanize with StealthGPT (primary) or Claude (fallback)
       // Uses optimized settings: 150-200 word chunks, iterative rephrasing, business mode
       let humanizedContent
-      try {
-        if (this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured()) {
-          const stealthOptions = {
-            tone: this.stealthGptSettings.tone,
-            mode: this.stealthGptSettings.mode,
-            detector: this.stealthGptSettings.detector,
-            business: this.stealthGptSettings.business, // 10x more powerful engine
-          }
+      if (!humanizeEnabled) {
+        console.log('[Generation] Humanization step disabled in pipeline config - skipping')
+        humanizedContent = draftData.content
+      } else {
+        try {
+          if (this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured()) {
+            const stealthOptions = {
+              tone: this.stealthGptSettings.tone,
+              mode: this.stealthGptSettings.mode,
+              detector: this.stealthGptSettings.detector,
+              business: this.stealthGptSettings.business, // 10x more powerful engine
+            }
 
-          // Use double-passing for maximum undetectability if enabled
-          if (this.stealthGptSettings.doublePassing) {
-            console.log('[Generation] Using double-pass humanization for maximum bypass')
-            humanizedContent = await this.stealthGpt.humanizeWithDoublePassing(draftData.content, stealthOptions)
+            // Use double-passing for maximum undetectability if enabled
+            if (this.stealthGptSettings.doublePassing) {
+              console.log('[Generation] Using double-pass humanization for maximum bypass')
+              humanizedContent = await this.stealthGpt.humanizeWithDoublePassing(draftData.content, stealthOptions)
+            } else {
+              humanizedContent = await this.stealthGpt.humanizeLongContent(draftData.content, stealthOptions)
+            }
+            console.log('[Generation] Content humanized with StealthGPT (optimized)')
           } else {
-            humanizedContent = await this.stealthGpt.humanizeLongContent(draftData.content, stealthOptions)
+            // Fallback to Claude with comprehensive author profile AND tone/voice context
+            humanizedContent = await this.claude.humanize(draftData.content, {
+              contributorProfile: contributor,
+              authorSystemPrompt: authorPrompt,
+              targetPerplexity: 'high',
+              targetBurstiness: 'high',
+              toneVoice: toneVoiceContext, // NEW: Pass tone/voice from content rules
+            })
+            console.log('[Generation] Content humanized with Claude (fallback)')
           }
-          console.log('[Generation] Content humanized with StealthGPT (optimized)')
-        } else {
-          // Fallback to Claude with comprehensive author profile
+        } catch (humanizeError) {
+          console.warn('[Generation] StealthGPT humanization failed, falling back to Claude:', humanizeError.message)
           humanizedContent = await this.claude.humanize(draftData.content, {
             contributorProfile: contributor,
             authorSystemPrompt: authorPrompt,
             targetPerplexity: 'high',
             targetBurstiness: 'high',
+            toneVoice: toneVoiceContext, // NEW: Pass tone/voice from content rules
           })
-          console.log('[Generation] Content humanized with Claude (fallback)')
         }
-      } catch (humanizeError) {
-        console.warn('[Generation] StealthGPT humanization failed, falling back to Claude:', humanizeError.message)
-        humanizedContent = await this.claude.humanize(draftData.content, {
-          contributorProfile: contributor,
-          authorSystemPrompt: authorPrompt,
-          targetPerplexity: 'high',
-          targetBurstiness: 'high',
-        })
       }
 
       this.updateProgress(onProgress, 'Adding internal links...', 55)
 
-      // STAGE 4: Add internal links
+      // STAGE 4: Add internal links (respects pipeline config)
       let finalContent = humanizedContent
-      if (addInternalLinks) {
+      const internalLinksEnabled = this.isPipelineStepEnabled(contentRules, 'internal_links')
+      if (addInternalLinks && internalLinksEnabled) {
         const siteArticles = await this.getRelevantSiteArticles(draftData.title, 30)
         if (siteArticles.length >= 3) {
           finalContent = await this.addInternalLinksToContent(humanizedContent, siteArticles)
         }
+      } else if (!internalLinksEnabled) {
+        console.log('[Generation] Internal linking step disabled in pipeline config - skipping')
       }
 
       this.updateProgress(onProgress, 'Adding monetization shortcodes...', 62)
 
-      // STAGE 4.5: Add monetization shortcodes using new MonetizationEngine
+      // STAGE 4.5: Add monetization shortcodes using new MonetizationEngine (respects pipeline config)
+      const monetizationEnabled = this.isPipelineStepEnabled(contentRules, 'monetization')
       let monetizationResult = null
-      try {
-        // First, match the topic to a monetization category
-        const monetizationMatch = await this.monetizationEngine.matchTopicToCategory(
-          idea.title || draftData.title,
-          costContext.degreeLevel
-        )
 
-        if (monetizationMatch.matched) {
-          console.log(`[Generation] Matched monetization: category=${monetizationMatch.categoryId}, concentration=${monetizationMatch.concentrationId}, confidence=${monetizationMatch.confidence}`)
+      if (!monetizationEnabled) {
+        console.log('[Generation] Monetization step disabled in pipeline config - skipping')
+      } else {
+        try {
+          // First, match the topic to a monetization category
+          const monetizationMatch = await this.monetizationEngine.matchTopicToCategory(
+            idea.title || draftData.title,
+            costContext.degreeLevel
+          )
 
-          // Determine article type for slot configuration
-          const articleType = options.contentType || 'default'
+          if (monetizationMatch.matched) {
+            console.log(`[Generation] Matched monetization: category=${monetizationMatch.categoryId}, concentration=${monetizationMatch.concentrationId}, confidence=${monetizationMatch.confidence}`)
 
-          // Generate full monetization with program selection
-          monetizationResult = await this.monetizationEngine.generateMonetization({
-            articleId: idea.id,
-            categoryId: monetizationMatch.categoryId,
-            concentrationId: monetizationMatch.concentrationId,
-            degreeLevelCode: monetizationMatch.degreeLevelCode,
-            articleType,
-          })
+            // Determine article type for slot configuration
+            const articleType = options.contentType || 'default'
 
-          if (monetizationResult.success && monetizationResult.slots.length > 0) {
-            console.log(`[Generation] Generated ${monetizationResult.slots.length} monetization slots with ${monetizationResult.totalProgramsSelected} programs`)
+            // Generate full monetization with program selection
+            monetizationResult = await this.monetizationEngine.generateMonetization({
+              articleId: idea.id,
+              categoryId: monetizationMatch.categoryId,
+              concentrationId: monetizationMatch.concentrationId,
+              degreeLevelCode: monetizationMatch.degreeLevelCode,
+              articleType,
+            })
 
-            // Insert shortcodes at their designated positions
-            for (const slot of monetizationResult.slots) {
-              // Map slot names to insertion positions
-              const positionMap = {
-                'after_intro': 'after_intro',
-                'mid_article': 'mid_content',
-                'near_conclusion': 'pre_conclusion',
+            if (monetizationResult.success && monetizationResult.slots.length > 0) {
+              console.log(`[Generation] Generated ${monetizationResult.slots.length} monetization slots with ${monetizationResult.totalProgramsSelected} programs`)
+
+              // Insert shortcodes at their designated positions
+              for (const slot of monetizationResult.slots) {
+                // Map slot names to insertion positions
+                const positionMap = {
+                  'after_intro': 'after_intro',
+                  'mid_article': 'mid_content',
+                  'near_conclusion': 'pre_conclusion',
+                }
+                const insertPosition = positionMap[slot.name] || 'after_intro'
+
+                finalContent = insertShortcodeInContent(finalContent, slot.shortcode, insertPosition)
+                console.log(`[Generation] Inserted ${slot.type} shortcode at ${slot.name} (${slot.programCount} programs, sponsored: ${slot.hasSponsored})`)
               }
-              const insertPosition = positionMap[slot.name] || 'after_intro'
-
-              finalContent = insertShortcodeInContent(finalContent, slot.shortcode, insertPosition)
-              console.log(`[Generation] Inserted ${slot.type} shortcode at ${slot.name} (${slot.programCount} programs, sponsored: ${slot.hasSponsored})`)
+            } else {
+              console.warn('[Generation] Monetization generation returned no slots')
             }
           } else {
-            console.warn('[Generation] Monetization generation returned no slots')
+            console.warn('[Generation] Could not match monetization category:', monetizationMatch.error)
           }
-        } else {
-          console.warn('[Generation] Could not match monetization category:', monetizationMatch.error)
-        }
 
-        // Validate monetization compliance (business rules)
-        const validation = await monetizationValidator.validate(monetizationResult, finalContent)
-        if (validation.blockingIssues.length > 0) {
-          console.error('[Generation] Monetization validation blocking issues:', validation.blockingIssues)
-        } else if (validation.warnings.length > 0) {
-          console.warn('[Generation] Monetization validation warnings:', validation.warnings.map(w => w.message))
-        }
+          // Validate monetization compliance (business rules)
+          const validation = await monetizationValidator.validate(monetizationResult, finalContent)
+          if (validation.blockingIssues.length > 0) {
+            console.error('[Generation] Monetization validation blocking issues:', validation.blockingIssues)
+          } else if (validation.warnings.length > 0) {
+            console.warn('[Generation] Monetization validation warnings:', validation.warnings.map(w => w.message))
+          }
 
-      } catch (monetizationError) {
-        console.warn('[Generation] Monetization shortcode insertion failed:', monetizationError.message)
-        // Non-blocking - continue without shortcodes
+        } catch (monetizationError) {
+          console.warn('[Generation] Monetization shortcode insertion failed:', monetizationError.message)
+          // Non-blocking - continue without shortcodes
+        }
       }
 
       this.updateProgress(onProgress, 'Running content validation...', 68)
@@ -316,13 +607,14 @@ class GenerationService {
               `Auto-fixing quality issues (attempt ${attempt}/${total})...`,
               70 + (attempt * 10)
             )
-          }
+          },
+          qualityThresholds // Pass content rules thresholds to QA loop
         )
 
         articleData = qaResult.article
       } else {
-        // Just calculate metrics without fixing
-        const metrics = this.calculateQualityMetrics(articleData.content, articleData.faqs)
+        // Just calculate metrics without fixing (using content rules thresholds)
+        const metrics = this.calculateQualityMetrics(articleData.content, articleData.faqs, qualityThresholds)
         articleData.word_count = metrics.word_count
         articleData.quality_score = metrics.score
         articleData.risk_flags = metrics.issues.map(i => i.type)
@@ -341,8 +633,9 @@ class GenerationService {
   /**
    * Quality Assurance Loop with Auto-Fix
    * Attempts to fix quality issues up to maxAttempts times
+   * Now accepts optional quality thresholds from content rules
    */
-  async qualityAssuranceLoop(articleData, maxAttempts = 3, onAttempt) {
+  async qualityAssuranceLoop(articleData, maxAttempts = 3, onAttempt, qualityThresholds = null) {
     let currentArticle = { ...articleData }
     let attempt = 0
 
@@ -351,8 +644,8 @@ class GenerationService {
 
       if (onAttempt) onAttempt(attempt, maxAttempts)
 
-      // Calculate quality metrics
-      const metrics = this.calculateQualityMetrics(currentArticle.content, currentArticle.faqs)
+      // Calculate quality metrics using configurable thresholds
+      const metrics = this.calculateQualityMetrics(currentArticle.content, currentArticle.faqs, qualityThresholds)
       const issues = metrics.issues
 
       // Update article with metrics
@@ -386,8 +679,8 @@ class GenerationService {
 
         currentArticle.content = fixedContent
 
-        // Re-calculate metrics to check improvement
-        const newMetrics = this.calculateQualityMetrics(fixedContent, currentArticle.faqs)
+        // Re-calculate metrics to check improvement (using same thresholds)
+        const newMetrics = this.calculateQualityMetrics(fixedContent, currentArticle.faqs, qualityThresholds)
 
         console.log(`Improvement: ${metrics.score} → ${newMetrics.score}`)
 
@@ -477,8 +770,23 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
   /**
    * Calculate quality metrics for an article
+   * Now accepts optional thresholds from content rules configuration
+   * @param {string} content - Article HTML content
+   * @param {Array} faqs - FAQ array
+   * @param {Object} thresholds - Optional quality thresholds from content rules
    */
-  calculateQualityMetrics(content, faqs = []) {
+  calculateQualityMetrics(content, faqs = [], thresholds = null) {
+    // Use provided thresholds or defaults
+    const t = thresholds || {
+      minWordCount: 1500,
+      maxWordCount: 2500,
+      minInternalLinks: 3,
+      minExternalLinks: 2,
+      minFaqs: 3,
+      minH2Headings: 3,
+      maxAvgSentenceLength: 25,
+    }
+
     const issues = []
     let score = 100
 
@@ -486,48 +794,48 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
     const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
     const wordCount = textContent.split(' ').filter(w => w.length > 0).length
 
-    // Word count check (1500-2500)
-    if (wordCount < 1500) {
-      issues.push({ type: 'word_count_low', severity: 'major' })
+    // Word count check (uses configurable thresholds)
+    if (wordCount < t.minWordCount) {
+      issues.push({ type: 'word_count_low', severity: 'major', details: `${wordCount} < ${t.minWordCount}` })
       score -= 15
-    } else if (wordCount > 2500) {
-      issues.push({ type: 'word_count_high', severity: 'minor' })
+    } else if (wordCount > t.maxWordCount) {
+      issues.push({ type: 'word_count_high', severity: 'minor', details: `${wordCount} > ${t.maxWordCount}` })
       score -= 5
     }
 
-    // Internal links check (3-5)
+    // Internal links check (uses configurable threshold)
     const internalLinks = (content.match(/<a href/gi) || []).length
-    if (internalLinks < 3) {
-      issues.push({ type: 'missing_internal_links', severity: 'major' })
+    if (internalLinks < t.minInternalLinks) {
+      issues.push({ type: 'missing_internal_links', severity: 'major', details: `${internalLinks} < ${t.minInternalLinks}` })
       score -= 15
     }
 
-    // External links check (2-4)
+    // External links check (uses configurable threshold)
     const externalLinkMatches = content.match(/href="http/gi) || []
     const externalLinks = externalLinkMatches.length
-    if (externalLinks < 2) {
-      issues.push({ type: 'missing_external_links', severity: 'minor' })
+    if (externalLinks < t.minExternalLinks) {
+      issues.push({ type: 'missing_external_links', severity: 'minor', details: `${externalLinks} < ${t.minExternalLinks}` })
       score -= 10
     }
 
-    // FAQ check (at least 3)
-    if (!faqs || faqs.length < 3) {
-      issues.push({ type: 'missing_faqs', severity: 'minor' })
+    // FAQ check (uses configurable threshold)
+    if (!faqs || faqs.length < t.minFaqs) {
+      issues.push({ type: 'missing_faqs', severity: 'minor', details: `${faqs?.length || 0} < ${t.minFaqs}` })
       score -= 10
     }
 
-    // Heading structure check
+    // Heading structure check (uses configurable threshold)
     const h2Count = (content.match(/<h2/gi) || []).length
-    if (h2Count < 3) {
-      issues.push({ type: 'weak_headings', severity: 'minor' })
+    if (h2Count < t.minH2Headings) {
+      issues.push({ type: 'weak_headings', severity: 'minor', details: `${h2Count} < ${t.minH2Headings}` })
       score -= 10
     }
 
-    // Readability (simple heuristic - average sentence length)
+    // Readability (uses configurable threshold)
     const sentences = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0)
     const avgSentenceLength = sentences.length > 0 ? wordCount / sentences.length : 0
-    if (avgSentenceLength > 25) {
-      issues.push({ type: 'poor_readability', severity: 'minor' })
+    if (avgSentenceLength > t.maxAvgSentenceLength) {
+      issues.push({ type: 'poor_readability', severity: 'minor', details: `avg ${Math.round(avgSentenceLength)} words/sentence > ${t.maxAvgSentenceLength}` })
       score -= 10
     }
 
@@ -535,6 +843,7 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
       score: Math.max(0, score),
       word_count: wordCount,
       issues,
+      thresholds_used: t, // Include thresholds used for transparency
     }
   }
 

@@ -242,9 +242,10 @@ class GrokClient {
       costDataContext = null, // Cost data from ranking reports for RAG
       authorProfile = null, // Comprehensive author profile from useContributors
       authorName = null,
+      contentRulesContext = null, // Dynamic content rules from database
     } = options
 
-    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount, costDataContext, authorProfile, authorName)
+    const prompt = this.buildDraftPrompt(idea, contentType, targetWordCount, costDataContext, authorProfile, authorName, contentRulesContext)
 
     // Build system prompt with optional author profile
     let systemPrompt = 'You are an expert content writer who creates high-quality, engaging articles. You write in a natural, conversational style with varied sentence structure.'
@@ -286,9 +287,9 @@ Follow the author's voice, style, and guidelines precisely. This will ensure con
 
   /**
    * Build prompt for article draft generation
-   * IMPORTANT: Includes GetEducated-specific content rules
+   * IMPORTANT: Includes GetEducated-specific content rules (now configurable from database)
    */
-  buildDraftPrompt(idea, contentType, targetWordCount, costDataContext = null, authorProfile = null, authorName = null) {
+  buildDraftPrompt(idea, contentType, targetWordCount, costDataContext = null, authorProfile = null, authorName = null, contentRulesContext = null) {
     let costDataSection = ''
     if (costDataContext) {
       costDataSection = `\n\n${costDataContext}\n`
@@ -297,6 +298,12 @@ Follow the author's voice, style, and guidelines precisely. This will ensure con
     let authorSection = ''
     if (authorName) {
       authorSection = `\nAUTHOR: This article is being written by ${authorName}. Follow the author profile in the system prompt precisely.\n`
+    }
+
+    // Dynamic content rules from database (if available)
+    let dynamicRulesSection = ''
+    if (contentRulesContext) {
+      dynamicRulesSection = `\n${contentRulesContext}\n`
     }
 
     return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
@@ -363,7 +370,7 @@ REQUIREMENTS:
    - Links to ranking reports, schools, and degrees will be added via shortcodes AFTER generation
 
 === END GETEDUCATED RULES ===
-
+${dynamicRulesSection}
 STRUCTURE:
 ${this.getStructureForContentType(contentType)}
 

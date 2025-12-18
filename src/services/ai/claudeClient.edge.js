@@ -35,12 +35,15 @@ class ClaudeClient {
 
   /**
    * Humanize AI-generated content to make it undetectable
+   * Now accepts tone/voice settings from content rules configuration
    */
   async humanize(content, options = {}) {
     const {
       contributorProfile = null,
       targetPerplexity = 'high',
       targetBurstiness = 'high',
+      authorSystemPrompt = null,
+      toneVoice = null, // Tone/voice settings from content rules
     } = options
 
     try {
@@ -49,6 +52,8 @@ class ClaudeClient {
         contributorProfile,
         targetPerplexity,
         targetBurstiness,
+        authorSystemPrompt,
+        toneVoice, // Pass tone/voice to edge function for dynamic style application
       })
 
       return result
