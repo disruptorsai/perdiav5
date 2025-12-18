@@ -34,6 +34,27 @@ class ClaudeClient {
   }
 
   /**
+   * Generic chat method for custom prompts
+   * @param {Array} messages - Array of message objects with role and content
+   * @param {Object} options - Options like temperature, max_tokens
+   */
+  async chat(messages, options = {}) {
+    try {
+      const result = await this.callEdgeFunction('chat', {
+        messages,
+        temperature: options.temperature || 0.7,
+        max_tokens: options.max_tokens || 4000,
+      })
+
+      return result
+
+    } catch (error) {
+      console.error('Claude chat error:', error)
+      throw error
+    }
+  }
+
+  /**
    * Humanize AI-generated content to make it undetectable
    * Now accepts tone/voice settings from content rules configuration
    */

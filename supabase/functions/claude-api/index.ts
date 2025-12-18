@@ -468,8 +468,31 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
         break
       }
 
+      case 'chat': {
+        const { messages, temperature = 0.7, max_tokens = 4000 } = payload
+
+        if (!messages || !Array.isArray(messages)) {
+          throw new Error('Missing required parameter: messages (array)')
+        }
+
+        console.log('Processing chat request...')
+
+        const response = await client.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: max_tokens,
+          temperature: temperature,
+          messages: messages.map((m: any) => ({
+            role: m.role,
+            content: m.content
+          }))
+        })
+
+        result = response.content[0].text
+        break
+      }
+
       default:
-        throw new Error(`Unknown action: ${action}. Valid actions: humanize, autoFixQualityIssues, reviseWithFeedback, extractLearningPatterns, analyzeIdeaFeedback, addInternalLinks`)
+        throw new Error(`Unknown action: ${action}. Valid actions: humanize, autoFixQualityIssues, reviseWithFeedback, extractLearningPatterns, analyzeIdeaFeedback, addInternalLinks, chat`)
     }
 
     return new Response(
