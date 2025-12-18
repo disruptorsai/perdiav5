@@ -239,7 +239,7 @@ function Dashboard() {
     return articles.filter(a => a.status === status)
   }
 
-  // Handle idea discovery from sources
+  // Handle idea discovery from sources (monetization-first approach)
   const handleDiscoverIdeas = useCallback(async ({ sources, customTopic, existingTopics }) => {
     setIsDiscovering(true)
 
@@ -247,19 +247,32 @@ function Dashboard() {
       // Get existing idea titles to avoid duplicates
       const existingTitles = allIdeas.map(idea => idea.title)
 
-      // Discover ideas using the service
-      const discoveredIdeas = await ideaDiscoveryService.discoverIdeas({
+      // Discover ideas using the monetization-first service
+      // Returns { ideas, rejected, stats }
+      const result = await ideaDiscoveryService.discoverIdeas({
         sources,
         customTopic,
         existingTopics: existingTitles,
-        niche: settings?.niche || 'higher education, online degrees, career development',
+        strictMonetization: true, // Filter out non-monetizable ideas
+        minMonetizationScore: 25,
       })
+
+      const { ideas: discoveredIdeas, rejected, stats } = result
+
+      // Build toast message with monetization info
+      let description = `Found ${discoveredIdeas.length} monetizable content ideas`
+      if (rejected?.length > 0) {
+        description += ` (${rejected.length} rejected for low monetization potential)`
+      }
 
       addToast({
         title: 'Ideas Discovered',
-        description: `Found ${discoveredIdeas.length} new content ideas`,
+        description,
         variant: 'success',
       })
+
+      // Log stats for debugging
+      console.log('[Dashboard] Idea discovery stats:', stats)
 
       return discoveredIdeas
     } catch (error) {
@@ -273,7 +286,7 @@ function Dashboard() {
     } finally {
       setIsDiscovering(false)
     }
-  }, [allIdeas, settings, addToast, ideaDiscoveryService])
+  }, [allIdeas, addToast, ideaDiscoveryService])
 
   // Handle batch generation - Generate All button
   const handleGenerateAll = useCallback(async () => {

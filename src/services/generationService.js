@@ -1048,12 +1048,16 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
       const existingIdeas = await this.getExistingIdeas(userId)
       const existingTitles = existingIdeas.map(i => i.title)
 
-      const discoveredIdeas = await this.ideaDiscovery.discoverIdeas({
+      // Use monetization-first discovery (returns { ideas, rejected, stats })
+      const discoveryResult = await this.ideaDiscovery.discoverIdeas({
         sources,
         customTopic,
         existingTopics: existingTitles,
-        niche,
+        strictMonetization: true, // Filter out non-monetizable ideas
+        minMonetizationScore: 25,
       })
+
+      const discoveredIdeas = discoveryResult.ideas || []
 
       // Filter out duplicates using similarity check
       const uniqueIdeas = this.ideaDiscovery.filterDuplicates(
@@ -1063,9 +1067,10 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
       )
 
       results.discoveredIdeas = uniqueIdeas.slice(0, maxIdeas)
-      results.skippedIdeas = discoveredIdeas.filter(
-        i => !uniqueIdeas.includes(i)
-      )
+      results.skippedIdeas = [
+        ...discoveredIdeas.filter(i => !uniqueIdeas.includes(i)),
+        ...(discoveryResult.rejected || []) // Include rejected low-monetization ideas
+      ]
 
       this.updateProgress(
         onProgress,
