@@ -310,8 +310,67 @@ FORMAT AS JSON:
         break
       }
 
+      case 'generateWithWebContext': {
+        const { prompt, temperature = 0.8, max_tokens = 4000 } = payload
+
+        if (!prompt) {
+          throw new Error('Missing required parameter: prompt')
+        }
+
+        console.log('Generating with web context, prompt length:', prompt.length)
+
+        // Enhance the prompt to encourage the model to use current knowledge
+        const enhancedPrompt = `${prompt}
+
+IMPORTANT: Use your knowledge of CURRENT events, trends, and discussions.
+Include timely, relevant information from recent news, social media trends, and search data.
+Focus on what people are ACTIVELY searching for and discussing RIGHT NOW.`
+
+        const response = await makeGrokRequest([
+          {
+            role: 'system',
+            content: `You are a content strategist with access to real-time information about current trends, news, and social media discussions.
+You stay updated on the latest developments and can identify trending topics and emerging search queries.
+When generating ideas, prioritize topics that are currently being discussed and searched for.`
+          },
+          {
+            role: 'user',
+            content: enhancedPrompt
+          }
+        ], {
+          temperature,
+          max_tokens,
+        })
+
+        result = response
+        break
+      }
+
+      case 'generate': {
+        const { prompt, temperature = 0.8, max_tokens = 4000 } = payload
+
+        if (!prompt) {
+          throw new Error('Missing required parameter: prompt')
+        }
+
+        console.log('Simple generation, prompt length:', prompt.length)
+
+        const response = await makeGrokRequest([
+          {
+            role: 'user',
+            content: prompt
+          }
+        ], {
+          temperature,
+          max_tokens,
+        })
+
+        result = response
+        break
+      }
+
       default:
-        throw new Error(`Unknown action: ${action}. Valid actions: generateDraft, generateIdeas, generateMetadata`)
+        throw new Error(`Unknown action: ${action}. Valid actions: generateDraft, generateIdeas, generateMetadata, generateWithWebContext, generate`)
     }
 
     return new Response(
