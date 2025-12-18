@@ -14,7 +14,8 @@ import {
   Users,
   AlertTriangle,
   Monitor,
-  HelpCircle
+  HelpCircle,
+  Settings2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import { useSystemSettings, useBulkUpdateSettings } from '@/hooks/useSystemSetti
 import { useToast, ToastProvider } from '@/components/ui/toast'
 import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
 import { useHowToGuide } from '@/contexts/HowToGuideContext'
+import { ContentRulesTab } from '@/components/settings/content-rules'
 
 function SettingsContent() {
   const { toast } = useToast()
@@ -349,6 +351,10 @@ function SettingsContent() {
             <TabsTrigger value="quality">
               <Shield className="w-4 h-4 mr-2" />
               Quality Rules
+            </TabsTrigger>
+            <TabsTrigger value="contentrules">
+              <Settings2 className="w-4 h-4 mr-2" />
+              Content Rules
             </TabsTrigger>
             <TabsTrigger value="ui">
               <Monitor className="w-4 h-4 mr-2" />
@@ -1399,6 +1405,11 @@ function SettingsContent() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Content Rules Tab */}
+          <TabsContent value="contentrules" className="space-y-6 mt-6">
+            <ContentRulesTab />
           </TabsContent>
 
           {/* User Interface Settings Tab */}
