@@ -738,14 +738,30 @@ ${issueDescriptions}
 CURRENT ARTICLE CONTENT:
 ${content}
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 INSTRUCTIONS:
 1. Fix ALL the issues listed above
 2. Maintain the article's overall tone and message
 3. Keep the existing heading structure unless adding new headings
 4. For external citations, use real, authoritative sources when possible
-5. For FAQs, make them relevant and helpful to readers
+5. For FAQs, make them relevant and helpful to readers using proper HTML (<h2>Frequently Asked Questions</h2> followed by <h3> for questions and <p> for answers)
 6. Do NOT remove existing content unless consolidating
-7. Ensure all HTML tags are properly closed
+7. Ensure all HTML tags are properly closed and all new content is properly HTML formatted
 
 OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
@@ -1158,12 +1174,28 @@ ${content}
 AVAILABLE ARTICLES TO LINK TO:
 ${siteArticles.map(a => `- [${a.title}](${a.url})`).join('\n')}
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 INSTRUCTIONS:
 1. Add links where genuinely relevant
 2. Use natural anchor text
 3. Distribute throughout article
 4. Use HTML format: <a href="URL">anchor text</a>
 5. Aim for 3-5 links total
+6. Preserve all existing HTML formatting
 
 OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
 
@@ -1260,6 +1292,22 @@ ${contributorName ? `AUTHOR PERSONA: ${contributorName}` : ''}
 
 CURRENT CONTENT:
 ${content}
+
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
 
 INSTRUCTIONS:
 1. Maintain the core information and structure
@@ -1956,11 +2004,27 @@ ${patternContext}
 CURRENT CONTENT:
 ${content}
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 INSTRUCTIONS:
 1. Fix all listed quality issues
 2. Apply learned patterns from successful revisions
 3. Maintain the article structure and voice
-4. Keep all HTML formatting intact
+4. Keep all HTML formatting intact and ensure all new content is properly HTML formatted
 5. Do not add unrelated content
 
 OUTPUT ONLY THE FIXED HTML CONTENT.`

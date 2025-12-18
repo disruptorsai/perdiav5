@@ -133,8 +133,79 @@ function getStructureForContentType(contentType: string): string {
   return structures[contentType] || structures.guide
 }
 
-function buildDraftPrompt(idea: any, contentType: string, targetWordCount: number): string {
-  return `Generate a comprehensive ${contentType} article based on this content idea.
+// Anti-hallucination rules to inject into all generation prompts
+const ANTI_HALLUCINATION_RULES = `
+=== CRITICAL: ANTI-HALLUCINATION RULES ===
+
+You MUST follow these rules to avoid generating fabricated content:
+
+1. NEVER FABRICATE STATISTICS:
+   - NEVER cite percentages, survey results, or specific numbers unless provided in the source data below
+   - BAD: "73% of students prefer online learning" or "According to a 2024 survey..."
+   - GOOD: "Many students prefer online learning" or "Research suggests..."
+
+2. NEVER FABRICATE STUDIES OR SURVEYS:
+   - NEVER reference specific studies, surveys, reports, or research unless explicitly provided
+   - BAD: "According to a 2024 survey by the Online Learning Consortium, 68% reported..."
+   - GOOD: "Industry research indicates that..." or "Experts in the field note..."
+
+3. NEVER FABRICATE SCHOOL NAMES:
+   - NEVER invent school names or use placeholder names like "University A, B, C"
+   - NEVER use template markers like "[School Name]" or "[University]"
+   - GOOD: Only mention schools if specific data is provided in the prompt, or use "many accredited online programs"
+
+4. NEVER FABRICATE LEGISLATION:
+   - NEVER cite specific bills (SB-1001, HB-123), acts, or legal codes unless provided
+   - BAD: "California's SB-1001 requires..." or "The Higher Education Act of 2024..."
+   - GOOD: "State regulations may require..." or "Check with your state licensing board"
+
+5. NEVER FABRICATE ORGANIZATIONS:
+   - NEVER invent organization names or acronyms
+   - ONLY cite real, well-known organizations: BLS, NCES, Department of Education, etc.
+
+ALTERNATIVE PHRASING TO USE:
+- Instead of "73% of students..." → "Many students find that..."
+- Instead of "A 2024 study found..." → "Research suggests that..."
+- Instead of "$45,000 average salary" → "competitive salaries" (unless BLS data is provided)
+- Instead of "University A offers..." → "Many accredited programs offer..."
+- Instead of "SB-1001 requires..." → "State requirements vary, so check with your licensing board"
+
+=== END ANTI-HALLUCINATION RULES ===
+`
+
+interface DraftOptions {
+  idea: any
+  contentType: string
+  targetWordCount: number
+  costDataContext?: string | null
+  authorProfile?: string | null
+  authorName?: string | null
+  contentRulesContext?: string | null
+}
+
+function buildDraftPrompt(options: DraftOptions): string {
+  const { idea, contentType, targetWordCount, costDataContext, authorProfile, authorName, contentRulesContext } = options
+
+  let costDataSection = ''
+  if (costDataContext) {
+    costDataSection = `\n\n${costDataContext}\n`
+  }
+
+  let authorSection = ''
+  if (authorName) {
+    authorSection = `\nAUTHOR: This article is being written by ${authorName}. Follow the author profile in the system prompt precisely.\n`
+  }
+
+  // Dynamic content rules from database (if available)
+  let dynamicRulesSection = ''
+  if (contentRulesContext) {
+    dynamicRulesSection = `\n${contentRulesContext}\n`
+  }
+
+  return `Generate a comprehensive ${contentType} article based on this content idea for GetEducated.com, an online education resource.
+
+${ANTI_HALLUCINATION_RULES}
+${costDataSection}${authorSection}
 
 CONTENT IDEA:
 Title: ${idea.title}
@@ -145,22 +216,104 @@ ${idea.seed_topics ? `Topics to cover: ${idea.seed_topics.join(', ')}` : ''}
 REQUIREMENTS:
 - Target word count: ${targetWordCount} words
 - Content type: ${contentType}
-- Include an engaging introduction that hooks the reader
-- Use clear headings and subheadings (H2, H3)
-- Write in a conversational, natural tone
-- Include specific examples and actionable insights
+- Include an engaging introduction that hooks prospective online students
+- Use clear headings and subheadings (H2, H3) wrapped in proper HTML tags
+- Write in a conversational, natural tone that empathizes with readers' education goals
+- Provide actionable guidance and practical insights (but DO NOT fabricate statistics or specific data)
 - Vary sentence length (short punchy sentences mixed with longer explanatory ones)
-- Avoid generic phrases like "In conclusion", "It's important to note"
-- Make it valuable and informative
+- Make it valuable and informative for people considering online education
+- IMPORTANT: Complete the entire article including a proper conclusion - do not cut off mid-sentence
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your content MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping each paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+EXAMPLE CORRECT FORMAT:
+<h2>Why Online Social Work Degrees Matter</h2>
+<p>Social workers have the potential to change lives at every level of society. If you want to take the next step with a career in social work, you can do that with an online degree program.</p>
+
+<h3>Benefits of Online Programs</h3>
+<p>Online social work programs offer several advantages:</p>
+<ul>
+<li><strong>Flexibility:</strong> Study on your own schedule while working</li>
+<li><strong>Accessibility:</strong> Access programs from anywhere in the country</li>
+<li><strong>Affordability:</strong> Often lower total costs than on-campus options</li>
+</ul>
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
+=== CRITICAL GETEDUCATED CONTENT RULES ===
+
+1. COST DATA:
+   - ALL cost/tuition information MUST reference GetEducated ranking reports
+   - Format cost mentions as "According to GetEducated's ranking reports, [school] costs $X including all fees"
+   - Include BOTH in-state and out-of-state costs when available
+   - NEVER invent or estimate costs - only use data from ranking reports
+
+2. SCHOOL/DEGREE REFERENCES:
+   - NEVER invent or fabricate school names (e.g., "University A", "College B", "[School Name]")
+   - Only mention specific schools if they appear in the cost data provided above
+   - When mentioning degree types generically, use phrases like "many accredited programs" or "leading online universities"
+   - NEVER suggest linking directly to school .edu websites
+   - If no specific school data is provided, discuss programs in general terms without naming institutions
+
+3. EXTERNAL SOURCES:
+   - For salary/job outlook data, reference Bureau of Labor Statistics (BLS)
+   - For education statistics, reference NCES, Department of Education
+   - Accreditation info should reference official accreditation bodies (AACSB, ABET, etc.)
+   - NEVER reference competitor sites (onlineu.com, usnews.com, affordablecollegesonline.com)
+
+4. CONTENT FOCUS:
+   - All content must be relevant to ONLINE students
+   - Emphasize affordability, flexibility, and career outcomes
+   - Discuss accreditation requirements where relevant
+   - Help readers make informed decisions about their education
+
+5. STRUCTURE REQUIREMENTS:
+   - DO NOT include school recommendation sections (these will be added via shortcodes later)
+   - Include article navigation suggestions (anchor links to major sections)
+   - Minimum 3 FAQ items relevant to the topic with COMPLETE answers (no truncation)
+   - Include a "How we researched this" note mentioning GetEducated's methodology
+   - ALWAYS include a proper conclusion section - never end the article abruptly
+
+6. SHORTCODES - CRITICAL:
+   - DO NOT generate any shortcodes in the content - they will be added programmatically later
+   - DO NOT use these fake shortcode formats: [degree_table], [degree_offer], [ge_monetization], [ge_internal_link], [ge_external_cited]
+   - The REAL GetEducated shortcodes are: [su_ge-picks], [su_ge-cta], [su_ge-qdf]
+   - If you need to indicate where a degree list should go, just write: <!-- MONETIZATION BLOCK: degree picks for [topic] -->
+   - Links to ranking reports, schools, and degrees will be added via shortcodes AFTER generation
+
+=== END GETEDUCATED RULES ===
+${dynamicRulesSection}
 STRUCTURE:
 ${getStructureForContentType(contentType)}
+
+BANNED PHRASES (never use these):
+- "In today's digital age"
+- "In conclusion"
+- "It's important to note that"
+- "Delve into"
+- "Dive deep"
+- "At the end of the day"
+- "Game changer"
+- "Revolutionary"
+- "Cutting-edge"
 
 FORMAT YOUR RESPONSE AS JSON:
 {
   "title": "Compelling article title (60-70 characters)",
   "excerpt": "Brief 1-2 sentence summary (150-160 characters)",
-  "content": "Full article in HTML format with proper heading tags",
+  "content": "Full article in HTML format with proper <h2>, <h3>, <p>, <ul>, <li> tags",
   "meta_title": "SEO-optimized title (50-60 characters)",
   "meta_description": "SEO description (150-160 characters)",
   "focus_keyword": "Primary keyword for SEO",
@@ -191,7 +344,15 @@ serve(async (req) => {
 
     switch (action) {
       case 'generateDraft': {
-        const { idea, contentType = 'guide', targetWordCount = 2000 } = payload
+        const {
+          idea,
+          contentType = 'guide',
+          targetWordCount = 2000,
+          costDataContext = null,
+          authorProfile = null,
+          authorName = null,
+          contentRulesContext = null,
+        } = payload
 
         if (!idea) {
           throw new Error('Missing required parameter: idea')
@@ -199,11 +360,34 @@ serve(async (req) => {
 
         console.log('Generating draft for:', idea.title)
 
-        const prompt = buildDraftPrompt(idea, contentType, targetWordCount)
+        const prompt = buildDraftPrompt({
+          idea,
+          contentType,
+          targetWordCount,
+          costDataContext,
+          authorProfile,
+          authorName,
+          contentRulesContext,
+        })
+
+        // Build system prompt with optional author profile
+        let systemPrompt = 'You are an expert content writer who creates high-quality, engaging articles. You write in a natural, conversational style with varied sentence structure. You ALWAYS format content as proper HTML with <h2>, <h3>, <p>, <ul>, <li> tags.'
+
+        if (authorProfile) {
+          systemPrompt = `You are an expert content writer creating content for GetEducated.com. You are writing as ${authorName || 'a professional author'}.
+
+=== AUTHOR PROFILE & WRITING STYLE ===
+${authorProfile}
+=== END AUTHOR PROFILE ===
+
+Follow the author's voice, style, and guidelines precisely. This will ensure consistency across all articles by this author.
+You ALWAYS format content as proper HTML with <h2>, <h3>, <p>, <ul>, <li> tags.`
+        }
+
         const response = await makeGrokRequest([
           {
             role: 'system',
-            content: 'You are an expert content writer who creates high-quality, engaging articles. You write in a natural, conversational style with varied sentence structure.'
+            content: systemPrompt
           },
           {
             role: 'user',
@@ -211,10 +395,21 @@ serve(async (req) => {
           }
         ], {
           temperature: 0.8,
-          max_tokens: 4000,
+          max_tokens: 12000, // Increased to prevent truncation
         })
 
-        result = JSON.parse(response)
+        // Strip markdown code blocks if present
+        let cleanedResponse = response.trim()
+        const openFenceMatch = cleanedResponse.match(/^```(?:json|JSON)?\s*\n?/)
+        if (openFenceMatch) {
+          cleanedResponse = cleanedResponse.slice(openFenceMatch[0].length)
+        }
+        const closeFenceMatch = cleanedResponse.match(/\n?```\s*$/)
+        if (closeFenceMatch) {
+          cleanedResponse = cleanedResponse.slice(0, -closeFenceMatch[0].length)
+        }
+
+        result = JSON.parse(cleanedResponse.trim())
         break
       }
 

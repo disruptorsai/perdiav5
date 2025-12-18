@@ -40,6 +40,10 @@ class GrokClient {
     const {
       contentType = 'guide',
       targetWordCount = 2000,
+      costDataContext = null,
+      authorProfile = null,
+      authorName = null,
+      contentRulesContext = null,
     } = options
 
     try {
@@ -47,6 +51,10 @@ class GrokClient {
         idea,
         contentType,
         targetWordCount,
+        costDataContext,
+        authorProfile,
+        authorName,
+        contentRulesContext,
       })
 
       return result

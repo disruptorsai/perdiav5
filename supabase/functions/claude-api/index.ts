@@ -82,6 +82,22 @@ CRITICAL HUMANIZATION TECHNIQUES:
    - Keep the same SEO focus
    - Ensure the content remains valuable and informative
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 OUTPUT ONLY THE REWRITTEN HTML CONTENT. DO NOT include explanations, meta-commentary, or anything other than the pure HTML article content.`
 }
 
@@ -181,16 +197,32 @@ QUALITY ISSUES TO FIX:
 - ${issueDescriptions}
 ${internalLinksContext}
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 INSTRUCTIONS:
 1. Fix each issue listed above
 2. For word count: Add or remove content naturally, maintaining quality
 3. For internal links: Add 3-5 contextual links to the provided articles where genuinely relevant (use HTML <a> tags)
 4. For external links: Add 2-4 citations to authoritative sources like research papers, official documentation, or reputable publications
-5. For FAQs: Add a "Frequently Asked Questions" section with at least 3 relevant Q&A pairs at the end
+5. For FAQs: Add a "Frequently Asked Questions" section with at least 3 relevant Q&A pairs at the end using proper HTML (<h2>Frequently Asked Questions</h2> followed by <h3> for questions and <p> for answers)
 6. For readability: Simplify complex sentences, break up long paragraphs, use clearer language
 7. For headings: Ensure proper H2/H3 hierarchy, make headings descriptive and keyword-rich
 8. Maintain the article's tone, style, and factual accuracy
-9. Keep all existing HTML formatting
+9. Keep all existing HTML formatting and ensure ALL new content is properly HTML formatted
 
 OUTPUT ONLY THE CORRECTED HTML CONTENT. DO NOT include explanations or notes.`
 
@@ -232,12 +264,28 @@ ${content}
 EDITORIAL FEEDBACK:
 ${feedbackText}
 
+=== CRITICAL HTML FORMATTING RULES ===
+
+Your output MUST be properly formatted HTML with:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+7. <em> or <i> tags for italic text
+8. <a href="..."> tags for any links
+
+NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+
+=== END HTML FORMATTING RULES ===
+
 INSTRUCTIONS:
 1. Address each piece of feedback carefully
 2. Make necessary revisions to the content
 3. Maintain the overall structure and tone
 4. Keep all other content unchanged
-5. Preserve HTML formatting
+5. Preserve HTML formatting and ensure ALL new content is properly HTML formatted
 
 OUTPUT ONLY THE REVISED HTML CONTENT.`
 
