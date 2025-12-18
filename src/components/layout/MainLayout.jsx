@@ -31,7 +31,7 @@ function MainLayout() {
     { name: 'Review Queue', href: '/review', icon: ClipboardCheck },
     { name: 'Automation', href: '/automation', icon: Zap },
     { name: 'Site Catalog', href: '/catalog', icon: Globe },
-    { name: 'Keywords', href: '/keywords', icon: Hash },
+    // { name: 'Keywords', href: '/keywords', icon: Hash }, // Hidden - not currently in use
     { name: 'Integrations', href: '/integrations', icon: Plug },
     { name: 'Contributors', href: '/contributors', icon: Users },
     { name: 'AI Training', href: '/ai-training', icon: Brain },
