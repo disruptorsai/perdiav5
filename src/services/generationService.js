@@ -525,8 +525,27 @@ class GenerationService {
         // Use retry data
         Object.assign(draftData, retryDraftData)
         console.log('[Generation] Retry draft passed validation')
+        // Log successful draft generation
+        this.logReasoning('draft_generation', {
+          model: 'grok-beta',
+          title_generated: draftData.title,
+          word_count_estimate: draftData.content?.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(w => w.length > 0).length || 0,
+          faqs_generated: draftData.faqs?.length || 0,
+          reasoning: 'Draft generated on retry after initial validation failure.',
+          retry_attempted: true,
+        })
       } else {
         console.log('[Generation] Draft validation passed:', contentValidator.getSummary(draftValidation))
+
+        // Log successful draft generation
+        this.logReasoning('draft_generation', {
+          model: 'grok-beta',
+          title_generated: draftData.title,
+          word_count_estimate: draftData.content?.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(w => w.length > 0).length || 0,
+          faqs_generated: draftData.faqs?.length || 0,
+          reasoning: `Draft generated successfully with Grok AI. Title: "${draftData.title}". Contains ${draftData.faqs?.length || 0} FAQs.`,
+          retry_attempted: false,
+        })
       }
 
       this.updateProgress(onProgress, 'Humanizing content with StealthGPT...', 40)
@@ -586,6 +605,14 @@ class GenerationService {
         // CRITICAL: Re-validate HTML formatting after humanization
         // StealthGPT and Claude humanization can sometimes strip HTML tags
         humanizedContent = this.ensureProperHtmlFormatting(humanizedContent)
+
+        // Log humanization decision for reasoning
+        this.logReasoning('humanization', {
+          provider: this.humanizationProvider === 'stealthgpt' && this.stealthGpt.isConfigured() ? 'stealthgpt' : 'claude',
+          mode: this.stealthGptSettings?.mode || 'default',
+          tone: this.stealthGptSettings?.tone || 'default',
+          changes_made: 'Content processed for natural language patterns and AI detection bypass',
+        })
       }
 
       this.updateProgress(onProgress, 'Adding internal links...', 55)
@@ -593,13 +620,36 @@ class GenerationService {
       // STAGE 4: Add internal links (respects pipeline config)
       let finalContent = humanizedContent
       const internalLinksEnabled = this.isPipelineStepEnabled(contentRules, 'internal_links')
+      let internalLinksAdded = 0
+      let selectedSiteArticles = []
+
       if (addInternalLinks && internalLinksEnabled) {
         const siteArticles = await this.getRelevantSiteArticles(draftData.title, 30)
         if (siteArticles.length >= 3) {
           finalContent = await this.addInternalLinksToContent(humanizedContent, siteArticles)
+          internalLinksAdded = Math.min(5, siteArticles.length) // Estimate based on our target
+          selectedSiteArticles = siteArticles.slice(0, 5)
         }
+
+        // Log internal linking decision for reasoning
+        this.logReasoning('internal_links', {
+          link_count: internalLinksAdded,
+          candidates_found: siteArticles.length,
+          reasoning: siteArticles.length >= 3
+            ? `Selected ${internalLinksAdded} relevant articles from ${siteArticles.length} candidates for contextual internal linking.`
+            : `Insufficient relevant articles found (${siteArticles.length}). Need at least 3 for internal linking.`,
+          selection_reasoning: selectedSiteArticles.map(a => ({
+            url: a.url,
+            title: a.title,
+            reason: `Matched based on topic relevance to "${draftData.title}"`,
+          })),
+        })
       } else if (!internalLinksEnabled) {
         console.log('[Generation] Internal linking step disabled in pipeline config - skipping')
+        this.logReasoning('internal_links', {
+          link_count: 0,
+          reasoning: 'Internal linking step was disabled in pipeline configuration.',
+        })
       }
 
       this.updateProgress(onProgress, 'Adding monetization shortcodes...', 62)
@@ -664,8 +714,31 @@ class GenerationService {
             console.warn('[Generation] Monetization validation warnings:', validation.warnings.map(w => w.message))
           }
 
+          // Log monetization decision for reasoning
+          if (monetizationMatch.matched && monetizationResult?.success) {
+            this.logReasoning('monetization_category', {
+              selected: {
+                category: monetizationMatch.categoryId,
+                concentration: monetizationMatch.concentrationId,
+                level: monetizationMatch.degreeLevelCode,
+              },
+              confidence: monetizationMatch.confidence,
+              reasoning: `Matched topic "${idea.title || draftData.title}" to monetization category "${monetizationMatch.categoryId}" with concentration "${monetizationMatch.concentrationId}" (confidence: ${monetizationMatch.confidence}).`,
+              sponsored_count: monetizationResult.sponsoredCount || 0,
+              slots_generated: monetizationResult.slots?.length || 0,
+              total_programs: monetizationResult.totalProgramsSelected || 0,
+            })
+          } else {
+            this.logReasoningWarning(
+              'monetization_match_failed',
+              monetizationMatch.error || 'Could not match topic to any monetization category.',
+              'medium'
+            )
+          }
+
         } catch (monetizationError) {
           console.warn('[Generation] Monetization shortcode insertion failed:', monetizationError.message)
+          this.logReasoningWarning('monetization_error', monetizationError.message, 'medium')
           // Non-blocking - continue without shortcodes
         }
       }
@@ -749,6 +822,17 @@ class GenerationService {
       }
 
       this.updateProgress(onProgress, 'Finalizing article...', 95)
+
+      // Log final quality score for reasoning
+      this.logReasoning('quality_assessment', {
+        final_score: articleData.quality_score,
+        word_count: articleData.word_count,
+        issues_remaining: articleData.risk_flags?.length || 0,
+        requires_human_review: requiresHumanReview,
+        reasoning: articleData.quality_score >= 80
+          ? `Article passed quality checks with a score of ${articleData.quality_score}. Ready for review.`
+          : `Article has quality score of ${articleData.quality_score}. Issues: ${(articleData.risk_flags || []).join(', ') || 'none'}. May need manual review.`,
+      })
 
       // Attach AI reasoning output to article for transparency
       // Per Dec 18, 2025 meeting - Tony requested this for debugging

@@ -67,7 +67,8 @@ import {
   ShortcodeInspector,
   MonetizationPreview,
   CommentableArticle,
-  AITrainingPanel
+  AITrainingPanel,
+  AIReasoningPanel
 } from '@/components/article'
 import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 
@@ -720,13 +721,16 @@ function ArticleEditorContent() {
         {showSidebar && (
           <div className="w-80 border-l border-gray-200 bg-white fixed right-0 top-[57px] bottom-0 flex flex-col overflow-hidden">
             <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col min-h-0">
-              <TabsList className="w-full border-b rounded-none h-auto p-1 bg-gray-50 flex-shrink-0">
+              <TabsList className="w-full border-b rounded-none h-auto p-1 bg-gray-50 flex-shrink-0 flex-wrap">
                 <TabsTrigger value="quality" className="flex-1 text-xs py-2">Quality</TabsTrigger>
                 <TabsTrigger value="seo" className="flex-1 text-xs py-2">SEO</TabsTrigger>
                 <TabsTrigger value="links" className="flex-1 text-xs py-2">Links</TabsTrigger>
                 <TabsTrigger value="monetize" className="flex-1 text-xs py-2">Monetize</TabsTrigger>
                 <TabsTrigger value="tools" className="flex-1 text-xs py-2">Tools</TabsTrigger>
-                <TabsTrigger value="training" className="flex-1 text-xs py-2">AI Training</TabsTrigger>
+                <TabsTrigger value="reasoning" className="flex-1 text-xs py-2">
+                  <Brain className="w-3 h-3 mr-1" />
+                  Reasoning
+                </TabsTrigger>
               </TabsList>
 
               <ScrollArea className="flex-1 min-h-0">
@@ -918,13 +922,10 @@ function ArticleEditorContent() {
                     </div>
                   </TabsContent>
 
-                  {/* AI Training Tab */}
-                  <TabsContent value="training" className="mt-0">
-                    <AITrainingPanel
-                      articleId={articleId}
-                      content={content}
-                      onContentRestore={setContent}
-                    />
+                  {/* AI Reasoning Tab - per Dec 18, 2025 meeting with Tony */}
+                  {/* Shows AI's thinking process during generation for debugging */}
+                  <TabsContent value="reasoning" className="mt-0">
+                    <AIReasoningPanel reasoning={article?.ai_reasoning} />
                   </TabsContent>
                 </div>
               </ScrollArea>

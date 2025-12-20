@@ -16,6 +16,9 @@ export { default as CommentableArticle } from './CommentableArticle'
 // AI Training
 export { default as AITrainingPanel } from './AITrainingPanel'
 
+// AI Reasoning (per Dec 18, 2025 meeting - Tony requested transparency)
+export { default as AIReasoningPanel } from './AIReasoningPanel'
+
 // Revision Animation
 export { default as RevisionProgressAnimation } from './RevisionProgressAnimation'
 export { default as CatalogRevisionAnimation } from './CatalogRevisionAnimation'
