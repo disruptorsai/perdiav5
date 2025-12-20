@@ -38,6 +38,10 @@ class GenerationService {
     this.contentRules = null
     this.contentRulesLoadedAt = null
 
+    // AI Reasoning tracking (per Dec 18, 2025 meeting - Tony requested transparency)
+    // Stores reasoning for each generation to help debug issues
+    this.reasoning = null
+
     // Humanization settings - optimized for maximum AI detection bypass
     this.humanizationProvider = 'stealthgpt' // 'stealthgpt' or 'claude'
     this.stealthGptSettings = {
@@ -46,6 +50,80 @@ class GenerationService {
       detector: 'gptzero',  // Most common AI detector
       business: true,       // Use 10x more powerful engine
       doublePassing: false, // Two-pass humanization for extra safety
+    }
+  }
+
+  // ========================================
+  // AI REASONING TRACKING
+  // Per Dec 18, 2025 meeting with Tony - provides transparency into AI decisions
+  // ========================================
+
+  /**
+   * Initialize reasoning log for a new generation
+   */
+  initReasoning() {
+    this.reasoning = {
+      generated_at: new Date().toISOString(),
+      model_used: 'grok-beta',
+      temperature: 0.7,
+      decisions: {},
+      warnings: [],
+      data_sources: [],
+    }
+  }
+
+  /**
+   * Log a reasoning decision
+   * @param {string} category - Decision category (e.g., 'contributor_selection', 'monetization')
+   * @param {Object} data - Decision data and reasoning
+   */
+  logReasoning(category, data) {
+    if (!this.reasoning) this.initReasoning()
+    this.reasoning.decisions[category] = {
+      ...data,
+      logged_at: new Date().toISOString(),
+    }
+  }
+
+  /**
+   * Log a warning in reasoning
+   * @param {string} type - Warning type
+   * @param {string} message - Warning message
+   * @param {string} severity - 'low', 'medium', 'high'
+   */
+  logReasoningWarning(type, message, severity = 'medium') {
+    if (!this.reasoning) this.initReasoning()
+    this.reasoning.warnings.push({
+      type,
+      message,
+      severity,
+      logged_at: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * Log a data source used
+   * @param {string} source - Data source description
+   * @param {Object} metadata - Additional metadata
+   */
+  logDataSource(source, metadata = {}) {
+    if (!this.reasoning) this.initReasoning()
+    this.reasoning.data_sources.push({
+      source,
+      ...metadata,
+      logged_at: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * Get final reasoning output with all decisions
+   * @returns {Object} Complete reasoning log
+   */
+  getReasoningOutput() {
+    if (!this.reasoning) return null
+    return {
+      ...this.reasoning,
+      finalized_at: new Date().toISOString(),
     }
   }
 
@@ -313,6 +391,17 @@ class GenerationService {
     } = options
 
     try {
+      // Initialize AI reasoning tracking for this generation
+      // Per Dec 18, 2025 meeting - Tony requested transparency into AI decisions
+      this.initReasoning()
+      this.logReasoning('topic_interpretation', {
+        input_idea: idea.title,
+        description: idea.description,
+        content_type: contentType,
+        target_word_count: targetWordCount,
+        reasoning: `Processing idea "${idea.title}" as ${contentType} with ${targetWordCount} word target.`,
+      })
+
       // STAGE -1: Load content rules configuration
       this.updateProgress(onProgress, 'Loading content rules configuration...', 2)
       const contentRules = await this.loadContentRules()
@@ -331,12 +420,41 @@ class GenerationService {
       const costContext = await getCostDataContext(idea)
       console.log(`[Generation] Cost data found: ${costContext.hasData ? costContext.costData.length + ' entries' : 'none'}`)
 
+      // Log cost data source in reasoning
+      if (costContext.hasData) {
+        this.logDataSource('ranking_reports', {
+          entries_found: costContext.costData.length,
+          reports_used: costContext.reportsUsed || [],
+          freshness: costContext.dataDate || 'unknown',
+        })
+        this.logReasoning('cost_data', {
+          has_data: true,
+          entry_count: costContext.costData.length,
+          reasoning: `Found ${costContext.costData.length} cost data entries from ranking reports.`,
+        })
+      } else {
+        this.logReasoningWarning('no_cost_data', 'No cost data found for this topic. Article may lack specific pricing information.', 'medium')
+      }
+
       this.updateProgress(onProgress, 'Auto-assigning contributor...', 10)
 
       // STAGE 1: Auto-assign contributor FIRST so we can use their profile in generation
       let contributor = null
+      let contributorReasoning = null
       if (autoAssignContributor) {
-        contributor = await this.assignContributor(idea, contentType)
+        const assignmentResult = await this.assignContributorWithReasoning(idea, contentType)
+        contributor = assignmentResult.contributor
+        contributorReasoning = assignmentResult.reasoning
+
+        // Log contributor selection reasoning
+        this.logReasoning('contributor_selection', {
+          selected: contributor?.name || 'None',
+          score: assignmentResult.score || 0,
+          reasoning: contributorReasoning || 'No reasoning available',
+          alternatives_considered: assignmentResult.alternatives || [],
+          expertise_match: assignmentResult.expertiseMatch || [],
+          content_type_match: assignmentResult.contentTypeMatch || false,
+        })
       }
 
       // Build author system prompt from comprehensive profile
@@ -361,6 +479,12 @@ class GenerationService {
         authorName: contributor?.name,
         contentRulesContext: contentRulesPrompt, // NEW: Pass content rules to AI
       })
+
+      // CRITICAL: Ensure HTML formatting is proper after draft generation
+      // This catches cases where AI ignores formatting instructions
+      if (draftData.content) {
+        draftData.content = this.ensureProperHtmlFormatting(draftData.content)
+      }
 
       this.updateProgress(onProgress, 'Validating draft content...', 30)
 
@@ -458,6 +582,10 @@ class GenerationService {
             toneVoice: toneVoiceContext, // NEW: Pass tone/voice from content rules
           })
         }
+
+        // CRITICAL: Re-validate HTML formatting after humanization
+        // StealthGPT and Claude humanization can sometimes strip HTML tags
+        humanizedContent = this.ensureProperHtmlFormatting(humanizedContent)
       }
 
       this.updateProgress(onProgress, 'Adding internal links...', 55)
@@ -621,6 +749,11 @@ class GenerationService {
       }
 
       this.updateProgress(onProgress, 'Finalizing article...', 95)
+
+      // Attach AI reasoning output to article for transparency
+      // Per Dec 18, 2025 meeting - Tony requested this for debugging
+      articleData.ai_reasoning = this.getReasoningOutput()
+      console.log(`[Generation] AI reasoning attached (${Object.keys(this.reasoning?.decisions || {}).length} decisions logged)`)
 
       return articleData
 
@@ -1007,6 +1140,147 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
   }
 
   /**
+   * Assign contributor with detailed reasoning for AI transparency
+   * Per Dec 18, 2025 meeting - Tony requested visibility into why authors are selected
+   * @param {Object} idea - The content idea
+   * @param {string} contentType - The content type
+   * @returns {Object} Result with contributor and detailed reasoning
+   */
+  async assignContributorWithReasoning(idea, contentType) {
+    try {
+      const { data: contributors, error } = await supabase
+        .from('article_contributors')
+        .select('*')
+        .eq('is_active', true)
+
+      if (error) throw error
+
+      // Filter to only approved authors
+      const approvedContributors = contributors.filter(c =>
+        APPROVED_AUTHORS.includes(c.name)
+      )
+
+      if (approvedContributors.length === 0) {
+        return {
+          contributor: null,
+          reasoning: 'No approved contributors found in database.',
+          score: 0,
+          alternatives: [],
+        }
+      }
+
+      const title = idea.title?.toLowerCase() || ''
+      const scoredContributors = []
+
+      for (const contributor of approvedContributors) {
+        let score = 0
+        const reasons = []
+
+        // Check expertise areas match
+        const ideaTopics = idea.seed_topics || []
+        const expertiseMatch = contributor.expertise_areas?.filter(area =>
+          ideaTopics.some(topic => topic.toLowerCase().includes(area.toLowerCase())) ||
+          title.includes(area.toLowerCase())
+        ) || []
+
+        if (expertiseMatch.length > 0) {
+          score += 50
+          reasons.push(`Expertise match: ${expertiseMatch.join(', ')}`)
+        }
+
+        // Check content type match
+        const contentTypeMatch = contributor.content_types?.includes(contentType)
+        if (contentTypeMatch) {
+          score += 30
+          reasons.push(`Content type match: ${contentType}`)
+        }
+
+        // Topic-specific author matching for GetEducated
+        // Tony Huffman - Rankings, cost analysis, affordability
+        if (contributor.name === 'Tony Huffman') {
+          if (title.includes('ranking') || title.includes('best') || title.includes('top') ||
+              title.includes('affordable') || title.includes('cheapest') || title.includes('cost')) {
+            score += 40
+            reasons.push('Title contains ranking/cost keywords (Tony specialty)')
+          }
+        }
+
+        // Kayleigh Gilbert - Healthcare, professional licensure, social work
+        if (contributor.name === 'Kayleigh Gilbert') {
+          if (title.includes('lcsw') || title.includes('nursing') || title.includes('healthcare') ||
+              title.includes('social work') || title.includes('hospitality') || title.includes('licensure')) {
+            score += 40
+            reasons.push('Title contains healthcare/social work keywords (Kayleigh specialty)')
+          }
+        }
+
+        // Sara - Technical education, general guides
+        if (contributor.name === 'Sara') {
+          if (title.includes('technical') || title.includes('online college') || title.includes('what degree') ||
+              title.includes('how to') || title.includes('guide to') || title.includes('beginner')) {
+            score += 40
+            reasons.push('Title contains technical/guide keywords (Sara specialty)')
+          }
+        }
+
+        // Charity - Teaching, education degrees
+        if (contributor.name === 'Charity') {
+          if (title.includes('teaching') || title.includes('teacher') || title.includes('education degree') ||
+              title.includes('mat ') || title.includes('med ') || title.includes('certification')) {
+            score += 40
+            reasons.push('Title contains teaching/education keywords (Charity specialty)')
+          }
+        }
+
+        scoredContributors.push({
+          contributor,
+          score,
+          reasons,
+          expertiseMatch,
+          contentTypeMatch,
+        })
+      }
+
+      // Sort by score descending
+      scoredContributors.sort((a, b) => b.score - a.score)
+
+      const selected = scoredContributors[0]
+      const alternatives = scoredContributors.slice(1).map(c => ({
+        name: c.contributor.name,
+        score: c.score,
+        reason: c.reasons.join('; ') || 'No specific matches',
+      }))
+
+      console.log(`[Generation] Assigned contributor: ${selected.contributor.name} (score: ${selected.score})`)
+
+      return {
+        contributor: selected.contributor,
+        reasoning: selected.reasons.length > 0
+          ? selected.reasons.join('. ')
+          : 'Selected as default - no strong topic matches found.',
+        score: selected.score,
+        alternatives,
+        expertiseMatch: selected.expertiseMatch,
+        contentTypeMatch: selected.contentTypeMatch,
+      }
+
+    } catch (error) {
+      console.error('Contributor assignment with reasoning error:', error)
+      return {
+        contributor: {
+          name: 'Tony Huffman',
+          display_name: 'Tony Huffman',
+          style_proxy: 'Kif',
+          expertise_areas: ['rankings', 'cost-analysis', 'online-degrees'],
+        },
+        reasoning: 'Error during assignment - using default (Tony Huffman).',
+        score: 0,
+        alternatives: [],
+      }
+    }
+  }
+
+  /**
    * Get relevant site articles for internal linking
    * Now uses the GetEducated catalog (geteducated_articles) for richer data
    * Falls back to legacy site_articles if GetEducated catalog is empty
@@ -1216,6 +1490,94 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
       console.error('Error adding internal links:', error)
       return content
     }
+  }
+
+  /**
+   * Validate and fix HTML formatting issues
+   * Ensures content has proper <p> tags around paragraphs
+   * This catches cases where AI generates plain text despite instructions
+   * @param {string} content - HTML content to validate/fix
+   * @returns {string} - Fixed HTML content
+   */
+  ensureProperHtmlFormatting(content) {
+    if (!content) return content
+
+    // Check if content already has proper HTML structure
+    const hasParagraphTags = /<p[^>]*>/i.test(content)
+    const hasHeadingTags = /<h[23][^>]*>/i.test(content)
+
+    // If content has HTML structure, just do minor cleanup
+    if (hasParagraphTags && hasHeadingTags) {
+      // Ensure there's proper spacing between elements
+      return content
+        .replace(/(<\/h[23]>)(?!\s*<)/gi, '$1\n\n')  // Add newlines after headings
+        .replace(/(<\/p>)(?!\s*<)/gi, '$1\n\n')      // Add newlines after paragraphs
+        .replace(/(<\/ul>)(?!\s*<)/gi, '$1\n\n')     // Add newlines after lists
+        .replace(/(<\/ol>)(?!\s*<)/gi, '$1\n\n')     // Add newlines after lists
+    }
+
+    // Content is missing proper HTML - attempt to fix it
+    console.warn('[Generation] Content missing proper HTML formatting - attempting to fix')
+
+    let fixed = content
+
+    // Split by obvious paragraph breaks (multiple newlines or <br><br>)
+    const paragraphSplitters = /\n\s*\n|<br\s*\/?>\s*<br\s*\/?>/gi
+
+    // Split content into segments
+    let segments = fixed.split(paragraphSplitters)
+
+    // Process each segment
+    const processedSegments = segments.map(segment => {
+      segment = segment.trim()
+      if (!segment) return ''
+
+      // If segment starts with heading-like text, wrap appropriately
+      // Check if it looks like a heading (short, no ending punctuation, potentially bold)
+      const isLikelyHeading = segment.length < 100 &&
+        !segment.endsWith('.') &&
+        !segment.endsWith('?') &&
+        !segment.endsWith('!')
+
+      // If already wrapped in tags, leave as is
+      if (/^<(h[123456]|p|ul|ol|div)/i.test(segment)) {
+        return segment
+      }
+
+      // If it looks like a list (starts with bullets or numbers)
+      if (/^[\-\*•]\s/.test(segment)) {
+        const listItems = segment.split(/[\n\r]+/).filter(item => item.trim())
+        const lis = listItems.map(item =>
+          `<li>${item.replace(/^[\-\*•]\s*/, '').trim()}</li>`
+        ).join('\n')
+        return `<ul>\n${lis}\n</ul>`
+      }
+
+      // If it looks like a numbered list
+      if (/^\d+[\.\)]\s/.test(segment)) {
+        const listItems = segment.split(/[\n\r]+/).filter(item => item.trim())
+        const lis = listItems.map(item =>
+          `<li>${item.replace(/^\d+[\.\)]\s*/, '').trim()}</li>`
+        ).join('\n')
+        return `<ol>\n${lis}\n</ol>`
+      }
+
+      // If it's short and looks like a heading
+      if (isLikelyHeading) {
+        // Remove any bold markers and wrap in h2 or h3
+        const cleanText = segment.replace(/\*\*/g, '').trim()
+        return `<h3>${cleanText}</h3>`
+      }
+
+      // Default: wrap in paragraph tags
+      return `<p>${segment}</p>`
+    })
+
+    // Join with proper spacing
+    fixed = processedSegments.filter(s => s).join('\n\n')
+
+    console.log('[Generation] HTML formatting fixed')
+    return fixed
   }
 
   /**

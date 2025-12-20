@@ -514,6 +514,64 @@ All GetEducated-specific requirements and implementation details are in `docs/v5
 - `07-REMAINING-IMPLEMENTATION.md` - Gap analysis (~41% complete, detailed status)
 - `08-AUTHOR-STYLE-SPECIFICATION.md` - **CANONICAL** author spec with style proxies and content mapping
 - `09-ARTICLE-STYLE-EXTRACTS.md` - Full article excerpts for AI voice training
+- `10-MEETING-NOTES-2025-12-18.md` - Technical meeting notes with Justin/Tony
+- `12-SITEMAP-CRAWLING-SPECIFICATION.md` - **CRITICAL** Daily sitemap sync requirements
+- `13-WORDPRESS-INTEGRATION-SPECIFICATION.md` - WordPress CPT and meta key mapping
+- `14-SPONSORED-SCHOOLS-SPECIFICATION.md` - Monetization prioritization logic
+- `15-SHORTCODE-SYSTEM-SPECIFICATION.md` - Full shortcode documentation
+- `16-AI-REASONING-OUTPUT-SPECIFICATION.md` - Debug/transparency logging
+
+## CRITICAL: December 2025 Technical Requirements
+
+These requirements were confirmed in the Dec 18, 2025 meeting with Justin (developer) and Tony (owner):
+
+### Site Catalog - MUST Include /online-degrees/
+
+The current catalog is MISSING the most important section. **CRITICAL FIX REQUIRED:**
+- Crawl `https://www.geteducated.com/sitemap.xml` daily
+- Include ALL pages under `/online-degrees/` (school directory)
+- Use sitemap as **source of truth** for URL whitelisting
+- Prefer content with recent `lastmod` dates
+
+### Sponsored Schools Detection
+
+Only create content for MONETIZABLE topics:
+- Check for logo presence (logo = sponsored)
+- Check `school_priority >= 5` (paid client)
+- Cross-reference with paid clients spreadsheet
+- WARN if generating content for non-monetizable areas
+
+### WordPress Article Contributor System
+
+**DO NOT** use standard WordPress `post_author`. Use custom meta keys:
+```
+written_by: [WordPress CPT ID]  -- Article Contributor CPT ID
+edited_by: [CPT ID]             -- Optional editor
+expert_review_by: [CPT ID]      -- Optional expert reviewer
+```
+
+Get contributor CPT IDs from Justin before publishing.
+
+### Shortcode Requirements
+
+**NEVER output raw affiliate URLs.** Always use shortcodes:
+- `[ge_cta category="X" concentration="Y" level="Z"]` - Monetization
+- `[ge_internal_link url="/path"]Text[/ge_internal_link]` - Internal links
+- `[ge_external_cited url="https://..." source="BLS"]Text[/ge_external_cited]` - External
+
+Stage site docs: `https://stage.geteducated.com/shortcodes` (auth: ge2022 / !educated)
+
+### Publishing Throttling
+
+Maximum rate: 5 articles per minute with 12-second delay between publishes.
+
+### AI Reasoning Output
+
+Include reasoning/thinking output for debugging:
+- Why contributor was selected
+- Why monetization category was chosen
+- Why internal links were selected
+- Warnings for data freshness issues
 
 ## Key URLs for GetEducated Integration
 

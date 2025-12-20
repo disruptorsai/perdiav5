@@ -385,20 +385,60 @@ BANNED PHRASES (never use these):
 - "Revolutionary"
 - "Cutting-edge"
 
+=== CRITICAL HTML FORMATTING RULES (MANDATORY) ===
+
+**THIS IS THE MOST IMPORTANT RULE:** Your content MUST be properly formatted HTML.
+WITHOUT proper HTML formatting, articles display as unreadable text walls.
+
+REQUIRED HTML STRUCTURE:
+1. <h2> tags for major section headings
+2. <h3> tags for subsections
+3. <p> tags wrapping EVERY paragraph of text (3-5 sentences max per paragraph)
+4. <ul> and <li> tags for bulleted lists
+5. <ol> and <li> tags for numbered lists
+6. <strong> or <b> tags for bold text
+
+=== CORRECT FORMAT EXAMPLE ===
+
+<h2>Why Online Degrees Matter</h2>
+
+<p>Online degrees have transformed higher education accessibility. More students than ever can pursue their educational goals while maintaining work and family responsibilities.</p>
+
+<p>The flexibility of online learning makes it possible to study from anywhere, at any time.</p>
+
+<h3>Key Benefits</h3>
+
+<p>Here are the main advantages:</p>
+
+<ul>
+<li><strong>Flexibility:</strong> Study on your own schedule</li>
+<li><strong>Affordability:</strong> Often lower total costs</li>
+</ul>
+
+=== WRONG FORMAT (NEVER DO THIS) ===
+
+Online degrees have transformed higher education accessibility. More students than ever can pursue their educational goals while maintaining work and family responsibilities. The flexibility of online learning makes it possible to study from anywhere...
+
+^^^ THIS IS WRONG - No paragraph breaks, just a wall of text.
+
+=== END HTML FORMATTING RULES ===
+
 FORMAT YOUR RESPONSE AS JSON:
 {
   "title": "Compelling article title (60-70 characters)",
   "excerpt": "Brief 1-2 sentence summary (150-160 characters)",
-  "content": "Full article in HTML format with proper heading tags",
+  "content": "Full article with PROPER HTML: every paragraph in <p> tags, headings in <h2>/<h3>, lists in <ul>/<li>. SHORT paragraphs (3-5 sentences each). NO walls of text.",
   "meta_title": "SEO-optimized title (50-60 characters)",
   "meta_description": "SEO description (150-160 characters)",
   "focus_keyword": "Primary keyword for SEO",
   "faqs": [
-    {"question": "Question 1", "answer": "Answer 1"},
-    {"question": "Question 2", "answer": "Answer 2"},
-    {"question": "Question 3", "answer": "Answer 3"}
+    {"question": "Question 1", "answer": "Complete answer"},
+    {"question": "Question 2", "answer": "Complete answer"},
+    {"question": "Question 3", "answer": "Complete answer"}
   ]
 }
+
+REMEMBER: The "content" field MUST contain properly formatted HTML with <p> tags around every paragraph.
 
 Generate the article now:`
   }

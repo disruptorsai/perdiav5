@@ -224,31 +224,55 @@ REQUIREMENTS:
 - Make it valuable and informative for people considering online education
 - IMPORTANT: Complete the entire article including a proper conclusion - do not cut off mid-sentence
 
-=== CRITICAL HTML FORMATTING RULES ===
+=== CRITICAL HTML FORMATTING RULES (MANDATORY) ===
 
-Your content MUST be properly formatted HTML with:
+**THIS IS THE MOST IMPORTANT RULE:** Your content MUST be properly formatted HTML.
+WITHOUT proper HTML formatting, articles display as unreadable text walls.
+
+REQUIRED HTML STRUCTURE:
 1. <h2> tags for major section headings
 2. <h3> tags for subsections
-3. <p> tags wrapping each paragraph of text
+3. <p> tags wrapping EVERY paragraph of text (3-5 sentences max per paragraph)
 4. <ul> and <li> tags for bulleted lists
 5. <ol> and <li> tags for numbered lists
 6. <strong> or <b> tags for bold text
 7. <em> or <i> tags for italic text
 8. <a href="..."> tags for any links
 
-EXAMPLE CORRECT FORMAT:
+=== CORRECT FORMAT EXAMPLE ===
+
 <h2>Why Online Social Work Degrees Matter</h2>
+
 <p>Social workers have the potential to change lives at every level of society. If you want to take the next step with a career in social work, you can do that with an online degree program.</p>
 
+<p>The demand for social workers continues to grow, with the Bureau of Labor Statistics projecting steady job growth through 2030. This makes it an excellent career choice for those passionate about helping others.</p>
+
 <h3>Benefits of Online Programs</h3>
-<p>Online social work programs offer several advantages:</p>
+
+<p>Online social work programs offer several advantages over traditional on-campus options:</p>
+
 <ul>
-<li><strong>Flexibility:</strong> Study on your own schedule while working</li>
-<li><strong>Accessibility:</strong> Access programs from anywhere in the country</li>
+<li><strong>Flexibility:</strong> Study on your own schedule while working full-time</li>
+<li><strong>Accessibility:</strong> Access accredited programs from anywhere in the country</li>
 <li><strong>Affordability:</strong> Often lower total costs than on-campus options</li>
+<li><strong>Technology skills:</strong> Develop digital competencies valued in modern practice</li>
 </ul>
 
-NEVER output plain text without HTML tags. Every paragraph MUST be wrapped in <p> tags.
+<p>These benefits make online degrees particularly attractive for working adults and career changers.</p>
+
+=== WRONG FORMAT (DO NOT DO THIS) ===
+
+Social workers have the potential to change lives at every level of society. If you want to take the next step with a career in social work, you can do that with an online degree program. The demand for social workers continues to grow, with the Bureau of Labor Statistics projecting steady job growth through 2030. This makes it an excellent career choice for those passionate about helping others. Benefits of Online Programs Online social work programs offer several advantages over traditional on-campus options: Flexibility: Study on your own schedule while working full-time Accessibility: Access accredited programs from anywhere in the country...
+
+^^^ THIS IS WRONG - No paragraph breaks, no headings, just a wall of text. NEVER do this.
+
+=== KEY FORMATTING RULES ===
+
+1. EVERY paragraph MUST be wrapped in <p></p> tags
+2. Paragraphs should be SHORT: 3-5 sentences maximum
+3. Break up long blocks of text with subheadings (<h3>)
+4. Use lists for any series of 3+ related items
+5. Add blank lines between HTML elements for readability in the source
 
 === END HTML FORMATTING RULES ===
 
@@ -313,16 +337,18 @@ FORMAT YOUR RESPONSE AS JSON:
 {
   "title": "Compelling article title (60-70 characters)",
   "excerpt": "Brief 1-2 sentence summary (150-160 characters)",
-  "content": "Full article in HTML format with proper <h2>, <h3>, <p>, <ul>, <li> tags",
+  "content": "Full article with PROPER HTML: every paragraph in <p> tags, headings in <h2>/<h3>, lists in <ul>/<li>. SHORT paragraphs (3-5 sentences each). NO walls of text.",
   "meta_title": "SEO-optimized title (50-60 characters)",
   "meta_description": "SEO description (150-160 characters)",
   "focus_keyword": "Primary keyword for SEO",
   "faqs": [
-    {"question": "Question 1", "answer": "Answer 1"},
-    {"question": "Question 2", "answer": "Answer 2"},
-    {"question": "Question 3", "answer": "Answer 3"}
+    {"question": "Question 1", "answer": "Complete answer wrapped in <p> tags"},
+    {"question": "Question 2", "answer": "Complete answer wrapped in <p> tags"},
+    {"question": "Question 3", "answer": "Complete answer wrapped in <p> tags"}
   ]
 }
+
+REMEMBER: The "content" field MUST contain properly formatted HTML with <p> tags around every paragraph. Articles without proper HTML formatting will be rejected.
 
 Generate the article now:`
 }

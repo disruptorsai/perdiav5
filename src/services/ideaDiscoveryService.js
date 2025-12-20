@@ -10,10 +10,17 @@
  * 2. Generate ideas that FIT these monetizable areas
  * 3. Validate and filter ideas by monetization potential
  * 4. Reject ideas that cannot be monetized (e.g., "space tourism", "forest ranger")
+ *
+ * DECEMBER 2025 UPDATE (per meeting with Tony & Justin):
+ * - Start from SPONSORED SCHOOLS, not general topics
+ * - Use geteducated_articles catalog with is_sponsored flag
+ * - Prioritize /online-degrees/ directory pages with logos
+ * - Work backwards from paid school listings
  */
 
 import GrokClient from './ai/grokClient.edge'
 import { supabase } from './supabaseClient'
+import { categorizeUrl } from './sitemapService'
 
 /**
  * Banned topic patterns - topics with NO monetization potential
@@ -734,6 +741,421 @@ Return ONLY the optimized title, nothing else.`
   async getMonetizationStats() {
     const context = await this.getMonetizationContext()
     return context?.stats || null
+  }
+
+  // ============================================================================
+  // SPONSORED-FIRST DISCOVERY - December 2025 Update
+  // Per meeting with Tony & Justin: Start from sponsored schools, not topics
+  // ============================================================================
+
+  /**
+   * Get sponsored degree listings from the site catalog
+   * These are /online-degrees/ pages where schools have paid listings (logos displayed)
+   *
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Sponsored listings sorted by school count
+   */
+  async getSponsoredListings(options = {}) {
+    const {
+      limit = 50,
+      category = null,
+      minSponsoredCount = 1,
+      includeStale = false,
+    } = options
+
+    try {
+      let query = supabase
+        .from('geteducated_articles')
+        .select('*')
+        .eq('content_type', 'degree_directory')  // Only /online-degrees/ pages
+        .eq('is_sponsored', true)
+        .gte('sponsored_school_count', minSponsoredCount)
+        .order('sponsored_school_count', { ascending: false })
+
+      if (category) {
+        query = query.eq('subject_area', category)
+      }
+
+      if (!includeStale) {
+        query = query.neq('is_stale', true)
+      }
+
+      const { data, error } = await query.limit(limit)
+
+      if (error) {
+        console.error('[IdeaDiscovery] Failed to fetch sponsored listings:', error)
+        return []
+      }
+
+      console.log(`[IdeaDiscovery] Found ${data?.length || 0} sponsored degree listings`)
+      return data || []
+
+    } catch (error) {
+      console.error('[IdeaDiscovery] Error in getSponsoredListings:', error)
+      return []
+    }
+  }
+
+  /**
+   * Generate content ideas starting from SPONSORED listings
+   * This is the NEW approach per December 2025 meeting
+   *
+   * Flow:
+   * 1. Fetch sponsored /online-degrees/ pages (pages with school logos)
+   * 2. Extract category/concentration/level from each
+   * 3. Generate content ideas that would LEAD readers to these sponsored pages
+   * 4. Validate search demand
+   *
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generated ideas with stats
+   */
+  async discoverFromSponsoredListings(options = {}) {
+    const {
+      limit = 20,
+      category = null,
+      existingTopics = [],
+      useAI = true,
+    } = options
+
+    console.log('[IdeaDiscovery] Starting SPONSORED-FIRST discovery...')
+
+    // 1. Get sponsored listings from catalog
+    const sponsoredListings = await this.getSponsoredListings({
+      limit: 100,
+      category,
+      minSponsoredCount: 1,
+    })
+
+    if (sponsoredListings.length === 0) {
+      console.warn('[IdeaDiscovery] No sponsored listings found - catalog may need sync')
+      return {
+        ideas: [],
+        stats: {
+          sponsoredListingsFound: 0,
+          ideasGenerated: 0,
+          warning: 'No sponsored listings in catalog. Run sitemap sync first.',
+        },
+      }
+    }
+
+    // 2. Generate ideas for each sponsored listing
+    const allIdeas = []
+    const processedCategories = new Set()
+
+    for (const listing of sponsoredListings.slice(0, 30)) {
+      // Extract category info from the listing
+      const categoryInfo = this.extractCategoryFromListing(listing)
+
+      // Avoid duplicate categories
+      const categoryKey = `${categoryInfo.category}-${categoryInfo.concentration}-${categoryInfo.level}`
+      if (processedCategories.has(categoryKey)) continue
+      processedCategories.add(categoryKey)
+
+      // Generate template-based ideas
+      const templateIdeas = this.generateTemplateIdeasForListing(listing, categoryInfo)
+      allIdeas.push(...templateIdeas)
+    }
+
+    // 3. Use AI to generate additional ideas if enabled
+    let aiIdeas = []
+    if (useAI && sponsoredListings.length > 0) {
+      aiIdeas = await this.generateAIIdeasFromSponsored(sponsoredListings.slice(0, 15), existingTopics)
+    }
+
+    // 4. Combine and deduplicate
+    const combinedIdeas = [...allIdeas, ...aiIdeas]
+    const dedupedIdeas = this.deduplicateIdeas(combinedIdeas, existingTopics)
+
+    // 5. Sort by monetization potential
+    const sortedIdeas = dedupedIdeas
+      .sort((a, b) => (b.sponsored_school_count || 0) - (a.sponsored_school_count || 0))
+      .slice(0, limit)
+
+    console.log(`[IdeaDiscovery] Generated ${sortedIdeas.length} ideas from ${sponsoredListings.length} sponsored listings`)
+
+    return {
+      ideas: sortedIdeas,
+      stats: {
+        sponsoredListingsFound: sponsoredListings.length,
+        templateIdeas: allIdeas.length,
+        aiIdeas: aiIdeas.length,
+        finalIdeas: sortedIdeas.length,
+        topCategories: Array.from(processedCategories).slice(0, 5),
+      },
+    }
+  }
+
+  /**
+   * Extract category/concentration/level from a listing URL
+   */
+  extractCategoryFromListing(listing) {
+    // Use the sitemap categorization
+    if (listing.url) {
+      const category = categorizeUrl(listing.url)
+      return {
+        category: listing.subject_area || category.category || null,
+        concentration: category.concentration || null,
+        level: listing.degree_level || category.level || null,
+      }
+    }
+
+    // Fallback to listing fields
+    return {
+      category: listing.subject_area || null,
+      concentration: listing.primary_topic || null,
+      level: listing.degree_level || null,
+    }
+  }
+
+  /**
+   * Generate template-based ideas for a sponsored listing
+   * These are proven content formats that lead to degree signups
+   */
+  generateTemplateIdeasForListing(listing, categoryInfo) {
+    const { category, concentration, level } = categoryInfo
+    const ideas = []
+
+    // Skip if missing key info
+    if (!concentration && !category) return ideas
+
+    const topic = concentration || category
+    const levelName = level ? this.levelCodeToName(level) : 'Degree'
+
+    // Template 1: Best programs guide
+    ideas.push({
+      title: `Best Online ${levelName} in ${this.titleCase(topic)} Programs`,
+      description: `Comprehensive guide to the top accredited online ${levelName.toLowerCase()} programs in ${topic}. Compare tuition, outcomes, and program features.`,
+      content_type: 'ranking',
+      monetization_category: category,
+      degree_level: level,
+      target_keywords: [`online ${topic} degree`, `best ${topic} programs`, `${topic} ${levelName.toLowerCase()}`],
+      source: 'sponsored_listing',
+      source_url: listing.url,
+      is_sponsored_topic: true,
+      sponsored_school_count: listing.sponsored_school_count || 0,
+      monetization_score: 90,
+    })
+
+    // Template 2: Cheapest/affordable guide
+    ideas.push({
+      title: `Cheapest Online ${levelName} in ${this.titleCase(topic)}`,
+      description: `Find the most affordable accredited online ${topic} programs. Compare tuition costs, financial aid options, and total program expenses.`,
+      content_type: 'ranking',
+      monetization_category: category,
+      degree_level: level,
+      target_keywords: [`cheap ${topic} degree`, `affordable ${topic} programs`, `low cost ${topic}`],
+      source: 'sponsored_listing',
+      source_url: listing.url,
+      is_sponsored_topic: true,
+      sponsored_school_count: listing.sponsored_school_count || 0,
+      monetization_score: 85,
+    })
+
+    // Template 3: Career guide
+    ideas.push({
+      title: `${this.titleCase(topic)} Career Guide: Jobs, Salary & Outlook`,
+      description: `Explore ${topic} careers including job descriptions, salary expectations, growth projections, and how an online ${levelName.toLowerCase()} can help you advance.`,
+      content_type: 'career_guide',
+      monetization_category: category,
+      degree_level: level,
+      target_keywords: [`${topic} careers`, `${topic} jobs`, `${topic} salary`],
+      source: 'sponsored_listing',
+      source_url: listing.url,
+      is_sponsored_topic: true,
+      sponsored_school_count: listing.sponsored_school_count || 0,
+      monetization_score: 75,
+    })
+
+    // Template 4: How to become guide
+    ideas.push({
+      title: `How to Become a ${this.titleCase(topic)} Professional`,
+      description: `Step-by-step guide to entering the ${topic} field including education requirements, certifications, and career path options.`,
+      content_type: 'guide',
+      monetization_category: category,
+      degree_level: level,
+      target_keywords: [`how to become ${topic}`, `${topic} requirements`, `${topic} certification`],
+      source: 'sponsored_listing',
+      source_url: listing.url,
+      is_sponsored_topic: true,
+      sponsored_school_count: listing.sponsored_school_count || 0,
+      monetization_score: 70,
+    })
+
+    return ideas
+  }
+
+  /**
+   * Use AI to generate additional ideas from sponsored listings
+   */
+  async generateAIIdeasFromSponsored(listings, existingTopics = []) {
+    // Build context of sponsored categories
+    const sponsoredContext = listings.map(l => {
+      const info = this.extractCategoryFromListing(l)
+      return `- ${info.category || 'Unknown'} / ${info.concentration || l.title} / ${info.level || 'Various'} (${l.sponsored_school_count || '?'} schools)`
+    }).join('\n')
+
+    const existingContext = existingTopics.length > 0
+      ? `\n\nAVOID these existing topics:\n${existingTopics.slice(0, 30).map(t => `- ${t}`).join('\n')}`
+      : ''
+
+    const prompt = `You are a content strategist for GetEducated.com.
+
+CRITICAL: We ONLY make money when content leads to degree program signups.
+We have PAID SCHOOL LISTINGS in these categories - content MUST target these:
+
+${sponsoredContext}
+
+Generate 10 SEO-optimized content ideas that will:
+1. Attract prospective students searching for these degree types
+2. Lead them to explore our sponsored school listings
+3. Answer their questions and build trust
+
+FOCUS on:
+- "How to become X" guides
+- Salary and career outlook articles
+- Program comparison guides
+- Accreditation explainers
+- ROI and career advancement articles
+${existingContext}
+
+Return JSON array:
+[
+  {
+    "title": "SEO title (50-60 chars)",
+    "description": "2-3 sentence description",
+    "content_type": "guide|ranking|career_guide|explainer",
+    "monetization_category": "which category from the list above",
+    "degree_level": "associate|bachelor|master|doctorate|certificate",
+    "target_keywords": ["keyword1", "keyword2"],
+    "why_monetizable": "brief explanation"
+  }
+]`
+
+    try {
+      const response = await this.grokClient.generate(prompt)
+
+      // Parse response
+      let ideas = []
+      try {
+        let cleanResponse = response.trim()
+        // Remove markdown code blocks
+        cleanResponse = cleanResponse.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+        ideas = JSON.parse(cleanResponse)
+        if (!Array.isArray(ideas)) {
+          ideas = ideas.ideas || []
+        }
+      } catch (e) {
+        const jsonMatch = response.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          ideas = JSON.parse(jsonMatch[0])
+        }
+      }
+
+      // Mark as AI-generated from sponsored
+      return ideas.map(idea => ({
+        ...idea,
+        source: 'ai_from_sponsored',
+        is_sponsored_topic: true,
+        monetization_score: 80,
+        discovered_at: new Date().toISOString(),
+      }))
+
+    } catch (error) {
+      console.error('[IdeaDiscovery] AI generation from sponsored failed:', error)
+      return []
+    }
+  }
+
+  /**
+   * Deduplicate ideas and filter out existing topics
+   */
+  deduplicateIdeas(ideas, existingTopics = []) {
+    const seen = new Set(existingTopics.map(t => t.toLowerCase()))
+    const result = []
+
+    for (const idea of ideas) {
+      const titleLower = idea.title.toLowerCase()
+
+      // Check similarity to seen titles
+      let isDuplicate = false
+      for (const existing of seen) {
+        if (this.calculateSimilarity(titleLower, existing) > 0.7) {
+          isDuplicate = true
+          break
+        }
+      }
+
+      if (!isDuplicate) {
+        seen.add(titleLower)
+        result.push(idea)
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * Convert degree level code to readable name
+   */
+  levelCodeToName(level) {
+    const map = {
+      'associate': 'Associate Degree',
+      'bachelor': 'Bachelor\'s Degree',
+      'bachelors': 'Bachelor\'s Degree',
+      'master': 'Master\'s Degree',
+      'masters': 'Master\'s Degree',
+      'doctorate': 'Doctoral Degree',
+      'doctoral': 'Doctoral Degree',
+      'phd': 'PhD',
+      'certificate': 'Certificate',
+      'diploma': 'Diploma',
+    }
+    return map[level?.toLowerCase()] || level || 'Degree'
+  }
+
+  /**
+   * Title case helper
+   */
+  titleCase(str) {
+    if (!str) return ''
+    return str.replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+  }
+
+  /**
+   * Check monetization potential from catalog
+   * Returns warning if topic has no sponsored schools
+   */
+  async checkMonetizationFromCatalog(topic) {
+    const topicLower = topic.toLowerCase()
+
+    const { data, error } = await supabase
+      .from('geteducated_articles')
+      .select('is_sponsored, sponsored_school_count, url')
+      .eq('content_type', 'degree_directory')
+      .or(`title.ilike.%${topicLower}%,primary_topic.ilike.%${topicLower}%`)
+      .eq('is_sponsored', true)
+      .limit(5)
+
+    if (error || !data || data.length === 0) {
+      return {
+        canMonetize: false,
+        warning: `No sponsored schools found for "${topic}". Content may not generate revenue.`,
+        sponsoredCount: 0,
+        relatedListings: [],
+      }
+    }
+
+    const totalSponsored = data.reduce((sum, d) => sum + (d.sponsored_school_count || 0), 0)
+
+    return {
+      canMonetize: true,
+      warning: null,
+      sponsoredCount: totalSponsored,
+      relatedListings: data.map(d => d.url),
+    }
   }
 }
 

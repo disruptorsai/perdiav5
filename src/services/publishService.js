@@ -25,6 +25,18 @@ const WEBHOOK_URL_PRODUCTION = import.meta.env.VITE_N8N_PUBLISH_WEBHOOK_PRODUCTI
 // Default to staging for safety
 const DEFAULT_ENVIRONMENT = 'staging'
 
+// Rate limiting configuration (per Dec 18, 2025 meeting with Justin)
+// "Put throttling in there, maybe like 5 every minute"
+const PUBLISH_RATE_LIMIT = {
+  maxPerMinute: 5,
+  delayBetweenMs: 12000,  // 12 seconds between publishes
+}
+
+// Track publish rate
+let lastPublishTime = 0
+let publishCountThisMinute = 0
+let minuteStartTime = Date.now()
+
 /**
  * Get the webhook URL for the specified environment
  * @param {string} environment - 'staging' or 'production'
@@ -32,6 +44,42 @@ const DEFAULT_ENVIRONMENT = 'staging'
  */
 export function getWebhookUrl(environment = DEFAULT_ENVIRONMENT) {
   return environment === 'production' ? WEBHOOK_URL_PRODUCTION : WEBHOOK_URL_STAGING
+}
+
+/**
+ * Apply rate limiting before publishing
+ * Ensures max 5 publishes per minute with 12-second minimum delay
+ * @returns {Promise<void>}
+ */
+async function applyRateLimiting() {
+  const now = Date.now()
+
+  // Reset counter every minute
+  if (now - minuteStartTime >= 60000) {
+    publishCountThisMinute = 0
+    minuteStartTime = now
+  }
+
+  // Check rate limit
+  if (publishCountThisMinute >= PUBLISH_RATE_LIMIT.maxPerMinute) {
+    const waitTime = 60000 - (now - minuteStartTime)
+    console.log(`[PublishService] Rate limit reached (${PUBLISH_RATE_LIMIT.maxPerMinute}/min), waiting ${Math.round(waitTime / 1000)}s`)
+    await new Promise(resolve => setTimeout(resolve, waitTime))
+    publishCountThisMinute = 0
+    minuteStartTime = Date.now()
+  }
+
+  // Ensure minimum delay between publishes
+  const timeSinceLastPublish = now - lastPublishTime
+  if (lastPublishTime > 0 && timeSinceLastPublish < PUBLISH_RATE_LIMIT.delayBetweenMs) {
+    const delay = PUBLISH_RATE_LIMIT.delayBetweenMs - timeSinceLastPublish
+    console.log(`[PublishService] Throttling: waiting ${Math.round(delay / 1000)}s before next publish`)
+    await new Promise(resolve => setTimeout(resolve, delay))
+  }
+
+  // Update tracking
+  lastPublishTime = Date.now()
+  publishCountThisMinute++
 }
 
 /**
@@ -80,6 +128,9 @@ export async function publishArticle(article, options = {}) {
   const webhookUrl = getWebhookUrl(environment)
 
   console.log(`[PublishService] Publishing to ${environment}: ${webhookUrl}`)
+
+  // Apply rate limiting before publishing
+  await applyRateLimiting()
 
   try {
     // POST to webhook
@@ -166,6 +217,10 @@ export function buildWebhookPayload(article, status = 'draft', environment = DEF
   const authorName = article.contributor_name || article.article_contributors?.name
   const displayName = AUTHOR_DISPLAY_NAMES[authorName] || authorName
 
+  // Get WordPress Article Contributor CPT ID for wp_postmeta mapping
+  const wordpressContributorId = article.article_contributors?.wordpress_contributor_id || null
+  const contributorPageUrl = article.article_contributors?.contributor_page_url || null
+
   return {
     // Article identification
     article_id: article.id,
@@ -175,9 +230,17 @@ export function buildWebhookPayload(article, status = 'draft', environment = DEF
     content: article.content,
     excerpt: article.excerpt || generateExcerpt(article.content),
 
-    // Author info
+    // Author info (legacy fields for backwards compatibility)
     author: authorName,
     author_display_name: displayName,
+
+    // WordPress Article Contributor CPT mapping
+    // These map to wp_postmeta keys for GetEducated's custom author system
+    // See: https://stage.geteducated.com/wp-admin/edit.php?post_type=article_contributor
+    written_by: wordpressContributorId,        // Primary author - wp_postmeta.meta_key
+    edited_by: null,                            // Editor - set if different from author
+    expert_review_by: null,                     // Expert reviewer - for EEAT signals
+    contributor_page_url: contributorPageUrl,   // Public profile URL
 
     // SEO metadata
     meta_title: article.meta_title || article.title,
@@ -190,7 +253,7 @@ export function buildWebhookPayload(article, status = 'draft', environment = DEF
 
     // Publishing settings
     status: status,
-    environment: environment, // NEW: Include environment in payload for n8n routing
+    environment: environment,
     published_at: new Date().toISOString(),
 
     // Quality metrics (for reference)
@@ -239,7 +302,7 @@ function generateSlug(title) {
 }
 
 /**
- * Bulk publish multiple articles
+ * Bulk publish multiple articles with built-in throttling
  * @param {Array} articles - Array of articles to publish
  * @param {Object} options - Publishing options
  * @returns {Object} Results summary
@@ -250,9 +313,16 @@ export async function bulkPublish(articles, options = {}) {
     successful: 0,
     failed: 0,
     results: [],
+    startTime: Date.now(),
   }
 
-  for (const article of articles) {
+  console.log(`[PublishService] Starting bulk publish of ${articles.length} articles (rate limit: ${PUBLISH_RATE_LIMIT.maxPerMinute}/min)`)
+
+  for (let i = 0; i < articles.length; i++) {
+    const article = articles[i]
+    console.log(`[PublishService] Publishing ${i + 1}/${articles.length}: ${article.title?.substring(0, 50)}...`)
+
+    // Rate limiting is handled inside publishArticle via applyRateLimiting()
     const result = await publishArticle(article, options)
     results.results.push(result)
 
@@ -261,12 +331,27 @@ export async function bulkPublish(articles, options = {}) {
     } else {
       results.failed++
     }
-
-    // Small delay between requests to avoid overwhelming the webhook
-    await new Promise(resolve => setTimeout(resolve, 500))
   }
 
+  results.endTime = Date.now()
+  results.durationMs = results.endTime - results.startTime
+  results.avgTimePerArticle = results.durationMs / results.total
+
+  console.log(`[PublishService] Bulk publish complete: ${results.successful}/${results.total} successful in ${Math.round(results.durationMs / 1000)}s`)
+
   return results
+}
+
+/**
+ * Throttled publish with explicit rate control
+ * Use this for manual publishing to ensure rate limits are respected
+ * @param {Object} article - Article to publish
+ * @param {Object} options - Publishing options
+ * @returns {Object} Publish result
+ */
+export async function throttledPublish(article, options = {}) {
+  // This is now the same as publishArticle since rate limiting is built in
+  return publishArticle(article, options)
 }
 
 /**
@@ -422,6 +507,7 @@ export default {
   publishArticle,
   buildWebhookPayload,
   bulkPublish,
+  throttledPublish,
   checkPublishEligibility,
   retryPublish,
   syncToGetEducatedCatalog,
@@ -430,4 +516,6 @@ export default {
   WEBHOOK_URL_STAGING,
   WEBHOOK_URL_PRODUCTION,
   DEFAULT_ENVIRONMENT,
+  // Rate limiting config (exposed for testing/monitoring)
+  PUBLISH_RATE_LIMIT,
 }
