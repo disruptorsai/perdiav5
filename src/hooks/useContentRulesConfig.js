@@ -392,6 +392,11 @@ function deepDiff(obj1, obj2, path = '') {
 
 // Export helper constants for UI components
 export const CONFIG_SECTIONS = {
+  global_rules: {
+    label: 'Global Rules',
+    description: 'Natural language rules that AI follows during generation',
+    icon: 'Globe',
+  },
   hard_rules: {
     label: 'Hard Rules',
     description: 'Non-negotiable rules that BLOCK publishing if violated',

@@ -16,6 +16,7 @@ import {
   Monitor,
   HelpCircle,
   Settings2,
+  FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ import { useToast, ToastProvider } from '@/components/ui/toast'
 import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
 import { useHowToGuide } from '@/contexts/HowToGuideContext'
 import { ContentRulesTab } from '@/components/settings/content-rules'
+import AuditLogViewer from '@/components/settings/AuditLogViewer'
 
 function SettingsContent() {
   const { toast } = useToast()
@@ -359,6 +361,10 @@ function SettingsContent() {
             <TabsTrigger value="ui">
               <Monitor className="w-4 h-4 mr-2" />
               User Interface
+            </TabsTrigger>
+            <TabsTrigger value="auditlog">
+              <FileText className="w-4 h-4 mr-2" />
+              Audit Log
             </TabsTrigger>
           </TabsList>
 
@@ -1455,6 +1461,28 @@ function SettingsContent() {
                 <p className="text-sm text-gray-500">
                   Additional display settings coming soon. This will include options for compact mode, sidebar preferences, and more.
                 </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Audit Log Tab */}
+          <TabsContent value="auditlog" className="space-y-6 mt-6">
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  User Input Audit Log
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Alert className="mb-4 border-blue-200 bg-blue-50">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800">
+                    This is an immutable log of all user-entered text including comments, revision notes, feedback, and setting changes.
+                    Entries cannot be deleted - this serves as a backup for recovery purposes.
+                  </AlertDescription>
+                </Alert>
+                <AuditLogViewer />
               </CardContent>
             </Card>
           </TabsContent>

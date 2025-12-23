@@ -270,6 +270,142 @@ export function useGenerateIdeas() {
 }
 
 /**
+ * Run compliance update on an article
+ * Per Dec 22, 2025 meeting - "Update" button for automatic compliance pass
+ * Fixes shortcodes, monetization, internal links, and formatting
+ * WITHOUT rewriting prose content
+ */
+export function useComplianceUpdate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ article, options = {}, onProgress }) => {
+      // Run compliance update
+      const result = await generationService.runComplianceUpdate(article, {
+        ...options,
+        onProgress,
+      })
+
+      if (!result.success) {
+        throw new Error('Compliance update failed')
+      }
+
+      // Update article in database
+      const { data, error } = await supabase
+        .from('articles')
+        .update({
+          content: result.content,
+          quality_score: result.quality_score,
+          word_count: result.word_count,
+          risk_flags: result.quality_issues.map(i => i.type),
+          ai_reasoning: result.ai_reasoning,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', article.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        article: data,
+        updates: result.updates,
+        reasoning: result.ai_reasoning,
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['article', data.article.id] })
+    },
+  })
+}
+
+/**
+ * Batch compliance update for multiple articles
+ * Per Dec 22, 2025 meeting - refresh all existing articles with new rules
+ */
+export function useBatchComplianceUpdate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleIds, options = {}, onProgress }) => {
+      const results = {
+        successful: [],
+        failed: [],
+      }
+
+      const total = articleIds.length
+
+      for (let i = 0; i < articleIds.length; i++) {
+        const articleId = articleIds[i]
+
+        try {
+          // Fetch the article
+          const { data: article, error: fetchError } = await supabase
+            .from('articles')
+            .select('*')
+            .eq('id', articleId)
+            .single()
+
+          if (fetchError) throw fetchError
+
+          // Run compliance update
+          const result = await generationService.runComplianceUpdate(article, {
+            ...options,
+            onProgress: (progress) => {
+              if (onProgress) {
+                const overallProgress = ((i + progress.percentage / 100) / total) * 100
+                onProgress({
+                  message: `[${i + 1}/${total}] ${progress.message}`,
+                  percentage: overallProgress,
+                  current: i + 1,
+                  total,
+                })
+              }
+            },
+          })
+
+          // Update article
+          const { data: updated, error: updateError } = await supabase
+            .from('articles')
+            .update({
+              content: result.content,
+              quality_score: result.quality_score,
+              word_count: result.word_count,
+              risk_flags: result.quality_issues.map(iss => iss.type),
+              ai_reasoning: result.ai_reasoning,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', articleId)
+            .select()
+            .single()
+
+          if (updateError) throw updateError
+
+          results.successful.push({
+            articleId,
+            title: article.title,
+            updates: result.updates,
+          })
+
+        } catch (error) {
+          console.error(`[BatchUpdate] Failed for article ${articleId}:`, error)
+          results.failed.push({
+            articleId,
+            error: error.message,
+          })
+        }
+      }
+
+      return results
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+    },
+  })
+}
+
+/**
  * Get contributors (for display)
  */
 export function useContributors() {

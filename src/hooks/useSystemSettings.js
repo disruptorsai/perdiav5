@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../services/supabaseClient'
+import { logUserInput, INPUT_TYPES } from './useUserInputLog'
 
 /**
  * Fetch all system settings
@@ -79,13 +80,16 @@ export function useUpdateSetting() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ key, value, category = 'workflow', description = '' }) => {
+    mutationFn: async ({ key, value, category = 'workflow', description = '', note = '' }) => {
       // First, try to find existing setting
       const { data: existing } = await supabase
         .from('system_settings')
-        .select('id')
+        .select('id, value')
         .eq('key', key)
         .single()
+
+      let result
+      const previousValue = existing?.value
 
       if (existing) {
         // Update existing
@@ -97,7 +101,7 @@ export function useUpdateSetting() {
           .single()
 
         if (error) throw error
-        return data
+        result = data
       } else {
         // Create new
         const { data, error } = await supabase
@@ -112,8 +116,25 @@ export function useUpdateSetting() {
           .single()
 
         if (error) throw error
-        return data
+        result = data
       }
+
+      // Log the setting change to audit log
+      await logUserInput({
+        inputType: INPUT_TYPES.SETTING_CHANGE,
+        inputText: note || `Changed ${key} to: ${value}`,
+        inputContext: {
+          setting_key: key,
+          previous_value: previousValue,
+          new_value: value,
+          category,
+          description,
+        },
+        sourceTable: 'system_settings',
+        sourceRecordId: result.id,
+      })
+
+      return result
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
@@ -128,16 +149,19 @@ export function useBulkUpdateSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (settings) => {
+    mutationFn: async (settings, note = '') => {
       // settings is an array of { key, value, category?, description? }
       const results = []
+      const changes = []
 
       for (const setting of settings) {
         const { data: existing } = await supabase
           .from('system_settings')
-          .select('id')
+          .select('id, value')
           .eq('key', setting.key)
           .single()
+
+        const previousValue = existing?.value
 
         if (existing) {
           const { data, error } = await supabase
@@ -149,6 +173,11 @@ export function useBulkUpdateSettings() {
 
           if (error) throw error
           results.push(data)
+          changes.push({
+            key: setting.key,
+            previous: previousValue,
+            new: setting.value,
+          })
         } else {
           const { data, error } = await supabase
             .from('system_settings')
@@ -163,7 +192,25 @@ export function useBulkUpdateSettings() {
 
           if (error) throw error
           results.push(data)
+          changes.push({
+            key: setting.key,
+            previous: null,
+            new: setting.value,
+          })
         }
+      }
+
+      // Log the bulk setting changes
+      if (changes.length > 0) {
+        await logUserInput({
+          inputType: INPUT_TYPES.SETTING_CHANGE,
+          inputText: note || `Bulk updated ${changes.length} settings: ${changes.map(c => c.key).join(', ')}`,
+          inputContext: {
+            bulk_update: true,
+            changes,
+          },
+          sourceTable: 'system_settings',
+        })
       }
 
       return results

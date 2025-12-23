@@ -1,7 +1,24 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useArticles } from '../hooks/useArticles'
-import { Search, Filter, Loader2, FileText } from 'lucide-react'
+import { useSubmitArticleFeedback, useArticleFeedbackSummary } from '../hooks/useArticleFeedback'
+import { Search, Filter, Loader2, FileText, ThumbsUp, ThumbsDown } from 'lucide-react'
+
+// Small component to display feedback for each article card
+function ArticleFeedback({ articleId }) {
+  const { data: summary } = useArticleFeedbackSummary(articleId)
+
+  if (!summary || summary.total === 0) return null
+
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      <ThumbsUp className="w-3 h-3 text-green-500" />
+      <span className="text-green-600">{summary.positive}</span>
+      <ThumbsDown className="w-3 h-3 text-red-500 ml-1" />
+      <span className="text-red-600">{summary.negative}</span>
+    </div>
+  )
+}
 
 function ContentLibrary() {
   const navigate = useNavigate()
@@ -91,11 +108,14 @@ function ContentLibrary() {
               <span className="capitalize">{article.status?.replace('_', ' ')}</span>
             </div>
 
-            {article.contributor_name && (
-              <p className="text-xs text-gray-600 mt-2">
-                By {article.contributor_name}
-              </p>
-            )}
+            <div className="flex items-center justify-between mt-2">
+              {article.contributor_name && (
+                <p className="text-xs text-gray-600">
+                  By {article.contributor_name}
+                </p>
+              )}
+              <ArticleFeedback articleId={article.id} />
+            </div>
           </div>
         ))}
       </div>

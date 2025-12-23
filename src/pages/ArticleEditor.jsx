@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useArticle, useUpdateArticle, useUpdateArticleStatus } from '../hooks/useArticles'
-import { useAutoFixQuality, useHumanizeContent, useReviseWithFeedback } from '../hooks/useGeneration'
+import { useAutoFixQuality, useHumanizeContent, useReviseWithFeedback, useComplianceUpdate } from '../hooks/useGeneration'
+import { useSubmitArticleFeedback, useUserArticleFeedback, useArticleFeedbackSummary } from '../hooks/useArticleFeedback'
 import { useActiveContributors } from '../hooks/useContributors'
 import { useCreateAIRevision } from '../hooks/useAIRevisions'
 import { usePublishArticle, usePublishEligibility } from '../hooks/usePublish'
@@ -25,7 +26,10 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Brain,
-  Edit3
+  Edit3,
+  ThumbsUp,
+  ThumbsDown,
+  RefreshCcw
 } from 'lucide-react'
 // TipTap editor - React 19 compatible rich text editor
 import { RichTextEditor, getWordCount } from '@/components/ui/rich-text-editor'
@@ -91,10 +95,16 @@ function ArticleEditorContent() {
   const autoFixQuality = useAutoFixQuality()
   const humanizeContent = useHumanizeContent()
   const reviseWithFeedback = useReviseWithFeedback()
+  const complianceUpdate = useComplianceUpdate()
   const createAIRevision = useCreateAIRevision()
   const { data: contributors = [] } = useActiveContributors()
   const publishArticle = usePublishArticle()
   const { toast } = useToast()
+
+  // Article feedback hooks (thumbs up/down per Dec 22, 2025 meeting)
+  const submitFeedback = useSubmitArticleFeedback()
+  const { data: userFeedback } = useUserArticleFeedback(articleId)
+  const { data: feedbackSummary } = useArticleFeedbackSummary(articleId)
 
   // Editor state
   const [title, setTitle] = useState('')
@@ -118,6 +128,17 @@ function ArticleEditorContent() {
   const [isRevising, setIsRevising] = useState(false)
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackComments, setFeedbackComments] = useState([]) // Array of comments for AI revision
+
+  // Compliance update state (per Dec 22, 2025 meeting - "Update" button)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateProgress, setUpdateProgress] = useState(null)
+
+  // Thumbs up/down feedback state (per Dec 22, 2025 meeting)
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false)
+  const [thumbsFeedbackComment, setThumbsFeedbackComment] = useState('')
+
+  // Post-revision workflow state (per Dec 22, 2025 meeting - approve/reject UX)
+  const [pendingRevision, setPendingRevision] = useState(null) // { previousContent, revisedContent, feedbackItems, timestamp }
 
   // Update local state when article loads
   useEffect(() => {
@@ -259,6 +280,7 @@ function ArticleEditorContent() {
 
   // AI Revise handler - per GetEducated spec section 8.3.3
   // Sends article + comments as context for AI revision and logs for training
+  // Updated per Dec 22, 2025 meeting: Now creates pending revision for approve/reject workflow
   const handleAIRevise = async () => {
     if (feedbackComments.length === 0 && !feedbackComment.trim()) {
       toast.error('Please add at least one feedback comment before requesting AI revision')
@@ -271,9 +293,6 @@ function ArticleEditorContent() {
       ? [...feedbackComments, { comment: feedbackComment.trim(), timestamp: new Date().toISOString() }]
       : feedbackComments
 
-    // Get contributor info for context
-    const contributor = contributors.find(c => c.id === selectedContributorId)
-
     try {
       // Call AI revision with feedback
       const result = await reviseWithFeedback.mutateAsync({
@@ -284,17 +303,45 @@ function ArticleEditorContent() {
         focusKeyword,
       })
 
-      // Update content with revised version
+      // Set pending revision for approve/reject workflow (per Dec 22, 2025 meeting)
+      setPendingRevision({
+        previousContent,
+        revisedContent: result.content,
+        feedbackItems: allComments,
+        timestamp: new Date().toISOString(),
+      })
+
+      // Update content to show the revised version (preview mode)
       setContent(result.content)
 
-      // Log the revision for AI training (per spec section 8.4) with full context
+      // Clear feedback comments (they're stored in pendingRevision)
+      setFeedbackComments([])
+      setFeedbackComment('')
+
+      toast.success('AI revision ready! Review and approve or reject the changes.')
+    } catch (error) {
+      toast.error('AI revision failed: ' + error.message)
+    } finally {
+      setIsRevising(false)
+    }
+  }
+
+  // Approve revision handler - per Dec 22, 2025 meeting
+  // Confirms the AI revision and logs it for training
+  const handleApproveRevision = async () => {
+    if (!pendingRevision) return
+
+    const contributor = contributors.find(c => c.id === selectedContributorId)
+
+    try {
+      // Log the approved revision for AI training (per spec section 8.4)
       await createAIRevision.mutateAsync({
         articleId,
-        previousVersion: previousContent,
-        revisedVersion: result.content,
-        commentsSnapshot: allComments,
+        previousVersion: pendingRevision.previousContent,
+        revisedVersion: pendingRevision.revisedContent,
+        commentsSnapshot: pendingRevision.feedbackItems,
         revisionType: 'feedback',
-        // Enhanced context for RLHF training
+        approved: true, // Mark as approved for RLHF positive signal
         articleContext: {
           title,
           focus_keyword: focusKeyword,
@@ -303,22 +350,54 @@ function ArticleEditorContent() {
           contributor_style: contributor?.writing_style || null,
           article_status: article?.status,
         },
-        // Store the quality delta if available
         qualityDelta: qualityData ? {
           before: qualityData.score,
-          after: null, // Will be calculated after content update
+          after: null, // Will be recalculated
         } : null,
       })
 
-      // Clear feedback after successful revision
-      setFeedbackComments([])
-      setFeedbackComment('')
+      // Clear pending revision - content is already updated
+      setPendingRevision(null)
 
-      toast.success('Article revised based on feedback. Revision logged for AI training.')
+      toast.success('Revision approved and logged for AI training!')
     } catch (error) {
-      toast.error('AI revision failed: ' + error.message)
-    } finally {
-      setIsRevising(false)
+      toast.error('Failed to log revision: ' + error.message)
+    }
+  }
+
+  // Reject revision handler - per Dec 22, 2025 meeting
+  // Reverts to previous content and logs rejection for training
+  const handleRejectRevision = async () => {
+    if (!pendingRevision) return
+
+    try {
+      // Revert to previous content
+      setContent(pendingRevision.previousContent)
+
+      // Log the rejected revision for AI training (negative signal)
+      await createAIRevision.mutateAsync({
+        articleId,
+        previousVersion: pendingRevision.previousContent,
+        revisedVersion: pendingRevision.revisedContent,
+        commentsSnapshot: pendingRevision.feedbackItems,
+        revisionType: 'feedback',
+        approved: false, // Mark as rejected for RLHF negative signal
+        articleContext: {
+          title,
+          focus_keyword: focusKeyword,
+          content_type: contentType,
+        },
+      })
+
+      // Clear pending revision
+      setPendingRevision(null)
+
+      toast.success('Revision rejected. Changes reverted.')
+    } catch (error) {
+      // Still revert the content even if logging fails
+      setContent(pendingRevision.previousContent)
+      setPendingRevision(null)
+      toast.error('Failed to log rejection, but changes reverted.')
     }
   }
 
@@ -404,6 +483,85 @@ function ArticleEditorContent() {
     }
   }
 
+  // Compliance update handler (per Dec 22, 2025 meeting - "Update" button)
+  // Fixes shortcodes, monetization, internal links WITHOUT rewriting prose
+  const handleComplianceUpdate = async () => {
+    setIsUpdating(true)
+    setUpdateProgress({ message: 'Starting compliance update...', percentage: 0 })
+
+    try {
+      // Build article object with current editor state
+      const articleToUpdate = {
+        ...article,
+        title,
+        content,
+        meta_description: metaDescription,
+        focus_keyword: focusKeyword,
+        content_type: contentType,
+      }
+
+      const result = await complianceUpdate.mutateAsync({
+        article: articleToUpdate,
+        options: {
+          fixShortcodes: true,
+          fixMonetization: true,
+          fixInternalLinks: true,
+          fixFormatting: true,
+        },
+        onProgress: (progress) => {
+          setUpdateProgress(progress)
+        },
+      })
+
+      // Update local content with fixed version
+      setContent(result.article.content)
+
+      // Show summary of updates
+      const updateCount = result.updates?.length || 0
+      if (updateCount > 0) {
+        toast.success(`Compliance update complete! ${updateCount} fixes applied.`)
+      } else {
+        toast.success('Article is already compliant - no changes needed.')
+      }
+
+      // Refetch to get updated quality score
+      refetch()
+    } catch (error) {
+      toast.error('Compliance update failed: ' + error.message)
+    } finally {
+      setIsUpdating(false)
+      setUpdateProgress(null)
+    }
+  }
+
+  // Thumbs up/down feedback handlers (per Dec 22, 2025 meeting)
+  const handleThumbsFeedback = async (type) => {
+    // If thumbs down, show dialog for optional comment
+    if (type === 'negative' && !showFeedbackDialog) {
+      setShowFeedbackDialog(true)
+      return
+    }
+
+    try {
+      await submitFeedback.mutateAsync({
+        articleId,
+        feedbackType: type,
+        comment: type === 'negative' ? thumbsFeedbackComment : null,
+      })
+
+      toast.success(type === 'positive' ? 'Thanks for the positive feedback!' : 'Feedback recorded')
+      setShowFeedbackDialog(false)
+      setThumbsFeedbackComment('')
+    } catch (error) {
+      toast.error('Failed to submit feedback')
+    }
+  }
+
+  const handleCancelFeedback = () => {
+    setShowFeedbackDialog(false)
+    setThumbsFeedbackComment('')
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -452,6 +610,33 @@ function ArticleEditorContent() {
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* Thumbs Up/Down Feedback - per Dec 22, 2025 meeting */}
+            <div className="flex items-center gap-1 border rounded-lg px-2 py-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleThumbsFeedback('positive')}
+                className={`p-1 h-7 w-7 ${userFeedback?.feedback_type === 'positive' ? 'bg-green-100 text-green-700' : 'text-gray-400 hover:text-green-600'}`}
+                title="Good article"
+              >
+                <ThumbsUp className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleThumbsFeedback('negative')}
+                className={`p-1 h-7 w-7 ${userFeedback?.feedback_type === 'negative' ? 'bg-red-100 text-red-700' : 'text-gray-400 hover:text-red-600'}`}
+                title="Needs improvement"
+              >
+                <ThumbsDown className="w-4 h-4" />
+              </Button>
+              {feedbackSummary?.total > 0 && (
+                <span className="text-xs text-gray-500 ml-1">
+                  {feedbackSummary.positive}/{feedbackSummary.total}
+                </span>
+              )}
+            </div>
+
             {/* Quality Score Badge */}
             {qualityData && (
               <Badge
@@ -611,6 +796,45 @@ function ArticleEditorContent() {
           </div>
         </div>
       </div>
+
+      {/* Pending Revision Banner - per Dec 22, 2025 meeting (approve/reject UX) */}
+      {pendingRevision && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <Brain className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-900">AI Revision Ready for Review</p>
+                <p className="text-xs text-amber-700">
+                  {pendingRevision.feedbackItems.length} feedback item(s) applied •{' '}
+                  Review the changes below and approve or reject
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleRejectRevision}
+                variant="outline"
+                size="sm"
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <ThumbsDown className="w-4 h-4 mr-2" />
+                Reject & Revert
+              </Button>
+              <Button
+                onClick={handleApproveRevision}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <ThumbsUp className="w-4 h-4 mr-2" />
+                Approve Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden flex">
@@ -818,69 +1042,174 @@ function ArticleEditorContent() {
 
                   {/* Tools Tab */}
                   <TabsContent value="tools" className="mt-0 space-y-4">
+                    {/* Compliance Update Button - per Dec 22, 2025 meeting */}
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <RefreshCcw className="w-4 h-4 text-green-600" />
+                        <h3 className="font-medium text-sm text-green-900">Compliance Update</h3>
+                      </div>
+                      <p className="text-xs text-green-700">
+                        Fix shortcodes, monetization, and internal links without changing the prose content.
+                      </p>
+
+                      {/* Progress indicator */}
+                      {updateProgress && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-3 h-3 animate-spin text-green-600" />
+                            <span className="text-xs text-green-700">{updateProgress.message}</span>
+                          </div>
+                          <div className="w-full bg-green-200 rounded-full h-1.5">
+                            <div
+                              className="bg-green-600 h-1.5 rounded-full transition-all"
+                              style={{ width: `${updateProgress.percentage || 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <Button
+                        onClick={handleComplianceUpdate}
+                        disabled={isUpdating}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        size="sm"
+                      >
+                        {isUpdating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="w-4 h-4 mr-2" />
+                            Update Article
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Thumbs Down Feedback Dialog */}
+                    {showFeedbackDialog && (
+                      <div className="p-4 bg-orange-50 rounded-lg border border-orange-200 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <ThumbsDown className="w-4 h-4 text-orange-600" />
+                          <h3 className="font-medium text-sm text-orange-900">What needs improvement?</h3>
+                        </div>
+                        <Textarea
+                          value={thumbsFeedbackComment}
+                          onChange={(e) => setThumbsFeedbackComment(e.target.value)}
+                          placeholder="(Optional) Tell us what could be better..."
+                          rows={2}
+                          className="text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleCancelFeedback}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => handleThumbsFeedback('negative')}
+                            size="sm"
+                            className="flex-1 bg-orange-600 hover:bg-orange-700"
+                          >
+                            Submit Feedback
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* AI Revise with Feedback - per spec section 8.3.3 */}
                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
                       <div className="flex items-center gap-2">
                         <Brain className="w-4 h-4 text-blue-600" />
                         <h3 className="font-medium text-sm text-blue-900">AI Revise with Feedback</h3>
                       </div>
-                      <p className="text-xs text-blue-700">
-                        Add feedback comments and let AI revise the article. All revisions are logged for training.
-                      </p>
 
-                      {/* Existing comments */}
-                      {feedbackComments.length > 0 && (
-                        <div className="space-y-2">
-                          {feedbackComments.map((comment, index) => (
-                            <div key={index} className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100">
-                              <MessageSquare className="w-3 h-3 text-blue-500 mt-1 flex-shrink-0" />
-                              <p className="text-xs text-gray-700 flex-1">{comment.comment}</p>
-                              <button
-                                onClick={() => handleRemoveFeedbackComment(index)}
-                                className="text-gray-400 hover:text-red-500"
-                              >
-                                &times;
-                              </button>
+                      {/* Show pending revision status - per Dec 22, 2025 meeting */}
+                      {pendingRevision ? (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-amber-100 rounded border border-amber-200">
+                            <p className="text-xs font-medium text-amber-900 mb-1">
+                              ⚡ Revision pending approval
+                            </p>
+                            <p className="text-xs text-amber-700">
+                              Review the changes above and use the banner to approve or reject.
+                            </p>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            <p className="font-medium mb-1">Applied feedback:</p>
+                            <ul className="list-disc list-inside space-y-1">
+                              {pendingRevision.feedbackItems.map((item, idx) => (
+                                <li key={idx} className="truncate">{item.comment}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-blue-700">
+                            Add feedback comments and let AI revise the article. All revisions are logged for training.
+                          </p>
+
+                          {/* Existing comments */}
+                          {feedbackComments.length > 0 && (
+                            <div className="space-y-2">
+                              {feedbackComments.map((comment, index) => (
+                                <div key={index} className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100">
+                                  <MessageSquare className="w-3 h-3 text-blue-500 mt-1 flex-shrink-0" />
+                                  <p className="text-xs text-gray-700 flex-1">{comment.comment}</p>
+                                  <button
+                                    onClick={() => handleRemoveFeedbackComment(index)}
+                                    className="text-gray-400 hover:text-red-500"
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          )}
 
-                      {/* Add comment input */}
-                      <div className="space-y-2">
-                        <Textarea
-                          value={feedbackComment}
-                          onChange={(e) => setFeedbackComment(e.target.value)}
-                          placeholder="Add feedback comment (e.g., 'Make the introduction more engaging', 'Add more statistics')"
-                          rows={2}
-                          className="text-xs"
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={handleAddFeedbackComment}
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            disabled={!feedbackComment.trim()}
-                          >
-                            <MessageSquare className="w-3 h-3 mr-1" />
-                            Add Comment
-                          </Button>
-                          <Button
-                            onClick={handleAIRevise}
-                            size="sm"
-                            className="flex-1 bg-blue-600 hover:bg-blue-700"
-                            disabled={isRevising || (feedbackComments.length === 0 && !feedbackComment.trim())}
-                          >
-                            {isRevising ? (
-                              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                            ) : (
-                              <Brain className="w-3 h-3 mr-1" />
-                            )}
-                            {isRevising ? 'Revising...' : 'AI Revise'}
-                          </Button>
-                        </div>
-                      </div>
+                          {/* Add comment input */}
+                          <div className="space-y-2">
+                            <Textarea
+                              value={feedbackComment}
+                              onChange={(e) => setFeedbackComment(e.target.value)}
+                              placeholder="Add feedback comment (e.g., 'Make the introduction more engaging', 'Add more statistics')"
+                              rows={2}
+                              className="text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={handleAddFeedbackComment}
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                disabled={!feedbackComment.trim()}
+                              >
+                                <MessageSquare className="w-3 h-3 mr-1" />
+                                Add Comment
+                              </Button>
+                              <Button
+                                onClick={handleAIRevise}
+                                size="sm"
+                                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                disabled={isRevising || (feedbackComments.length === 0 && !feedbackComment.trim())}
+                              >
+                                {isRevising ? (
+                                  <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Brain className="w-3 h-3 mr-1" />
+                                )}
+                                {isRevising ? 'Revising...' : 'AI Revise'}
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <BLSCitationHelper

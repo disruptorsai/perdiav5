@@ -2159,6 +2159,310 @@ OUTPUT ONLY THE HUMANIZED HTML CONTENT.`
     }
   }
 
+  // ========================================
+  // COMPLIANCE UPDATE (Article Update Button)
+  // Per Dec 22, 2025 meeting - automatic compliance pass
+  // Updates shortcodes, monetization, internal links, formatting
+  // WITHOUT rewriting prose content
+  // ========================================
+
+  /**
+   * Run a compliance update on existing article content
+   * Fixes shortcodes, monetization, internal links, and formatting
+   * Does NOT rewrite or humanize the prose content
+   *
+   * @param {Object} article - The article to update
+   * @param {Object} options - Update options
+   * @returns {Object} - Updated article data
+   */
+  async runComplianceUpdate(article, options = {}) {
+    const {
+      fixShortcodes = true,
+      fixMonetization = true,
+      fixInternalLinks = true,
+      fixFormatting = true,
+      onProgress = null,
+    } = options
+
+    try {
+      // Initialize reasoning for this update
+      this.initReasoning()
+      this.logReasoning('compliance_update', {
+        article_id: article.id,
+        article_title: article.title,
+        options: { fixShortcodes, fixMonetization, fixInternalLinks, fixFormatting },
+        reasoning: 'Running compliance update to align article with current rules.',
+      })
+
+      let content = article.content
+      const updates = {
+        shortcodes_fixed: 0,
+        monetization_updated: false,
+        internal_links_added: 0,
+        formatting_fixed: false,
+      }
+
+      // Load current content rules
+      const contentRules = await this.loadContentRules()
+      this.updateProgress(onProgress, 'Loading current content rules...', 10)
+
+      // STEP 1: Fix HTML formatting issues
+      if (fixFormatting) {
+        this.updateProgress(onProgress, 'Fixing HTML formatting...', 20)
+        const originalContent = content
+        content = this.ensureProperHtmlFormatting(content)
+        updates.formatting_fixed = content !== originalContent
+
+        if (updates.formatting_fixed) {
+          this.logReasoning('formatting_fix', {
+            action: 'Fixed HTML formatting',
+            reasoning: 'Ensured proper <p>, <h2>, <h3> tags and list formatting.',
+          })
+        }
+      }
+
+      // STEP 2: Fix/update shortcodes
+      if (fixShortcodes) {
+        this.updateProgress(onProgress, 'Validating and fixing shortcodes...', 35)
+        const shortcodeResult = await this.validateAndFixShortcodes(content, contentRules)
+        content = shortcodeResult.content
+        updates.shortcodes_fixed = shortcodeResult.fixCount
+
+        if (shortcodeResult.fixCount > 0) {
+          this.logReasoning('shortcode_fix', {
+            fixes_applied: shortcodeResult.fixCount,
+            issues_found: shortcodeResult.issues,
+            reasoning: `Fixed ${shortcodeResult.fixCount} shortcode issues.`,
+          })
+        }
+      }
+
+      // STEP 3: Update monetization if category info available
+      if (fixMonetization && article.category_id) {
+        this.updateProgress(onProgress, 'Updating monetization shortcodes...', 50)
+        try {
+          const monetizationResult = await this.monetizationEngine.generateMonetization({
+            articleId: article.id,
+            categoryId: article.category_id,
+            concentrationId: article.concentration_id,
+            degreeLevelCode: article.degree_level_code,
+            articleType: article.content_type || 'default',
+          })
+
+          if (monetizationResult.success && monetizationResult.slots.length > 0) {
+            // Remove old monetization shortcodes and insert new ones
+            content = this.replaceMonetizationShortcodes(content, monetizationResult.slots)
+            updates.monetization_updated = true
+
+            this.logReasoning('monetization_update', {
+              slots_generated: monetizationResult.slots.length,
+              total_programs: monetizationResult.totalProgramsSelected,
+              reasoning: `Updated monetization with ${monetizationResult.slots.length} slots.`,
+            })
+          }
+        } catch (monetizationError) {
+          console.warn('[Compliance] Monetization update failed:', monetizationError.message)
+          this.logReasoningWarning('monetization_error', monetizationError.message, 'low')
+        }
+      }
+
+      // STEP 4: Add missing internal links
+      if (fixInternalLinks) {
+        this.updateProgress(onProgress, 'Checking internal links...', 65)
+
+        // Count existing internal links
+        const existingLinks = (content.match(/<a href="[^"]*geteducated\.com/gi) || []).length
+        const minLinks = contentRules?.guidelines?.links?.internal_links_min || 3
+
+        if (existingLinks < minLinks) {
+          const siteArticles = await this.getRelevantSiteArticles(article.title, 30)
+          if (siteArticles.length >= 2) {
+            const linksToAdd = minLinks - existingLinks
+            content = await this.addInternalLinksToContentPreserving(content, siteArticles, linksToAdd)
+            updates.internal_links_added = linksToAdd
+
+            this.logReasoning('internal_links_update', {
+              existing_links: existingLinks,
+              links_added: linksToAdd,
+              reasoning: `Added ${linksToAdd} internal links to meet minimum requirement.`,
+            })
+          }
+        }
+      }
+
+      this.updateProgress(onProgress, 'Calculating updated quality score...', 85)
+
+      // Recalculate quality metrics
+      const qualityThresholds = this.getQualityThresholds(contentRules)
+      const metrics = this.calculateQualityMetrics(content, article.faqs, qualityThresholds)
+
+      this.updateProgress(onProgress, 'Compliance update complete!', 100)
+
+      // Attach reasoning to result
+      const reasoning = this.getReasoningOutput()
+
+      return {
+        success: true,
+        content,
+        updates,
+        quality_score: metrics.score,
+        word_count: metrics.word_count,
+        quality_issues: metrics.issues,
+        ai_reasoning: reasoning,
+      }
+
+    } catch (error) {
+      console.error('[Compliance] Update failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Validate and fix shortcodes in content
+   * @param {string} content - Article content
+   * @param {Object} contentRules - Content rules config
+   * @returns {Object} - { content, fixCount, issues }
+   */
+  async validateAndFixShortcodes(content, contentRules) {
+    const issues = []
+    let fixCount = 0
+    let fixedContent = content
+
+    // Get blocked/legacy shortcodes from rules
+    const blockedShortcodes = contentRules?.shortcode_rules?.legacy_shortcodes_blocked || []
+    const allowedShortcodes = contentRules?.shortcode_rules?.allowed_shortcodes || [
+      'ge_cta', 'ge_internal_link', 'ge_external_cited', 'degree_table', 'degree_offer'
+    ]
+
+    // Find all shortcodes in content
+    const shortcodeRegex = /\[([a-z_]+)([^\]]*)\]/gi
+    let match
+
+    while ((match = shortcodeRegex.exec(content)) !== null) {
+      const shortcodeName = match[1].toLowerCase()
+
+      // Check for blocked/legacy shortcodes
+      if (blockedShortcodes.includes(shortcodeName)) {
+        issues.push({
+          type: 'legacy_shortcode',
+          shortcode: match[0],
+          message: `Legacy shortcode [${shortcodeName}] should be replaced`
+        })
+        // Remove legacy shortcode
+        fixedContent = fixedContent.replace(match[0], '')
+        fixCount++
+      }
+
+      // Check for malformed shortcodes (missing required attributes)
+      if (shortcodeName === 'ge_cta') {
+        const hasCategory = /category=/.test(match[0])
+        const hasLevel = /level=/.test(match[0])
+
+        if (!hasCategory || !hasLevel) {
+          issues.push({
+            type: 'incomplete_shortcode',
+            shortcode: match[0],
+            message: 'ge_cta shortcode missing required attributes'
+          })
+        }
+      }
+    }
+
+    // Check for raw affiliate URLs that should be shortcodes
+    const affiliateUrlPattern = /href="https?:\/\/[^"]*(?:commission|affiliate|tracking|click)[^"]*"/gi
+    const affiliateMatches = content.match(affiliateUrlPattern) || []
+
+    if (affiliateMatches.length > 0) {
+      issues.push({
+        type: 'raw_affiliate_url',
+        count: affiliateMatches.length,
+        message: `Found ${affiliateMatches.length} raw affiliate URLs that should use shortcodes`
+      })
+    }
+
+    return {
+      content: fixedContent,
+      fixCount,
+      issues,
+    }
+  }
+
+  /**
+   * Replace monetization shortcodes with updated versions
+   * @param {string} content - Article content
+   * @param {Array} slots - New monetization slots
+   * @returns {string} - Updated content
+   */
+  replaceMonetizationShortcodes(content, slots) {
+    let updatedContent = content
+
+    // Remove existing monetization shortcodes
+    const monetizationShortcodes = /\[(?:ge_cta|degree_table|degree_offer)[^\]]*\]/gi
+    updatedContent = updatedContent.replace(monetizationShortcodes, '')
+
+    // Clean up any double newlines left behind
+    updatedContent = updatedContent.replace(/\n{3,}/g, '\n\n')
+
+    // Insert new shortcodes at designated positions
+    for (const slot of slots) {
+      const positionMap = {
+        'after_intro': 'after_intro',
+        'mid_article': 'mid_content',
+        'near_conclusion': 'pre_conclusion',
+      }
+      const insertPosition = positionMap[slot.name] || 'after_intro'
+      updatedContent = insertShortcodeInContent(updatedContent, slot.shortcode, insertPosition)
+    }
+
+    return updatedContent
+  }
+
+  /**
+   * Add internal links to content while preserving existing structure
+   * More conservative than full rewrite - only adds links where natural
+   * @param {string} content - Article content
+   * @param {Array} siteArticles - Available articles to link to
+   * @param {number} linksToAdd - Target number of links to add
+   * @returns {string} - Updated content
+   */
+  async addInternalLinksToContentPreserving(content, siteArticles, linksToAdd = 3) {
+    const prompt = `Add ${linksToAdd} contextual internal links to this article.
+
+IMPORTANT: Only add links where they naturally fit. Do NOT rewrite any prose.
+
+ARTICLE CONTENT:
+${content}
+
+AVAILABLE ARTICLES TO LINK TO (pick ${linksToAdd} most relevant):
+${siteArticles.slice(0, 10).map(a => `- [${a.title}](${a.url})`).join('\n')}
+
+RULES:
+1. Add EXACTLY ${linksToAdd} links, no more, no fewer
+2. Use natural anchor text (1-5 words from existing text)
+3. Do NOT change any other text or structure
+4. Use HTML format: <a href="URL">existing text</a>
+5. Choose link placements that make sense contextually
+6. Distribute links throughout the article
+
+OUTPUT ONLY THE UPDATED CONTENT with the ${linksToAdd} new links added.
+Do not include any explanation or commentary.`
+
+    try {
+      const linkedContent = await this.claude.chat([
+        { role: 'user', content: prompt }
+      ], {
+        temperature: 0.3, // Lower temperature for more conservative changes
+        max_tokens: 4500,
+      })
+
+      return linkedContent
+
+    } catch (error) {
+      console.error('[Compliance] Error adding internal links:', error)
+      return content // Return original on error
+    }
+  }
+
   /**
    * Stop the pipeline
    */

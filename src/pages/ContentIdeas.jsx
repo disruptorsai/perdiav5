@@ -32,6 +32,10 @@ import {
   BarChart3,
   DollarSign,
   TrendingUp,
+  Search,
+  Lightbulb,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
@@ -54,6 +58,13 @@ function ContentIdeas() {
   const [rejectModalIdea, setRejectModalIdea] = useState(null) // For rejection reason modal
   const [activeTab, setActiveTab] = useState('ideas') // ideas, history
   const [learningModalOpen, setLearningModalOpen] = useState(false)
+
+  // Dual-Track Mode: monetization-first (default) or free-form research
+  // Per Dec 22, 2025 meeting - allows user-initiated research mode
+  const [ideaMode, setIdeaMode] = useState('monetization') // 'monetization' or 'research'
+  const [showResearchModal, setShowResearchModal] = useState(false)
+  const [isDiscovering, setIsDiscovering] = useState(false)
+  const [researchTopic, setResearchTopic] = useState('')
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
@@ -189,6 +200,64 @@ function ContentIdeas() {
     }
   }
 
+  // Handle free-form research discovery (per Dec 22, 2025 meeting - Dual-Track)
+  const handleResearchDiscover = async () => {
+    if (!researchTopic.trim()) {
+      alert('Please enter a topic to research')
+      return
+    }
+
+    setIsDiscovering(true)
+    setShowResearchModal(false)
+
+    // Start progress modal for research
+    progressModal.start(
+      'Discovering Ideas',
+      `Researching "${researchTopic.substring(0, 50)}${researchTopic.length > 50 ? '...' : ''}"`
+    )
+
+    try {
+      // Generate multiple ideas from the research topic
+      // This uses free-form research rather than monetization-first approach
+      const topics = researchTopic.split(',').map(t => t.trim()).filter(Boolean)
+
+      progressModal.addStep('Analyzing topic for content opportunities...')
+      progressModal.updateProgress(20)
+
+      // Create ideas from the research topic
+      for (let i = 0; i < Math.min(topics.length * 2, 5); i++) {
+        const topicIndex = i % topics.length
+        const variationSuffix = i < topics.length ? '' : ' - In-Depth Guide'
+
+        progressModal.addStep(`Creating idea ${i + 1}...`)
+
+        await createIdea.mutateAsync({
+          title: `${topics[topicIndex]}${variationSuffix}`,
+          description: `Research-driven content idea about ${topics[topicIndex]}. Generated from free-form research mode.`,
+          seed_topics: topics,
+          source: 'research',
+          status: 'pending',
+        })
+
+        progressModal.updateProgress(20 + (i + 1) * (60 / Math.min(topics.length * 2, 5)))
+        progressModal.completeStep(`Creating idea ${i + 1}...`)
+      }
+
+      progressModal.addStep('Ideas created successfully!')
+      progressModal.completeStep('Ideas created successfully!')
+      progressModal.updateProgress(100)
+      progressModal.complete()
+
+      setResearchTopic('')
+    } catch (error) {
+      progressModal.addStep(`Error: ${error.message}`)
+      progressModal.errorStep(`Error: ${error.message}`)
+      progressModal.error(error.message)
+    } finally {
+      setIsDiscovering(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -206,6 +275,34 @@ function ContentIdeas() {
           <p className="text-gray-600 mt-1">Manage and generate content ideas</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Dual-Track Mode Toggle - per Dec 22, 2025 meeting */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+            <button
+              onClick={() => setIdeaMode('monetization')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm transition-colors ${
+                ideaMode === 'monetization'
+                  ? 'bg-green-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Monetization-first: prioritizes ideas with revenue potential"
+            >
+              <DollarSign className="w-4 h-4" />
+              <span className="hidden sm:inline">Monetization</span>
+            </button>
+            <button
+              onClick={() => setIdeaMode('research')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm transition-colors ${
+                ideaMode === 'research'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Free-form: user-initiated topic research"
+            >
+              <Search className="w-4 h-4" />
+              <span className="hidden sm:inline">Research</span>
+            </button>
+          </div>
+
           {/* Stats Badge */}
           {feedbackStats && feedbackStats.total > 0 && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm">
@@ -226,6 +323,23 @@ function ContentIdeas() {
               </Badge>
             </button>
           )}
+
+          {/* Research Mode: Discover Ideas Button */}
+          {ideaMode === 'research' && (
+            <button
+              onClick={() => setShowResearchModal(true)}
+              disabled={isDiscovering}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+            >
+              {isDiscovering ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Lightbulb className="w-5 h-5" />
+              )}
+              {isDiscovering ? 'Discovering...' : 'Discover Ideas'}
+            </button>
+          )}
+
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -394,6 +508,17 @@ function ContentIdeas() {
         open={learningModalOpen}
         onOpenChange={setLearningModalOpen}
       />
+
+      {/* Research Discovery Modal - per Dec 22, 2025 meeting */}
+      {showResearchModal && (
+        <ResearchDiscoveryModal
+          onClose={() => setShowResearchModal(false)}
+          onSubmit={handleResearchDiscover}
+          researchTopic={researchTopic}
+          setResearchTopic={setResearchTopic}
+          isDiscovering={isDiscovering}
+        />
+      )}
     </div>
   )
 }
@@ -799,6 +924,104 @@ function RejectIdeaModal({ idea, onClose, onSubmit, isSubmitting }) {
                   <>
                     <XCircle className="w-4 h-4" />
                     Reject Idea
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Research Discovery Modal - per Dec 22, 2025 meeting
+ * Free-form topic research mode for user-initiated idea discovery
+ * Allows entering topics (comma-separated) to generate content ideas
+ */
+function ResearchDiscoveryModal({ onClose, onSubmit, researchTopic, setResearchTopic, isDiscovering }) {
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onSubmit()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Search className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Research Topics</h2>
+              <p className="text-sm text-gray-600">
+                Free-form idea discovery based on your topics
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Topics Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Enter Topics to Research
+              </label>
+              <textarea
+                value={researchTopic}
+                onChange={(e) => setResearchTopic(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter topics separated by commas, e.g.:&#10;online nursing degrees, RN to BSN programs, nursing career paths"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Separate multiple topics with commas. Up to 5 ideas will be generated.
+              </p>
+            </div>
+
+            {/* Mode Explanation */}
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <Lightbulb className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">
+                    Research Mode
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Unlike monetization mode, research mode lets you explore any topic without
+                    requiring sponsored school data. Great for editorial content, career guides,
+                    and exploratory articles.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                disabled={isDiscovering}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={isDiscovering || !researchTopic.trim()}
+              >
+                {isDiscovering ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Discovering...
+                  </>
+                ) : (
+                  <>
+                    <Lightbulb className="w-4 h-4" />
+                    Discover Ideas
                   </>
                 )}
               </button>

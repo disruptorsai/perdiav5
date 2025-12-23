@@ -7,6 +7,7 @@ import {
   GitBranch,
   Users,
   Code,
+  Globe,
   History,
   Save,
   AlertTriangle,
@@ -32,6 +33,7 @@ import {
 import { cn } from '@/lib/utils'
 
 // Section editors
+import GlobalRulesEditor from './GlobalRulesEditor'
 import HardRulesEditor from './HardRulesEditor'
 import GuidelinesEditor from './GuidelinesEditor'
 import ToneVoiceEditor from './ToneVoiceEditor'
@@ -41,6 +43,7 @@ import ShortcodeRulesEditor from './ShortcodeRulesEditor'
 import VersionHistoryPanel from './VersionHistoryPanel'
 
 const SECTION_ICONS = {
+  global_rules: Globe,
   hard_rules: Shield,
   guidelines: BookOpen,
   tone_voice: MessageSquare,
@@ -53,7 +56,7 @@ const SECTION_ICONS = {
  * ContentRulesTab - Main tab for editing all content generation rules
  */
 export default function ContentRulesTab() {
-  const [activeSection, setActiveSection] = useState('hard_rules')
+  const [activeSection, setActiveSection] = useState('global_rules')
   const [showHistory, setShowHistory] = useState(false)
   const [pendingChanges, setPendingChanges] = useState({})
   const [saveStatus, setSaveStatus] = useState(null) // null, 'saving', 'saved', 'error'
@@ -318,6 +321,12 @@ export default function ContentRulesTab() {
             <CardContent className="p-6">
               <ScrollArea className="h-[600px] pr-4">
                 {/* Render the appropriate editor */}
+                {activeSection === 'global_rules' && (
+                  <GlobalRulesEditor
+                    value={pendingChanges.global_rules || config?.global_rules}
+                    onChange={(value) => handleSectionChange('global_rules', value)}
+                  />
+                )}
                 {activeSection === 'hard_rules' && (
                   <HardRulesEditor
                     value={pendingChanges.hard_rules || config?.hard_rules}

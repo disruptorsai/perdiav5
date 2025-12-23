@@ -1,4 +1,5 @@
 export { default as ContentRulesTab } from './ContentRulesTab'
+export { default as GlobalRulesEditor } from './GlobalRulesEditor'
 export { default as HardRulesEditor } from './HardRulesEditor'
 export { default as GuidelinesEditor } from './GuidelinesEditor'
 export { default as ToneVoiceEditor } from './ToneVoiceEditor'
