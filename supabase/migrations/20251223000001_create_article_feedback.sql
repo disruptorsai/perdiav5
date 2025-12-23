@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS article_feedback (
 );
 
 -- Create indexes for efficient queries
-CREATE INDEX idx_article_feedback_article ON article_feedback(article_id);
-CREATE INDEX idx_article_feedback_user ON article_feedback(user_id);
-CREATE INDEX idx_article_feedback_type ON article_feedback(feedback_type);
-CREATE INDEX idx_article_feedback_created ON article_feedback(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_article_feedback_article ON article_feedback(article_id);
+CREATE INDEX IF NOT EXISTS idx_article_feedback_user ON article_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_article_feedback_type ON article_feedback(feedback_type);
+CREATE INDEX IF NOT EXISTS idx_article_feedback_created ON article_feedback(created_at DESC);
 
 -- Create a view for feedback summary by article
 CREATE OR REPLACE VIEW article_feedback_summary AS
@@ -94,7 +94,12 @@ $$;
 -- Enable RLS
 ALTER TABLE article_feedback ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
+-- RLS Policies (drop if exist first for idempotency)
+DROP POLICY IF EXISTS "Users can view all article feedback" ON article_feedback;
+DROP POLICY IF EXISTS "Users can create article feedback" ON article_feedback;
+DROP POLICY IF EXISTS "Users can update own feedback" ON article_feedback;
+DROP POLICY IF EXISTS "Users can delete own feedback" ON article_feedback;
+DROP POLICY IF EXISTS "Service role full access to article feedback" ON article_feedback;
 
 -- Allow authenticated users to view all feedback
 CREATE POLICY "Users can view all article feedback"
@@ -141,6 +146,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS article_feedback_updated_at ON article_feedback;
 CREATE TRIGGER article_feedback_updated_at
   BEFORE UPDATE ON article_feedback
   FOR EACH ROW

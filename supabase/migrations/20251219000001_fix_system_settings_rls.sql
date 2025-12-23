@@ -42,6 +42,7 @@ CREATE POLICY "Service role full access to system settings"
   WITH CHECK (true);
 
 -- Also grant to anon for public reads if needed (optional)
+DROP POLICY IF EXISTS "Anonymous can read system settings" ON system_settings;
 CREATE POLICY "Anonymous can read system settings"
   ON system_settings FOR SELECT
   TO anon

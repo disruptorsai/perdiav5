@@ -2,22 +2,27 @@
 -- Centralized, immutable log of ALL user-entered text (comments, revisions, settings, feedback)
 -- Purpose: Backup/recovery of user input in case of data loss
 
--- Create enum for input types
-CREATE TYPE user_input_type AS ENUM (
-  'article_comment',        -- Comments on article text
-  'revision_request',       -- Revision instructions/notes
-  'revision_feedback',      -- Feedback on AI revisions
-  'idea_feedback',          -- Content idea feedback/rejection reasons
-  'setting_change',         -- System setting modifications with notes
-  'quality_note',           -- Quality review notes
-  'publish_note',           -- Notes added during publishing
-  'general_note',           -- Any other user-entered text
-  'version_note',           -- Notes on article versions
-  'contributor_note'        -- Notes on contributor assignments
-);
+-- Create enum for input types (skip if exists)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_input_type') THEN
+    CREATE TYPE user_input_type AS ENUM (
+      'article_comment',        -- Comments on article text
+      'revision_request',       -- Revision instructions/notes
+      'revision_feedback',      -- Feedback on AI revisions
+      'idea_feedback',          -- Content idea feedback/rejection reasons
+      'setting_change',         -- System setting modifications with notes
+      'quality_note',           -- Quality review notes
+      'publish_note',           -- Notes added during publishing
+      'general_note',           -- Any other user-entered text
+      'version_note',           -- Notes on article versions
+      'contributor_note'        -- Notes on contributor assignments
+    );
+  END IF;
+END $$;
 
 -- Main audit log table
-CREATE TABLE user_input_audit_log (
+CREATE TABLE IF NOT EXISTS user_input_audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- What was entered
@@ -45,16 +50,20 @@ CREATE TABLE user_input_audit_log (
 );
 
 -- Indexes for fast queries
-CREATE INDEX idx_user_input_audit_user ON user_input_audit_log(user_id);
-CREATE INDEX idx_user_input_audit_type ON user_input_audit_log(input_type);
-CREATE INDEX idx_user_input_audit_created ON user_input_audit_log(created_at DESC);
-CREATE INDEX idx_user_input_audit_article ON user_input_audit_log(article_id) WHERE article_id IS NOT NULL;
-CREATE INDEX idx_user_input_audit_idea ON user_input_audit_log(idea_id) WHERE idea_id IS NOT NULL;
-CREATE INDEX idx_user_input_audit_source ON user_input_audit_log(source_table, source_record_id);
-CREATE INDEX idx_user_input_audit_search ON user_input_audit_log USING gin(search_vector);
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_user ON user_input_audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_type ON user_input_audit_log(input_type);
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_created ON user_input_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_article ON user_input_audit_log(article_id) WHERE article_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_idea ON user_input_audit_log(idea_id) WHERE idea_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_source ON user_input_audit_log(source_table, source_record_id);
+CREATE INDEX IF NOT EXISTS idx_user_input_audit_search ON user_input_audit_log USING gin(search_vector);
 
 -- Enable RLS
 ALTER TABLE user_input_audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first
+DROP POLICY IF EXISTS "Users can view own input logs" ON user_input_audit_log;
+DROP POLICY IF EXISTS "Users can insert own input logs" ON user_input_audit_log;
 
 -- Users can view their own logs
 CREATE POLICY "Users can view own input logs"
