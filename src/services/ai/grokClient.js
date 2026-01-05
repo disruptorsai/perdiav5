@@ -180,6 +180,24 @@ class GrokClient {
   getMockResponse(messages) {
     const userMessage = messages.find(m => m.role === 'user')?.content || ''
 
+    // Check if this is a title suggestion request
+    if (userMessage.includes('title suggestions') || userMessage.includes('article title')) {
+      return JSON.stringify([
+        {
+          title: "Best Online Programs for Working Professionals in 2025",
+          reasoning: "Uses power words 'Best' and specific year for SEO, targets working professionals directly"
+        },
+        {
+          title: "How to Choose the Right Online Degree Program",
+          reasoning: "How-to format is highly searchable, addresses decision-making need"
+        },
+        {
+          title: "Online vs On-Campus: Which Degree Fits Your Life?",
+          reasoning: "Comparison format attracts searchers comparing options, personal touch with 'Your Life'"
+        }
+      ])
+    }
+
     // Return mock article data as JSON
     return JSON.stringify({
       title: "Understanding Modern Web Development: A Comprehensive Guide",
