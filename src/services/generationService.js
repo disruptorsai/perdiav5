@@ -1,17 +1,62 @@
 /**
  * Generation Service
  * Orchestrates the complete two-pass AI generation pipeline with quality checks
- * Pipeline: Grok Draft → Claude Humanize → Quality Check → Auto-Fix Loop → Save
+ * Pipeline: Grok Draft → Claude Humanize → Apply Rules → Quality Check → Auto-Fix Loop → Save
  */
 
 import GrokClient from './ai/grokClient'
 import ClaudeClient from './ai/claudeClient'
+import RulesEngine from './rulesEngine'
 import { supabase } from './supabaseClient'
 
 class GenerationService {
   constructor() {
     this.grok = new GrokClient()
     this.claude = new ClaudeClient()
+    this.rulesEngine = null
+    this.reasoning = [] // Capture AI decisions for transparency
+  }
+
+  /**
+   * Initialize rules engine with loaded rules
+   */
+  async initRulesEngine() {
+    if (this.rulesEngine) return this.rulesEngine
+
+    // Load rules from database
+    const { data: rules } = await supabase
+      .from('content_rules')
+      .select('*')
+      .eq('is_active', true)
+
+    this.rulesEngine = new RulesEngine(rules || [])
+    return this.rulesEngine
+  }
+
+  /**
+   * Capture reasoning/decision for transparency
+   */
+  captureReasoning(stage, decision, details = {}) {
+    this.reasoning.push({
+      stage,
+      decision,
+      details,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * Get captured reasoning for an article
+   */
+  getReasoning() {
+    return this.reasoning
+  }
+
+  /**
+   * Clear reasoning for new generation
+   */
+  clearReasoning() {
+    this.reasoning = []
   }
 
   /**
@@ -24,12 +69,24 @@ class GenerationService {
       targetWordCount = 2000,
       autoAssignContributor = true,
       addInternalLinks = true,
+      applyRules = true,
       autoFix = true,
       maxFixAttempts = 3,
       qualityThreshold = 85,
     } = options
 
+    // Clear reasoning for new generation
+    this.clearReasoning()
+
     try {
+      // Initialize rules engine if needed
+      if (applyRules) {
+        await this.initRulesEngine()
+        this.captureReasoning('init', 'Rules engine initialized', {
+          rulesCount: this.rulesEngine?.rules?.length || 0,
+        })
+      }
+
       // Update progress
       this.updateProgress(onProgress, 'Generating draft with Grok AI...', 10)
 
@@ -39,12 +96,23 @@ class GenerationService {
         targetWordCount,
       })
 
+      this.captureReasoning('draft', 'Initial draft generated', {
+        title: draftData.title,
+        wordCount: draftData.content?.length || 0,
+        contentType,
+      })
+
       this.updateProgress(onProgress, 'Auto-assigning contributor...', 25)
 
       // STAGE 2: Auto-assign contributor
       let contributor = null
       if (autoAssignContributor) {
         contributor = await this.assignContributor(idea, contentType)
+        this.captureReasoning('contributor', `Assigned contributor: ${contributor?.name || 'None'}`, {
+          contributorId: contributor?.id,
+          matchReason: contributor ? 'Best expertise match' : 'No matching contributor',
+          expertiseAreas: contributor?.expertise_areas || [],
+        })
       }
 
       this.updateProgress(onProgress, 'Humanizing content with Claude AI...', 40)
@@ -56,6 +124,10 @@ class GenerationService {
         targetBurstiness: 'high',
       })
 
+      this.captureReasoning('humanize', 'Content humanized with Claude', {
+        voiceApplied: contributor?.writing_style || 'default',
+      })
+
       this.updateProgress(onProgress, 'Adding internal links...', 55)
 
       // STAGE 4: Add internal links
@@ -64,7 +136,22 @@ class GenerationService {
         const siteArticles = await this.getRelevantSiteArticles(draftData.title, 30)
         if (siteArticles.length >= 3) {
           finalContent = await this.addInternalLinksToContent(humanizedContent, siteArticles)
+          this.captureReasoning('links', `Added internal links`, {
+            candidateArticles: siteArticles.length,
+            articlesUsed: siteArticles.slice(0, 5).map(a => a.title),
+          })
         }
+      }
+
+      // STAGE 4.5: Apply content rules
+      if (applyRules && this.rulesEngine) {
+        this.updateProgress(onProgress, 'Applying content rules...', 60)
+        const rulesResult = await this.applyContentRules(finalContent, contentType)
+        finalContent = rulesResult.content
+        this.captureReasoning('rules', 'Content rules applied', {
+          rulesApplied: rulesResult.appliedRules,
+          bannedPhrasesRemoved: rulesResult.bannedPhrasesRemoved,
+        })
       }
 
       this.updateProgress(onProgress, 'Running quality assurance...', 70)
@@ -82,6 +169,7 @@ class GenerationService {
         contributor_id: contributor?.id || null,
         contributor_name: contributor?.name || null,
         status: 'drafting',
+        reasoning: this.getReasoning(), // Include reasoning in article data
       }
 
       if (autoFix) {
@@ -98,6 +186,10 @@ class GenerationService {
         )
 
         articleData = qaResult.article
+        this.captureReasoning('qa', 'Quality assurance completed', {
+          attempts: qaResult.attempts,
+          finalScore: qaResult.finalScore,
+        })
       } else {
         // Just calculate metrics without fixing
         const metrics = this.calculateQualityMetrics(articleData.content, articleData.faqs)
@@ -106,13 +198,86 @@ class GenerationService {
         articleData.risk_flags = metrics.issues.map(i => i.type)
       }
 
+      // Update reasoning in article data
+      articleData.reasoning = this.getReasoning()
+
       this.updateProgress(onProgress, 'Finalizing article...', 95)
 
       return articleData
 
     } catch (error) {
       console.error('Article generation error:', error)
+      this.captureReasoning('error', 'Generation failed', {
+        error: error.message,
+      })
       throw error
+    }
+  }
+
+  /**
+   * Apply content rules to generated content
+   */
+  async applyContentRules(content, contentType) {
+    if (!this.rulesEngine) {
+      return { content, appliedRules: [], bannedPhrasesRemoved: 0 }
+    }
+
+    let updatedContent = content
+    const appliedRules = []
+    let bannedPhrasesRemoved = 0
+
+    // Get banned phrases rules
+    const bannedPhraseRules = this.rulesEngine.rules.filter(r => r.rule_type === 'banned_phrase')
+    for (const rule of bannedPhraseRules) {
+      const pattern = new RegExp(rule.pattern, 'gi')
+      const matches = updatedContent.match(pattern)
+      if (matches) {
+        bannedPhrasesRemoved += matches.length
+        updatedContent = updatedContent.replace(pattern, rule.replacement || '')
+        appliedRules.push({
+          type: 'banned_phrase',
+          pattern: rule.pattern,
+          count: matches.length,
+        })
+      }
+    }
+
+    // Get shortcode rules for this content type
+    const shortcodeRules = this.rulesEngine.rules.filter(r =>
+      r.rule_type === 'shortcode' &&
+      (!r.content_types || r.content_types.includes(contentType))
+    )
+
+    for (const rule of shortcodeRules) {
+      if (rule.placement === 'top') {
+        updatedContent = rule.shortcode + '\n\n' + updatedContent
+        appliedRules.push({ type: 'shortcode', name: rule.name, placement: 'top' })
+      } else if (rule.placement === 'bottom') {
+        updatedContent = updatedContent + '\n\n' + rule.shortcode
+        appliedRules.push({ type: 'shortcode', name: rule.name, placement: 'bottom' })
+      }
+    }
+
+    return {
+      content: updatedContent,
+      appliedRules,
+      bannedPhrasesRemoved,
+    }
+  }
+
+  /**
+   * Refresh article with latest content rules
+   * Used by "Update Rules" button in editor
+   */
+  async refreshWithRules(article) {
+    await this.initRulesEngine()
+
+    const result = await this.applyContentRules(article.content, article.content_type)
+
+    return {
+      content: result.content,
+      rulesApplied: result.appliedRules.length,
+      bannedPhrasesRemoved: result.bannedPhrasesRemoved,
     }
   }
 

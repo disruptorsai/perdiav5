@@ -152,3 +152,182 @@ export function useTestWordPressConnection() {
     },
   })
 }
+
+/**
+ * Publish article via N8N webhook
+ * Alternative to direct WordPress API - sends to N8N for processing
+ * Includes written_by meta, shortcodes, and full SEO metadata
+ */
+export function usePublishViaN8N() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ article, webhookUrl, options = {} }) => {
+      const {
+        includeShortcodes = true,
+        includeWordPressAuthorId = true,
+      } = options
+
+      // Fetch contributor's WordPress author ID if needed
+      let wordpressAuthorId = null
+      if (includeWordPressAuthorId && article.contributor_id) {
+        const { data: contributor } = await supabase
+          .from('article_contributors')
+          .select('wordpress_author_id, name')
+          .eq('id', article.contributor_id)
+          .single()
+
+        wordpressAuthorId = contributor?.wordpress_author_id
+      }
+
+      // Fetch applicable shortcodes if needed
+      let shortcodes = []
+      if (includeShortcodes) {
+        const { data: shortcodesData } = await supabase
+          .from('shortcodes')
+          .select('*')
+          .eq('is_active', true)
+
+        shortcodes = shortcodesData || []
+      }
+
+      // Build the payload for N8N
+      const payload = {
+        // Article content
+        title: article.title,
+        content: article.content,
+        excerpt: article.excerpt,
+        slug: article.slug,
+
+        // SEO metadata
+        seo: {
+          meta_title: article.meta_title,
+          meta_description: article.meta_description,
+          focus_keyword: article.focus_keyword,
+        },
+
+        // Author/contributor info
+        author: {
+          contributor_id: article.contributor_id,
+          contributor_name: article.contributor_name,
+          wordpress_author_id: wordpressAuthorId,
+        },
+
+        // WordPress meta fields
+        meta: {
+          written_by: wordpressAuthorId || article.contributor_id,
+          _yoast_wpseo_focuskw: article.focus_keyword,
+          _yoast_wpseo_title: article.meta_title,
+          _yoast_wpseo_metadesc: article.meta_description,
+        },
+
+        // Shortcodes to apply
+        shortcodes: shortcodes.map(sc => ({
+          name: sc.name,
+          shortcode: sc.shortcode,
+          placement: sc.placement,
+          content_types: sc.content_types,
+        })),
+
+        // FAQs for schema markup
+        faqs: article.faqs || [],
+
+        // Additional metadata
+        metadata: {
+          article_id: article.id,
+          content_type: article.content_type,
+          word_count: article.word_count,
+          quality_score: article.quality_score,
+          generated_at: new Date().toISOString(),
+        },
+      }
+
+      // Send to N8N webhook
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`N8N webhook failed: ${response.status} - ${errorText}`)
+      }
+
+      const result = await response.json()
+
+      // Update article status
+      await supabase
+        .from('articles')
+        .update({
+          status: 'published',
+          published_at: new Date().toISOString(),
+          published_via: 'n8n',
+          wordpress_post_id: result.post_id || null,
+          wordpress_url: result.post_url || null,
+        })
+        .eq('id', article.id)
+
+      return {
+        success: true,
+        articleId: article.id,
+        postId: result.post_id,
+        postUrl: result.post_url,
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['article', data.articleId] })
+    },
+  })
+}
+
+/**
+ * Get N8N webhook settings
+ */
+export function useN8NSettings() {
+  return useQuery({
+    queryKey: ['n8n_settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('setting_key', 'n8n_webhook_url')
+        .single()
+
+      if (error && error.code !== 'PGRST116') throw error
+      return data?.setting_value || null
+    },
+  })
+}
+
+/**
+ * Update N8N webhook settings
+ */
+export function useUpdateN8NSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (webhookUrl) => {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .upsert({
+          setting_key: 'n8n_webhook_url',
+          setting_value: webhookUrl,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'setting_key',
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['n8n_settings'] })
+    },
+  })
+}
