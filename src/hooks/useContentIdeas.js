@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
+import GrokClient from '../services/ai/grokClient'
+
+// Initialize Grok client for title suggestions
+const grokClient = new GrokClient()
 
 /**
  * Fetch all content ideas (shared workspace - all users see all ideas)
@@ -253,6 +257,23 @@ export function useApproveIdeaWithFeedback() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+    },
+  })
+}
+
+/**
+ * Generate title suggestions using Grok AI
+ * Returns 3 title suggestions with reasoning for each
+ */
+export function useGenerateTitleSuggestions() {
+  return useMutation({
+    mutationFn: async ({ description, topics, count = 3 }) => {
+      const suggestions = await grokClient.generateTitleSuggestions(
+        description,
+        topics,
+        count
+      )
+      return suggestions
     },
   })
 }

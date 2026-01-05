@@ -602,6 +602,59 @@ When generating ideas, prioritize topics that are currently being discussed and 
   }
 
   /**
+   * Generate title suggestions for a content idea
+   * Used by TitleSuggestions component for AI-powered title generation
+   */
+  async generateTitleSuggestions(description, topics = [], count = 3) {
+    const topicsList = topics.length > 0 ? topics.join(', ') : 'general'
+
+    const prompt = `Generate ${count} compelling article title suggestions based on:
+
+Description: ${description}
+Topics: ${topicsList}
+
+Requirements:
+- Each title should be SEO-friendly (50-60 characters ideal)
+- Use power words and emotional triggers
+- Make titles specific and actionable
+- Vary the approaches (how-to, list, question, statement)
+- Titles should be appropriate for GetEducated.com (online education focus)
+
+Return a JSON array with exactly ${count} objects:
+[
+  {
+    "title": "The article title",
+    "reasoning": "Brief explanation of why this title works"
+  }
+]
+
+Return ONLY the JSON array, no other text.`
+
+    try {
+      const response = await this.request([
+        {
+          role: 'system',
+          content: 'You are an SEO expert who creates compelling, click-worthy article titles for online education content.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], {
+        temperature: 0.8,
+        max_tokens: 1000,
+      })
+
+      const parsed = this.parseJsonResponse(response)
+      return Array.isArray(parsed) ? parsed : []
+
+    } catch (error) {
+      console.error('Title suggestion generation error:', error)
+      return []
+    }
+  }
+
+  /**
    * Generate SEO metadata for an article
    */
   async generateMetadata(articleContent, focusKeyword) {

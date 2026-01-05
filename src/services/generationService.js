@@ -2803,6 +2803,119 @@ OUTPUT ONLY THE FIXED HTML CONTENT.`
       return content // Return original on error
     }
   }
+
+  // ========================================
+  // REFRESH WITH RULES
+  // Per Dec 22, 2025 meeting: "Update" button to re-apply current rules
+  // ========================================
+
+  /**
+   * Refresh an article with current content rules
+   * Re-applies shortcodes, internal links, and content rules without regenerating
+   * @param {Object} article - The article to refresh
+   * @returns {Object} Updated article with refreshed content
+   */
+  async refreshWithRules(article) {
+    console.log('[Generation] Refreshing article with current rules:', article.id)
+
+    // Load fresh content rules
+    await this.loadContentRules()
+
+    let updatedContent = article.content
+
+    // Re-apply shortcodes based on current rules
+    try {
+      const { data: shortcodes, error: shortcodeError } = await supabase
+        .from('shortcodes')
+        .select('*')
+        .eq('is_active', true)
+
+      if (!shortcodeError && shortcodes?.length > 0) {
+        for (const sc of shortcodes) {
+          // Check if shortcode applies to this content type
+          const appliesToContentType = !sc.content_types ||
+            sc.content_types.length === 0 ||
+            sc.content_types.includes(article.content_type)
+
+          if (appliesToContentType && !updatedContent.includes(sc.shortcode)) {
+            if (sc.placement === 'after_intro') {
+              // Insert after first paragraph
+              const firstPEnd = updatedContent.indexOf('</p>')
+              if (firstPEnd > -1) {
+                updatedContent =
+                  updatedContent.slice(0, firstPEnd + 4) +
+                  '\n\n' + sc.shortcode + '\n\n' +
+                  updatedContent.slice(firstPEnd + 4)
+                console.log(`[Generation] Inserted shortcode ${sc.name} after intro`)
+              }
+            } else if (sc.placement === 'before_conclusion') {
+              // Insert before last H2 heading
+              const lastH2 = updatedContent.lastIndexOf('<h2')
+              if (lastH2 > -1) {
+                updatedContent =
+                  updatedContent.slice(0, lastH2) +
+                  '\n\n' + sc.shortcode + '\n\n' +
+                  updatedContent.slice(lastH2)
+                console.log(`[Generation] Inserted shortcode ${sc.name} before conclusion`)
+              }
+            } else if (sc.placement === 'end') {
+              // Insert at the very end
+              updatedContent = updatedContent + '\n\n' + sc.shortcode
+              console.log(`[Generation] Inserted shortcode ${sc.name} at end`)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Generation] Error refreshing shortcodes:', error)
+    }
+
+    // Refresh internal links if needed
+    try {
+      const relevantArticles = await this.getRelevantSiteArticles(
+        article.title,
+        30,
+        { topics: article.topics || [] }
+      )
+
+      if (relevantArticles.length > 0) {
+        // Count existing internal links
+        const currentLinkCount = (updatedContent.match(/href="https?:\/\/www\.geteducated\.com/gi) || []).length
+
+        // Only add more links if we're below the minimum (3)
+        if (currentLinkCount < 3) {
+          const linksToAdd = 3 - currentLinkCount
+          updatedContent = await this.addInternalLinksToContentPreserving(
+            updatedContent,
+            relevantArticles,
+            linksToAdd
+          )
+          console.log(`[Generation] Added ${linksToAdd} internal links`)
+        }
+      }
+    } catch (error) {
+      console.warn('[Generation] Error refreshing internal links:', error)
+    }
+
+    // Recalculate quality score with current thresholds
+    const qualityThresholds = this.contentRules?.guidelines?.quality_thresholds || null
+    const qualityMetrics = this.calculateQualityMetrics(
+      updatedContent,
+      article.faqs || [],
+      qualityThresholds
+    )
+
+    console.log(`[Generation] Refresh complete. Quality score: ${qualityMetrics.score}`)
+
+    return {
+      ...article,
+      content: updatedContent,
+      quality_score: qualityMetrics.score,
+      quality_issues: qualityMetrics.issues,
+      rules_applied_at: new Date().toISOString(),
+      rules_version: this.contentRules?.version || 0,
+    }
+  }
 }
 
 export default GenerationService

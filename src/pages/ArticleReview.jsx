@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { useArticleRevisions, useCreateRevision, useBulkMarkAddressed } from '@/hooks/useArticleRevisions'
 import { useReviseArticle } from '@/hooks/useGeneration'
+import GenerationService from '@/services/generationService'
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,7 +41,8 @@ import {
   Sparkles,
   Eye,
   Code,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react'
 import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 import { RevisionProgressAnimation } from '@/components/article'
@@ -94,6 +96,7 @@ export default function ArticleReview() {
   const [revisedContent, setRevisedContent] = useState(null)
   const [revisionFeedbackItems, setRevisionFeedbackItems] = useState([])
   const [originalContentSnapshot, setOriginalContentSnapshot] = useState(null)
+  const [isRefreshingRules, setIsRefreshingRules] = useState(false)
 
   // Fetch article
   const { data: article, isLoading } = useQuery({
@@ -316,6 +319,38 @@ export default function ArticleReview() {
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this article?')) {
       deleteArticleMutation.mutate()
+    }
+  }
+
+  const handleRefreshWithRules = async () => {
+    setIsRefreshingRules(true)
+    try {
+      const generationService = new GenerationService()
+      const updatedArticle = await generationService.refreshWithRules(article)
+
+      // Save updated article to database
+      const { error } = await supabase
+        .from('articles')
+        .update({
+          content: updatedArticle.content,
+          quality_score: updatedArticle.quality_score,
+          quality_issues: updatedArticle.quality_issues,
+          rules_applied_at: updatedArticle.rules_applied_at,
+          rules_version: updatedArticle.rules_version,
+        })
+        .eq('id', articleId)
+
+      if (error) throw error
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] })
+    } catch (error) {
+      console.error('Error refreshing with rules:', error)
+      alert('Failed to refresh with rules: ' + error.message)
+    } finally {
+      setIsRefreshingRules(false)
     }
   }
 
@@ -592,6 +627,21 @@ export default function ArticleReview() {
                 >
                   <FileText className="w-4 h-4" />
                   Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshWithRules}
+                  disabled={isRefreshingRules}
+                  className="gap-2"
+                  title="Re-apply content rules, shortcodes, and refresh internal links"
+                >
+                  {isRefreshingRules ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Update with Rules
                 </Button>
                 <Button
                   onClick={handleRevise}
