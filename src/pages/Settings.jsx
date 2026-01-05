@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { Settings as SettingsIcon, Plus, Trash2, Check, X, ExternalLink } from 'lucide-react'
+import { Settings as SettingsIcon, Plus, Trash2, Check, X, ExternalLink, Webhook } from 'lucide-react'
+import ContentRulesSection from '../components/settings/ContentRulesSection'
+import ShortcodesSection from '../components/settings/ShortcodesSection'
+import GlobalRulesSection from '../components/settings/GlobalRulesSection'
+import SitemapSection from '../components/settings/SitemapSection'
 
 function Settings() {
   const [wpConnections, setWpConnections] = useState([])
@@ -22,11 +26,26 @@ function Settings() {
         <p className="text-gray-600 mt-1">Configure your Perdia Content Engine</p>
       </div>
 
-      <div className="max-w-4xl">
+      <div className="max-w-5xl">
+        {/* Content Rules Section */}
+        <ContentRulesSection />
+
+        {/* Shortcodes Section */}
+        <ShortcodesSection />
+
+        {/* Global Rules Section */}
+        <GlobalRulesSection />
+
+        {/* Sitemap & Internal Linking Section */}
+        <SitemapSection />
+
         {/* WordPress Connections Section */}
         <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">WordPress Connections</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">WordPress Connections</h2>
+              <p className="text-sm text-gray-600">Configure publishing destinations</p>
+            </div>
             <button
               onClick={() => setShowWpModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -51,6 +70,12 @@ function Settings() {
                       <h3 className="font-medium text-gray-900">{conn.name}</h3>
                       {conn.isDefault && (
                         <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Default</span>
+                      )}
+                      {conn.useN8N && (
+                        <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded flex items-center gap-1">
+                          <Webhook className="w-3 h-3" />
+                          N8N
+                        </span>
                       )}
                     </div>
                     <p className="text-sm text-gray-600 mt-1">{conn.siteUrl}</p>
@@ -228,6 +253,8 @@ function WordPressConnectionModal({ onClose, onSubmit }) {
     password: '',
     authType: 'basic',
     isDefault: false,
+    useN8N: false,
+    n8nWebhookUrl: '',
   })
 
   const handleSubmit = (e) => {
@@ -237,7 +264,7 @@ function WordPressConnectionModal({ onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Add WordPress Connection</h2>
@@ -279,36 +306,78 @@ function WordPressConnectionModal({ onClose, onSubmit }) {
               <p className="text-xs text-gray-500 mt-1">Full WordPress site URL (no trailing slash)</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                WordPress Username *
-              </label>
-              <input
-                type="text"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="admin"
-                required
-              />
+            {/* N8N Toggle */}
+            <div className="p-4 bg-purple-50 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Webhook className="w-5 h-5 text-purple-600" />
+                  <p className="font-medium text-gray-900">Use N8N Webhook</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={formData.useN8N}
+                    onChange={(e) => setFormData({ ...formData, useN8N: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Publish via N8N workflow instead of direct WordPress API
+              </p>
+
+              {formData.useN8N && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    N8N Webhook URL *
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.n8nWebhookUrl}
+                    onChange={(e) => setFormData({ ...formData, n8nWebhookUrl: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="https://n8n.example.com/webhook/..."
+                    required={formData.useN8N}
+                  />
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Application Password *
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="xxxx xxxx xxxx xxxx"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Generate in WordPress: Users → Profile → Application Passwords
-              </p>
-            </div>
+            {!formData.useN8N && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    WordPress Username *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="admin"
+                    required={!formData.useN8N}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Application Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="xxxx xxxx xxxx xxxx"
+                    required={!formData.useN8N}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Generate in WordPress: Users → Profile → Application Passwords
+                  </p>
+                </div>
+              </>
+            )}
 
             <div className="flex items-center">
               <input
