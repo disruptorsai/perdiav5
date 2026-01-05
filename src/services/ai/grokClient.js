@@ -333,6 +333,72 @@ Generate the ideas now:`
   }
 
   /**
+   * Generate title suggestions for a content idea
+   */
+  async generateTitleSuggestions(description, topics = [], count = 3) {
+    const prompt = `Generate ${count} compelling, SEO-friendly article title suggestions based on:
+
+DESCRIPTION/TOPIC: ${description}
+${topics.length > 0 ? `RELATED KEYWORDS: ${topics.join(', ')}` : ''}
+
+REQUIREMENTS:
+- Each title should be 50-70 characters
+- Include relevant keywords naturally
+- Make titles engaging and click-worthy
+- Use different angles/approaches for variety
+- Avoid clickbait or sensationalism
+- Focus on value and specificity
+
+FORMAT AS JSON:
+{
+  "suggestions": [
+    {
+      "title": "Title suggestion 1",
+      "reasoning": "Brief explanation of why this title works"
+    },
+    {
+      "title": "Title suggestion 2",
+      "reasoning": "Brief explanation of why this title works"
+    },
+    {
+      "title": "Title suggestion 3",
+      "reasoning": "Brief explanation of why this title works"
+    }
+  ]
+}
+
+Generate the suggestions now:`
+
+    try {
+      const response = await this.request([
+        {
+          role: 'system',
+          content: 'You are an expert content strategist and SEO specialist who creates compelling article titles that rank well and attract readers.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ], {
+        temperature: 0.9,
+        max_tokens: 1000,
+      })
+
+      const parsedResponse = JSON.parse(response)
+      return parsedResponse.suggestions
+
+    } catch (error) {
+      console.error('Grok title generation error:', error)
+      // Return fallback suggestions if API fails
+      return [
+        { title: `Complete Guide to ${description.slice(0, 40)}`, reasoning: 'Fallback suggestion' },
+        { title: `Everything You Need to Know About ${description.slice(0, 30)}`, reasoning: 'Fallback suggestion' },
+        { title: `${description.slice(0, 50)}: A Comprehensive Overview`, reasoning: 'Fallback suggestion' },
+      ]
+    }
+  }
+
+  /**
    * Generate SEO metadata for an article
    */
   async generateMetadata(articleContent, focusKeyword) {
