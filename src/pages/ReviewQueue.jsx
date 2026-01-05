@@ -214,7 +214,7 @@ export default function ReviewQueue() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('articles')
-        .select('*, article_contributors(name, display_name)')
+        .select('*, article_contributors(*)')
         .eq('status', selectedStatus)
         .order('autopublish_deadline', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })

@@ -105,7 +105,7 @@ export default function ArticleReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('articles')
-        .select('*, article_contributors(name, title)')
+        .select('*, article_contributors(*)')
         .eq('id', articleId)
         .single()
 
