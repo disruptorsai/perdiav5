@@ -36,20 +36,22 @@ CREATE TABLE IF NOT EXISTS deletion_log (
 );
 
 -- Index for looking up deletions by entity
-CREATE INDEX idx_deletion_log_entity ON deletion_log(entity_type, entity_id);
-CREATE INDEX idx_deletion_log_category ON deletion_log(deletion_category);
-CREATE INDEX idx_deletion_log_deleted_at ON deletion_log(deleted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deletion_log_entity ON deletion_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_deletion_log_category ON deletion_log(deletion_category);
+CREATE INDEX IF NOT EXISTS idx_deletion_log_deleted_at ON deletion_log(deleted_at DESC);
 
 -- RLS policies
 ALTER TABLE deletion_log ENABLE ROW LEVEL SECURITY;
 
 -- All authenticated users can view deletion log
+DROP POLICY IF EXISTS "Users can view deletion log" ON deletion_log;
 CREATE POLICY "Users can view deletion log"
   ON deletion_log FOR SELECT
   TO authenticated
   USING (true);
 
 -- All authenticated users can insert to deletion log
+DROP POLICY IF EXISTS "Users can insert to deletion log" ON deletion_log;
 CREATE POLICY "Users can insert to deletion log"
   ON deletion_log FOR INSERT
   TO authenticated
