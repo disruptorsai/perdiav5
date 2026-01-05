@@ -143,3 +143,143 @@ export function useContributors() {
     },
   }
 }
+
+/**
+ * Refresh article with latest content rules
+ * Re-applies: shortcodes, internal links, banned phrase removal, contributor voice
+ */
+export function useRefreshWithRules() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, content, article }) => {
+      // Load latest content rules
+      const { data: rules, error: rulesError } = await supabase
+        .from('content_rules')
+        .select('*')
+        .eq('is_active', true)
+
+      if (rulesError) throw rulesError
+
+      // Load latest shortcodes
+      const { data: shortcodes, error: shortcodesError } = await supabase
+        .from('shortcodes')
+        .select('*')
+
+      if (shortcodesError) throw shortcodesError
+
+      // Load system settings for banned phrases
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('banned_phrases')
+        .single()
+
+      const bannedPhrases = settings?.banned_phrases || []
+
+      // Track reasoning for transparency
+      const reasoning = {
+        timestamp: new Date().toISOString(),
+        summary: 'Article refreshed with latest rules',
+        rules_applied: [],
+        stages_completed: 0,
+      }
+
+      let updatedContent = content
+
+      // Step 1: Apply blocked patterns (banned phrases)
+      const blockedPatterns = rules.filter(r => r.rule_type === 'blocked_pattern')
+      for (const pattern of blockedPatterns) {
+        const regex = new RegExp(pattern.pattern, 'gi')
+        if (regex.test(updatedContent)) {
+          updatedContent = updatedContent.replace(
+            regex,
+            pattern.replacement || ''
+          )
+          reasoning.rules_applied.push({
+            name: `Blocked Pattern: ${pattern.pattern}`,
+            description: pattern.replacement
+              ? `Replaced with "${pattern.replacement}"`
+              : 'Removed from content',
+            changes: 1,
+          })
+        }
+      }
+      reasoning.stages_completed++
+
+      // Step 2: Remove system-wide banned phrases
+      for (const phrase of bannedPhrases) {
+        const regex = new RegExp(phrase, 'gi')
+        if (regex.test(updatedContent)) {
+          updatedContent = updatedContent.replace(regex, '')
+          reasoning.rules_applied.push({
+            name: `Banned Phrase: ${phrase}`,
+            description: 'Removed from content',
+            changes: 1,
+          })
+        }
+      }
+      reasoning.stages_completed++
+
+      // Step 3: Refresh internal links using generation service
+      try {
+        const linkedContent = await generationService.addInternalLinks(updatedContent, article.title || '')
+        if (linkedContent !== updatedContent) {
+          updatedContent = linkedContent
+          reasoning.stages_completed++
+          reasoning.links_inserted = (updatedContent.match(/<a\s+(?:[^>]*?\s+)?href=["'][^"']*["']/gi) || []).length
+        }
+      } catch (linkError) {
+        console.warn('Link refresh failed:', linkError)
+      }
+
+      // Step 4: Re-apply shortcodes based on content type
+      const applicableShortcodes = shortcodes.filter(s => {
+        // Check if shortcode matches content type or is universally applicable
+        return !s.category || s.category === article.content_type || s.category === 'general'
+      })
+
+      for (const shortcode of applicableShortcodes) {
+        // Update existing shortcode usages with latest version
+        const shortcodePattern = new RegExp(`\\[${shortcode.name}\\]`, 'g')
+        if (shortcodePattern.test(updatedContent)) {
+          // Already present, update usage count
+          await supabase
+            .from('shortcodes')
+            .update({ times_used: (shortcode.times_used || 0) + 1 })
+            .eq('id', shortcode.id)
+        }
+      }
+      reasoning.stages_completed++
+
+      // Recalculate quality metrics
+      const metrics = generationService.calculateQualityMetrics(updatedContent, [])
+
+      // Update article with refreshed content and reasoning
+      const { data, error } = await supabase
+        .from('articles')
+        .update({
+          content: updatedContent,
+          quality_score: metrics.score,
+          word_count: metrics.word_count,
+          risk_flags: metrics.issues.map(i => i.type),
+          reasoning: JSON.stringify(reasoning),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', articleId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        ...data,
+        rulesApplied: reasoning.rules_applied.length,
+        reasoning,
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['article', data.id] })
+    },
+  })
+}

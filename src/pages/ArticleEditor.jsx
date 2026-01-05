@@ -1,11 +1,13 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { useArticle, useUpdateArticle } from '../hooks/useArticles'
-import { useAutoFixQuality } from '../hooks/useGeneration'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import { useAutoFixQuality, useRefreshWithRules } from '../hooks/useGeneration'
+import { ArrowLeft, Save, Loader2, RefreshCw, Settings } from 'lucide-react'
 import ReactQuill from 'react-quill'
 import 'react-quill/dist/quill.snow.css'
 import QualityChecklist from '../components/editor/QualityChecklist'
+import ReasoningPanel from '../components/editor/ReasoningPanel'
+import FeedbackPanel from '../components/editor/FeedbackPanel'
 
 function ArticleEditor() {
   const { articleId } = useParams()
@@ -13,10 +15,12 @@ function ArticleEditor() {
   const { data: article, isLoading } = useArticle(articleId)
   const updateArticle = useUpdateArticle()
   const autoFixQuality = useAutoFixQuality()
+  const refreshWithRules = useRefreshWithRules()
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Update local state when article loads
   useEffect(() => {
@@ -77,6 +81,31 @@ function ArticleEditor() {
     }
   }
 
+  const handleRefreshWithRules = async () => {
+    if (!confirm('Refresh article with latest content rules? This will re-apply banned phrases, update internal links, and refresh shortcodes.')) return
+
+    setRefreshing(true)
+    try {
+      const result = await refreshWithRules.mutateAsync({
+        articleId,
+        content,
+        article,
+      })
+
+      // Update local content with refreshed version
+      setContent(result.content)
+
+      const message = result.rulesApplied > 0
+        ? `Article refreshed! ${result.rulesApplied} rules applied.`
+        : 'Article refreshed with latest rules (no changes needed).'
+      alert(message)
+    } catch (error) {
+      alert('Failed to refresh: ' + error.message)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -123,6 +152,26 @@ function ArticleEditor() {
                 Quality: {article.quality_score}
               </div>
             )}
+
+            {/* Update with Rules Button */}
+            <button
+              onClick={handleRefreshWithRules}
+              disabled={refreshing}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              title="Re-apply content rules, refresh internal links, and update shortcodes"
+            >
+              {refreshing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Update Rules
+                </>
+              )}
+            </button>
 
             <button
               onClick={handleSave}
@@ -177,7 +226,7 @@ function ArticleEditor() {
                   modules={quillModules}
                   formats={quillFormats}
                   className="bg-white"
-                  style={{ height: '500px', marginBottom: '50px' }}
+                  style={{ height: '400px', marginBottom: '50px' }}
                   placeholder="Write your article content here..."
                 />
               </div>
@@ -201,6 +250,12 @@ function ArticleEditor() {
                   <p className="text-lg font-semibold text-gray-900">{article.focus_keyword}</p>
                 </div>
               )}
+              {article.content_type && (
+                <div>
+                  <p className="text-sm text-gray-600">Content Type</p>
+                  <p className="text-lg font-semibold text-gray-900 capitalize">{article.content_type}</p>
+                </div>
+              )}
               {article.created_at && (
                 <div>
                   <p className="text-sm text-gray-600">Created</p>
@@ -209,17 +264,32 @@ function ArticleEditor() {
                   </p>
                 </div>
               )}
+              {article.updated_at && (
+                <div>
+                  <p className="text-sm text-gray-600">Last Updated</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {new Date(article.updated_at).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Quality Checklist Sidebar - 1/3 width */}
-          <div className="overflow-y-auto">
+          {/* Sidebar - 1/3 width */}
+          <div className="overflow-y-auto space-y-6">
+            {/* Quality Checklist */}
             <div className="sticky top-0">
               <QualityChecklist
                 article={article}
                 onAutoFix={handleAutoFix}
               />
             </div>
+
+            {/* AI Reasoning Panel */}
+            <ReasoningPanel article={article} />
+
+            {/* Feedback Panel */}
+            <FeedbackPanel articleId={articleId} />
           </div>
         </div>
       </div>
