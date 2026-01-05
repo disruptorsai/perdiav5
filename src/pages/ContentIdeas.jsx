@@ -3,11 +3,11 @@ import {
   useContentIdeas,
   useCreateContentIdea,
   useUpdateContentIdea,
-  useDeleteContentIdea,
   useIdeaFeedback,
   useRejectIdeaWithReason,
   useApproveIdeaWithFeedback,
 } from '../hooks/useContentIdeas'
+import { useDeleteContentIdeaWithReason } from '../hooks/useDeletionLog'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import {
   useRecordFeedback,
@@ -40,6 +40,8 @@ import {
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
 import AILearningModal from '../components/ideas/AILearningModal'
+import TitleSuggestions from '../components/ideas/TitleSuggestions'
+import { DeleteWithReasonModal } from '../components/ui/DeleteWithReasonModal'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
 
@@ -58,6 +60,7 @@ function ContentIdeas() {
   const [rejectModalIdea, setRejectModalIdea] = useState(null) // For rejection reason modal
   const [activeTab, setActiveTab] = useState('ideas') // ideas, history
   const [learningModalOpen, setLearningModalOpen] = useState(false)
+  const [deleteModalIdea, setDeleteModalIdea] = useState(null) // For delete with reason modal
 
   // Dual-Track Mode: monetization-first (default) or free-form research
   // Per Dec 22, 2025 meeting - allows user-initiated research mode
@@ -72,7 +75,7 @@ function ContentIdeas() {
   const { data: ideas = [], isLoading } = useContentIdeas({ status: filterStatus })
   const createIdea = useCreateContentIdea()
   const updateIdea = useUpdateContentIdea()
-  const deleteIdea = useDeleteContentIdea()
+  const deleteIdeaWithReason = useDeleteContentIdeaWithReason()
   const generateArticle = useGenerateArticle()
   const ideaFeedback = useIdeaFeedback()
   const rejectWithReason = useRejectIdeaWithReason()
@@ -146,11 +149,19 @@ function ContentIdeas() {
     }
   }
 
-  const handleDelete = async (ideaId) => {
-    if (!confirm('Are you sure you want to delete this idea?')) return
+  // Open delete modal instead of immediate deletion
+  const handleDelete = (idea) => {
+    setDeleteModalIdea(idea)
+  }
 
+  // Handle deletion with reason (from modal)
+  const handleDeleteWithReason = async (deletionData) => {
     try {
-      await deleteIdea.mutateAsync(ideaId)
+      await deleteIdeaWithReason.mutateAsync({
+        idea: deleteModalIdea,
+        ...deletionData,
+      })
+      setDeleteModalIdea(null)
     } catch (error) {
       alert('Failed to delete idea: ' + error.message)
     }
@@ -519,6 +530,16 @@ function ContentIdeas() {
           isDiscovering={isDiscovering}
         />
       )}
+
+      {/* Delete with Reason Modal */}
+      <DeleteWithReasonModal
+        isOpen={!!deleteModalIdea}
+        onClose={() => setDeleteModalIdea(null)}
+        onConfirm={handleDeleteWithReason}
+        title={deleteModalIdea?.title || ''}
+        entityType="content idea"
+        isDeleting={deleteIdeaWithReason.isPending}
+      />
     </div>
   )
 }
@@ -594,7 +615,7 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
             <ThumbsDown className="w-4 h-4" />
           </button>
           <button
-            onClick={() => onDelete(idea.id)}
+            onClick={() => onDelete(idea)}
             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
             title="Delete idea"
           >
@@ -760,6 +781,18 @@ function CreateIdeaModal({ onClose, onSubmit, isSubmitting }) {
                 placeholder="Brief description of what this article should cover..."
               />
             </div>
+
+            {/* AI Title Suggestions - per Dec 22, 2025 meeting */}
+            {formData.description && (
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+                <TitleSuggestions
+                  description={formData.description}
+                  topics={formData.seed_topics}
+                  onSelectTitle={(title) => setFormData({ ...formData, title })}
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
 
             {/* Topics */}
             <div>

@@ -6,6 +6,8 @@ import { motion } from 'framer-motion'
 import { supabase } from '@/services/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAllRevisions } from '@/hooks/useArticleRevisions'
+import { useDeleteArticleWithReason } from '@/hooks/useDeletionLog'
+import { DeleteWithReasonModal } from '@/components/ui/DeleteWithReasonModal'
 
 // UI Components
 import { Card, CardContent } from '@/components/ui/card'
@@ -28,7 +30,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   Timer,
-  Zap
+  Zap,
+  Trash2
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
@@ -183,6 +186,10 @@ export default function ReviewQueue() {
   const location = useLocation()
   const [selectedStatus, setSelectedStatus] = useState('qa_review')
   const [searchQuery, setSearchQuery] = useState('')
+  const [deleteModalArticle, setDeleteModalArticle] = useState(null)
+
+  // Delete with reason hook
+  const deleteArticleWithReason = useDeleteArticleWithReason()
 
   // Fetch articles in review statuses (include new GetEducated fields)
   const { data: articles = [], isLoading, refetch } = useQuery({
@@ -243,6 +250,19 @@ export default function ReviewQueue() {
 
   const handleQuickAction = async (articleId, newStatus) => {
     await updateStatusMutation.mutateAsync({ id: articleId, status: newStatus })
+  }
+
+  // Handle deletion with reason
+  const handleDeleteWithReason = async (deletionData) => {
+    try {
+      await deleteArticleWithReason.mutateAsync({
+        article: deleteModalArticle,
+        ...deletionData,
+      })
+      setDeleteModalArticle(null)
+    } catch (error) {
+      alert('Failed to delete article: ' + error.message)
+    }
   }
 
   const getArticleCommentCount = (articleId) => {
@@ -545,6 +565,15 @@ export default function ReviewQueue() {
                               Edit
                             </Button>
                           </Link>
+
+                          <Button
+                            variant="ghost"
+                            className="gap-2 w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteModalArticle(article)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -555,6 +584,16 @@ export default function ReviewQueue() {
           )}
         </div>
       </div>
+
+      {/* Delete with Reason Modal */}
+      <DeleteWithReasonModal
+        isOpen={!!deleteModalArticle}
+        onClose={() => setDeleteModalArticle(null)}
+        onConfirm={handleDeleteWithReason}
+        title={deleteModalArticle?.title || ''}
+        entityType="article"
+        isDeleting={deleteArticleWithReason.isPending}
+      />
     </div>
   )
 }

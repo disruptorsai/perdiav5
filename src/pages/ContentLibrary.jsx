@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useArticles } from '../hooks/useArticles'
 import { useSubmitArticleFeedback, useArticleFeedbackSummary } from '../hooks/useArticleFeedback'
-import { Search, Filter, Loader2, FileText, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { useDeleteArticleWithReason } from '../hooks/useDeletionLog'
+import { DeleteWithReasonModal } from '../components/ui/DeleteWithReasonModal'
+import { Search, Filter, Loader2, FileText, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react'
 
 // Small component to display feedback for each article card
 function ArticleFeedback({ articleId }) {
@@ -24,11 +26,31 @@ function ContentLibrary() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [deleteModalArticle, setDeleteModalArticle] = useState(null)
+
+  const deleteArticleWithReason = useDeleteArticleWithReason()
 
   const { data: articles = [], isLoading } = useArticles({
     search: search || undefined,
     status: statusFilter || undefined,
   })
+
+  const handleDeleteWithReason = async (formData) => {
+    if (!deleteModalArticle) return
+
+    try {
+      await deleteArticleWithReason.mutateAsync({
+        article: deleteModalArticle,
+        deletionCategory: formData.deletionCategory,
+        deletionReason: formData.deletionReason,
+        additionalNotes: formData.additionalNotes,
+      })
+      setDeleteModalArticle(null)
+    } catch (error) {
+      console.error('Failed to delete article:', error)
+      alert('Failed to delete article. Please try again.')
+    }
+  }
 
   if (isLoading) {
     return (
@@ -82,15 +104,27 @@ function ContentLibrary() {
           >
             <div className="flex items-start justify-between mb-3">
               <FileText className="w-5 h-5 text-blue-600" />
-              {article.quality_score > 0 && (
-                <span className={`px-2 py-1 text-xs rounded ${
-                  article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
-                  article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
-                }`}>
-                  {article.quality_score}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {article.quality_score > 0 && (
+                  <span className={`px-2 py-1 text-xs rounded ${
+                    article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
+                    article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {article.quality_score}
+                  </span>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteModalArticle(article)
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  title="Delete article"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
@@ -126,6 +160,16 @@ function ContentLibrary() {
           <p className="text-gray-600">No articles found</p>
         </div>
       )}
+
+      {/* Delete with Reason Modal */}
+      <DeleteWithReasonModal
+        isOpen={!!deleteModalArticle}
+        onClose={() => setDeleteModalArticle(null)}
+        onConfirm={handleDeleteWithReason}
+        title={deleteModalArticle?.title}
+        entityType="article"
+        isDeleting={deleteArticleWithReason.isPending}
+      />
     </div>
   )
 }
