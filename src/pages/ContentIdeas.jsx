@@ -314,6 +314,12 @@ function ContentIdeas() {
       // Save each discovered idea to the database
       let savedCount = 0
       for (const idea of discoveredIdeas) {
+        // Check if user cancelled the process
+        if (progressModal.isCancelled) {
+          progressModal.addStep(`Stopped - saved ${savedCount} of ${discoveredIdeas.length} ideas`)
+          break
+        }
+
         try {
           await createIdea.mutateAsync({
             title: idea.title,
@@ -333,10 +339,13 @@ function ContentIdeas() {
         }
       }
 
-      progressModal.addStep(`Saved ${savedCount} new ideas to your library`)
-      progressModal.updateProgress(100)
-      progressModal.completeStep(`Saved ${savedCount} new ideas to your library`)
-      progressModal.complete()
+      // Only show completion if not cancelled
+      if (!progressModal.isCancelled) {
+        progressModal.addStep(`Saved ${savedCount} new ideas to your library`)
+        progressModal.updateProgress(100)
+        progressModal.completeStep(`Saved ${savedCount} new ideas to your library`)
+        progressModal.complete()
+      }
 
       console.log('[ContentIdeas] AI discovery stats:', stats)
     } catch (error) {
@@ -597,7 +606,7 @@ function ContentIdeas() {
       )}
 
       {/* Progress Modal for Article Generation */}
-      <ProgressModal {...progressModal.modalProps} />
+      <ProgressModal {...progressModal.modalProps} allowCancel={true} />
       <MinimizedProgressIndicator {...progressModal.minimizedProps} />
 
       {/* Rejection Reason Modal */}

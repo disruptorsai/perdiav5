@@ -13,11 +13,13 @@ import { Button } from './button'
  * @param {number} progress - Current progress percentage (0-100)
  * @param {string} currentStep - Current step being performed
  * @param {Array<{text: string, status: 'pending' | 'active' | 'completed' | 'error'}>} steps - Array of step objects
- * @param {string} status - Overall status: 'running' | 'completed' | 'error'
+ * @param {string} status - Overall status: 'running' | 'completed' | 'error' | 'cancelled'
  * @param {string} errorMessage - Error message if status is 'error'
  * @param {function} onClose - Callback when modal should close
  * @param {function} onMinimize - Callback when modal should minimize (process continues in background)
+ * @param {function} onCancel - Callback when user clicks STOP button
  * @param {boolean} allowDismissWhileRunning - Whether to allow closing/minimizing while running (default: true)
+ * @param {boolean} allowCancel - Whether to show STOP button while running (default: false)
  */
 export function ProgressModal({
   isOpen,
@@ -30,7 +32,9 @@ export function ProgressModal({
   errorMessage = '',
   onClose,
   onMinimize,
+  onCancel,
   allowDismissWhileRunning = true,
+  allowCancel = false,
 }) {
   const [displayedSteps, setDisplayedSteps] = useState([])
   const [typingStep, setTypingStep] = useState(null)
@@ -273,8 +277,32 @@ export function ProgressModal({
               </motion.div>
             )}
 
-            {/* Close Button (only when done) */}
-            {(status === 'completed' || status === 'error') && onClose && (
+            {/* STOP Button (only when running and allowed) */}
+            {allowCancel && status === 'running' && onCancel && (
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={onCancel}
+                className="w-full py-3 rounded-lg font-medium transition-colors bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2"
+              >
+                <XCircle className="w-5 h-5" />
+                STOP
+              </motion.button>
+            )}
+
+            {/* Cancelled Message */}
+            {status === 'cancelled' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+              >
+                <p className="text-amber-700 text-sm">Process was stopped by user</p>
+              </motion.div>
+            )}
+
+            {/* Close Button (only when done or cancelled) */}
+            {(status === 'completed' || status === 'error' || status === 'cancelled') && onClose && (
               <motion.button
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -387,6 +415,11 @@ export function useProgressModal() {
     setCurrentStep('Error occurred')
   }
 
+  const cancel = () => {
+    setStatus('cancelled')
+    setCurrentStep('Stopped by user')
+  }
+
   const close = () => {
     setIsOpen(false)
   }
@@ -416,7 +449,9 @@ export function useProgressModal() {
       errorMessage,
       onClose: close,
       onMinimize: minimize,
+      onCancel: cancel,
       allowDismissWhileRunning: true,
+      allowCancel: false, // Override in spread: { ...modalProps, allowCancel: true }
     },
     // Minimized indicator props
     minimizedProps: {
@@ -434,6 +469,7 @@ export function useProgressModal() {
     updateProgress,
     complete,
     error,
+    cancel,
     close,
     reset,
     minimize,
@@ -442,6 +478,7 @@ export function useProgressModal() {
     isOpen,
     isMinimized,
     isRunning: status === 'running' && isOpen,
+    isCancelled: status === 'cancelled',
   }
 }
 

@@ -47,30 +47,31 @@ import {
 import GetEducatedPreview from '@/components/article/GetEducatedPreview'
 import { RevisionProgressAnimation } from '@/components/article'
 
-// Comment categories and severities
+// Comment categories - must match DB CHECK constraint: accuracy, clarity, tone, seo, structure, style, other
 const COMMENT_CATEGORIES = [
   { value: 'accuracy', label: 'Accuracy' },
+  { value: 'clarity', label: 'Clarity' },
   { value: 'tone', label: 'Tone' },
   { value: 'structure', label: 'Structure' },
   { value: 'seo', label: 'SEO' },
-  { value: 'grammar', label: 'Grammar' },
   { value: 'style', label: 'Style' },
-  { value: 'formatting', label: 'Formatting' },
-  { value: 'compliance', label: 'Compliance' }
+  { value: 'other', label: 'Other' }
 ]
 
+// Severity options - must match DB CHECK constraint: critical, major, minor, suggestion
 const SEVERITY_OPTIONS = [
-  { value: 'minor', label: 'Minor', color: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { value: 'moderate', label: 'Moderate', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'suggestion', label: 'Suggestion', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'minor', label: 'Minor', color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { value: 'major', label: 'Major', color: 'bg-orange-100 text-orange-700 border-orange-300' },
   { value: 'critical', label: 'Critical', color: 'bg-red-100 text-red-700 border-red-300' }
 ]
 
+// Highlight colors for different severity levels - must match DB values
 const SEVERITY_HIGHLIGHT_COLORS = {
-  minor: 'rgba(191, 219, 254, 0.3)',
-  moderate: 'rgba(254, 243, 199, 0.4)',
-  major: 'rgba(254, 215, 170, 0.4)',
-  critical: 'rgba(254, 202, 202, 0.5)'
+  suggestion: 'rgba(191, 219, 254, 0.3)',  // Blue for suggestions
+  minor: 'rgba(254, 243, 199, 0.4)',        // Amber for minor
+  major: 'rgba(254, 215, 170, 0.4)',        // Orange for major
+  critical: 'rgba(254, 202, 202, 0.5)'      // Red for critical
 }
 
 export default function ArticleReview() {
@@ -87,7 +88,7 @@ export default function ArticleReview() {
   const [commentData, setCommentData] = useState({
     comment: '',
     category: 'style',
-    severity: 'moderate'
+    severity: 'minor'  // Must match DB CHECK constraint: critical, major, minor, suggestion
   })
   const [viewMode, setViewMode] = useState('preview')
   const [floatingButtonPos, setFloatingButtonPos] = useState({ x: 0, y: 0, show: false })
@@ -99,7 +100,7 @@ export default function ArticleReview() {
   const [isRefreshingRules, setIsRefreshingRules] = useState(false)
 
   // Fetch article
-  const { data: article, isLoading } = useQuery({
+  const { data: article, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['article', articleId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -111,7 +112,12 @@ export default function ArticleReview() {
       if (error) throw error
       return data
     },
-    enabled: !!articleId
+    enabled: !!articleId,
+    retry: (failureCount, error) => {
+      // Don't retry if article doesn't exist (PGRST116 = "not found")
+      if (error?.code === 'PGRST116') return false
+      return failureCount < 2
+    }
   })
 
   // Fetch revisions/comments
@@ -210,7 +216,7 @@ export default function ArticleReview() {
       setSelectedText('')
       setSavedSelectedText('')
       setFloatingButtonPos({ x: 0, y: 0, show: false })
-      setCommentData({ comment: '', category: 'style', severity: 'moderate' })
+      setCommentData({ comment: '', category: 'style', severity: 'minor' })  // Reset to valid DB value
     } catch (error) {
       console.error('Error creating comment:', error)
     }
@@ -222,16 +228,22 @@ export default function ArticleReview() {
       return
     }
 
-    // Prepare feedback items for the animation
+    // Prepare feedback items - only include PENDING revisions
     const feedbackItems = revisions
       .filter(r => r.status === 'pending')
       .map(r => ({
         id: r.id,
         selected_text: r.selected_text,
         comment: r.comment,
-        category: r.category,
-        severity: r.severity
+        category: r.category || 'other',  // Fallback for missing category
+        severity: r.severity || 'minor'   // Fallback for missing severity
       }))
+
+    // Check if there are any pending items to process
+    if (feedbackItems.length === 0) {
+      alert('No pending feedback to apply. All comments have already been addressed.')
+      return
+    }
 
     // Store original content before any changes
     setOriginalContentSnapshot(article.content)
@@ -391,7 +403,7 @@ export default function ArticleReview() {
 
     sortedRevisions.forEach((revision) => {
       if (revision.selected_text && revision.selected_text.length > 10) {
-        const color = SEVERITY_HIGHLIGHT_COLORS[revision.severity] || SEVERITY_HIGHLIGHT_COLORS.moderate
+        const color = SEVERITY_HIGHLIGHT_COLORS[revision.severity] || SEVERITY_HIGHLIGHT_COLORS.minor
         const escapedText = revision.selected_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
         const replacement = `<mark data-comment-id="${revision.id}" style="background-color: ${color}; cursor: pointer; border-radius: 2px; padding: 0 2px;">${revision.selected_text}</mark>`
@@ -414,12 +426,15 @@ export default function ArticleReview() {
     )
   }
 
-  if (!article) {
+  if (!article || isError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">Article not found</p>
+          <p className="text-gray-500 mb-1">Article not found</p>
+          <p className="text-sm text-gray-400 mb-4">
+            {isError ? 'This article may have been deleted.' : 'The requested article does not exist.'}
+          </p>
           <Button onClick={() => navigate('/review')} className="mt-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Queue

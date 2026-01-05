@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAllRevisions } from '@/hooks/useArticleRevisions'
 import { useDeleteArticleWithReason } from '@/hooks/useDeletionLog'
+import { usePublishArticle } from '@/hooks/usePublish'
 import { DeleteWithReasonModal } from '@/components/ui/DeleteWithReasonModal'
 
 // UI Components
@@ -31,7 +32,11 @@ import {
   ShieldCheck,
   Timer,
   Zap,
-  Trash2
+  Trash2,
+  Sparkles,
+  RefreshCw,
+  Upload,
+  Loader2
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
@@ -180,6 +185,13 @@ function AutoPublishDeadline({ deadline, humanReviewed }) {
   )
 }
 
+// Article type filter options
+const ARTICLE_TYPE_OPTIONS = [
+  { value: 'all', label: 'All', icon: FileText },
+  { value: 'generated', label: 'Generated', icon: Sparkles, description: 'Fresh AI-generated articles' },
+  { value: 'revised', label: 'Revised', icon: RefreshCw, description: 'Articles that have been AI-revised' }
+]
+
 export default function ReviewQueue() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -187,9 +199,14 @@ export default function ReviewQueue() {
   const [selectedStatus, setSelectedStatus] = useState('qa_review')
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalArticle, setDeleteModalArticle] = useState(null)
+  const [articleTypeFilter, setArticleTypeFilter] = useState('all')
 
   // Delete with reason hook
   const deleteArticleWithReason = useDeleteArticleWithReason()
+
+  // Publish to stage hook
+  const publishArticle = usePublishArticle()
+  const [publishingArticleId, setPublishingArticleId] = useState(null)
 
   // Fetch articles in review statuses (include new GetEducated fields)
   const { data: articles = [], isLoading, refetch } = useQuery({
@@ -252,15 +269,55 @@ export default function ReviewQueue() {
     await updateStatusMutation.mutateAsync({ id: articleId, status: newStatus })
   }
 
-  // Handle deletion with reason
+  // Handle publish to stage website
+  const handlePublishToStage = async (article) => {
+    setPublishingArticleId(article.id)
+    try {
+      const result = await publishArticle.mutateAsync({
+        article,
+        options: { environment: 'staging' }
+      })
+
+      if (result.success) {
+        // Update status to published after successful publish
+        await updateStatusMutation.mutateAsync({ id: article.id, status: 'published' })
+        // Refresh the list
+        queryClient.invalidateQueries({ queryKey: ['review-articles'] })
+      } else {
+        alert(`Publish failed: ${result.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Publish to stage error:', error)
+      alert(`Publish failed: ${error.message}`)
+    } finally {
+      setPublishingArticleId(null)
+    }
+  }
+
+  // Handle deletion with reason - with optimistic updates
   const handleDeleteWithReason = async (deletionData) => {
+    const articleToDelete = deleteModalArticle
+
+    // Immediately close modal and optimistically remove from UI
+    setDeleteModalArticle(null)
+
+    // Snapshot previous data for potential rollback
+    const previousData = queryClient.getQueryData(['review-articles', selectedStatus])
+
+    // Optimistically remove the article from the cache immediately
+    queryClient.setQueryData(['review-articles', selectedStatus], (old) => {
+      if (!old) return old
+      return old.filter(article => article.id !== articleToDelete.id)
+    })
+
     try {
       await deleteArticleWithReason.mutateAsync({
-        article: deleteModalArticle,
+        article: articleToDelete,
         ...deletionData,
       })
-      setDeleteModalArticle(null)
     } catch (error) {
+      // Rollback on error - restore the article to the list
+      queryClient.setQueryData(['review-articles', selectedStatus], previousData)
       alert('Failed to delete article: ' + error.message)
     }
   }
@@ -269,12 +326,40 @@ export default function ReviewQueue() {
     return allRevisions.filter(r => r.article_id === articleId && r.status === 'pending').length
   }
 
-  // Filter articles by search
-  const filteredArticles = articles.filter(article =>
-    !searchQuery ||
-    article.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    article.focus_keyword?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Get set of article IDs that have been revised (have ai_revised revisions)
+  const revisedArticleIds = useMemo(() => {
+    const ids = new Set()
+    allRevisions.forEach(r => {
+      if (r.ai_revised) {
+        ids.add(r.article_id)
+      }
+    })
+    return ids
+  }, [allRevisions])
+
+  // Filter articles by search and type
+  const filteredArticles = articles.filter(article => {
+    // Search filter
+    const matchesSearch = !searchQuery ||
+      article.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      article.focus_keyword?.toLowerCase().includes(searchQuery.toLowerCase())
+
+    if (!matchesSearch) return false
+
+    // Article type filter
+    if (articleTypeFilter === 'all') return true
+    if (articleTypeFilter === 'revised') return revisedArticleIds.has(article.id)
+    if (articleTypeFilter === 'generated') return !revisedArticleIds.has(article.id)
+
+    return true
+  })
+
+  // Counts for type filter badges
+  const typeCounts = useMemo(() => ({
+    all: articles.length,
+    revised: articles.filter(a => revisedArticleIds.has(a.id)).length,
+    generated: articles.filter(a => !revisedArticleIds.has(a.id)).length
+  }), [articles, revisedArticleIds])
 
   // Count by status
   const statusCounts = {
@@ -362,6 +447,44 @@ export default function ReviewQueue() {
                   {statusCounts[value] || 0}
                 </Badge>
               </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Article Type Filter */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-600">Show:</span>
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+            {ARTICLE_TYPE_OPTIONS.map(({ value, label, icon: Icon }) => (
+              <TooltipProvider key={value}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={articleTypeFilter === value ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setArticleTypeFilter(value)}
+                      className={`gap-1.5 px-3 ${
+                        articleTypeFilter === value
+                          ? 'bg-white shadow-sm hover:bg-white text-gray-900'
+                          : 'hover:bg-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                      <span className={`text-xs ${
+                        articleTypeFilter === value ? 'text-gray-500' : 'text-gray-400'
+                      }`}>
+                        ({typeCounts[value]})
+                      </span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {value === 'all' && 'Show all articles'}
+                    {value === 'generated' && 'Show only fresh AI-generated articles'}
+                    {value === 'revised' && 'Show only AI-revised articles'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ))}
           </div>
         </div>
@@ -552,10 +675,20 @@ export default function ReviewQueue() {
                             <Button
                               variant="outline"
                               className="gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                              onClick={() => handleQuickAction(article.id, 'published')}
+                              onClick={() => handlePublishToStage(article)}
+                              disabled={publishingArticleId === article.id}
                             >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Mark Published
+                              {publishingArticleId === article.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Publishing...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  Publish to Stage
+                                </>
+                              )}
                             </Button>
                           )}
 

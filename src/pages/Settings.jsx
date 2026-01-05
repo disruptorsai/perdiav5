@@ -17,6 +17,10 @@ import {
   HelpCircle,
   Settings2,
   FileText,
+  Globe,
+  RefreshCw,
+  Database,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +36,7 @@ import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
 import { useHowToGuide } from '@/contexts/HowToGuideContext'
 import { ContentRulesTab } from '@/components/settings/content-rules'
 import AuditLogViewer from '@/components/settings/AuditLogViewer'
+import { useSitemapSync, useCatalogStats } from '@/hooks/useSitemap'
 
 function SettingsContent() {
   const { toast } = useToast()
@@ -41,6 +46,12 @@ function SettingsContent() {
   const { data: settings = [], isLoading } = useSystemSettings()
   const bulkUpdateSettings = useBulkUpdateSettings()
   const { isEnabled: howToGuidesEnabled, setEnabled: setHowToGuidesEnabled } = useHowToGuide()
+
+  // Site Catalog hooks
+  const sitemapSync = useSitemapSync()
+  const { data: catalogStats, isLoading: statsLoading, refetch: refetchStats } = useCatalogStats()
+  const [syncProgress, setSyncProgress] = useState(null)
+  const [syncResults, setSyncResults] = useState(null)
 
   // Helper to get setting value
   const getSettingValue = (settingKey, defaultValue = '') => {
@@ -365,6 +376,10 @@ function SettingsContent() {
             <TabsTrigger value="auditlog">
               <FileText className="w-4 h-4 mr-2" />
               Audit Log
+            </TabsTrigger>
+            <TabsTrigger value="sitecatalog">
+              <Globe className="w-4 h-4 mr-2" />
+              Site Catalog
             </TabsTrigger>
           </TabsList>
 
@@ -1483,6 +1498,211 @@ function SettingsContent() {
                   </AlertDescription>
                 </Alert>
                 <AuditLogViewer />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Site Catalog Tab */}
+          <TabsContent value="sitecatalog" className="space-y-6 mt-6">
+            {/* Catalog Overview */}
+            <Alert className="border-blue-200 bg-blue-50">
+              <Globe className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                The site catalog syncs from GetEducated's sitemap to enable internal linking and identify monetizable content areas.
+              </AlertDescription>
+            </Alert>
+
+            {/* Catalog Statistics */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  Catalog Statistics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {statsLoading ? (
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading statistics...
+                  </div>
+                ) : catalogStats ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-2xl font-bold text-blue-700">{catalogStats.total?.toLocaleString() || 0}</p>
+                        <p className="text-sm text-blue-600">Total URLs</p>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <p className="text-2xl font-bold text-green-700">
+                          {(catalogStats.byType?.degree_directory || 0).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-green-600">Degree Directory</p>
+                      </div>
+                      <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <p className="text-2xl font-bold text-purple-700">
+                          {(catalogStats.byType?.ranking || 0).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-purple-600">Rankings</p>
+                      </div>
+                      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-2xl font-bold text-amber-700">
+                          {(catalogStats.byType?.career || 0).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-amber-600">Career Guides</p>
+                      </div>
+                    </div>
+
+                    {/* Type Breakdown */}
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Content Type Breakdown</h4>
+                      <div className="space-y-2">
+                        {Object.entries(catalogStats.byType || {}).map(([type, count]) => (
+                          <div key={type} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <span className="text-sm text-gray-700 capitalize">{type.replace(/_/g, ' ')}</span>
+                            <Badge variant="secondary">{count.toLocaleString()}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No catalog data available. Run a sync to populate.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sync Controls */}
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5" />
+                  Sitemap Sync
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Sync the catalog from GetEducated's sitemap. This will fetch all URLs and categorize them for internal linking.
+                </p>
+
+                {/* Progress indicator */}
+                {syncProgress && (
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span className="text-sm font-medium text-blue-800">Syncing...</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(syncProgress.processed / syncProgress.total) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      {syncProgress.processed.toLocaleString()} / {syncProgress.total.toLocaleString()} URLs processed
+                    </p>
+                  </div>
+                )}
+
+                {/* Results */}
+                {syncResults && !syncProgress && (
+                  <div className={`p-4 rounded-lg border ${syncResults.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {syncResults.errors?.length > 0 ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      )}
+                      <span className="text-sm font-medium">
+                        Sync Complete: {syncResults.synced?.toLocaleString()} URLs synced
+                      </span>
+                    </div>
+                    {syncResults.errors?.length > 0 && (
+                      <div className="mt-2 text-xs text-amber-700">
+                        <p className="font-medium">Errors ({syncResults.errors.length}):</p>
+                        <ul className="list-disc list-inside">
+                          {syncResults.errors.slice(0, 3).map((err, i) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                          {syncResults.errors.length > 3 && (
+                            <li>...and {syncResults.errors.length - 3} more</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    {syncResults.byType && (
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                        {Object.entries(syncResults.byType).slice(0, 6).map(([type, count]) => (
+                          <div key={type} className="bg-white/50 p-1 rounded">
+                            <span className="capitalize">{type.replace(/_/g, ' ')}:</span> {count}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={async () => {
+                      setSyncProgress({ processed: 0, total: 1 })
+                      setSyncResults(null)
+                      try {
+                        const results = await sitemapSync.mutateAsync({
+                          maxPages: 5000,
+                          onProgress: (progress) => {
+                            setSyncProgress(progress)
+                          },
+                        })
+                        setSyncResults(results)
+                        refetchStats()
+                        toast({
+                          title: 'Sync Complete',
+                          description: `Synced ${results.synced} URLs from sitemap`,
+                        })
+                      } catch (error) {
+                        setSyncResults({ synced: 0, errors: [error.message] })
+                        toast({
+                          title: 'Sync Failed',
+                          description: error.message,
+                          variant: 'destructive',
+                        })
+                      } finally {
+                        setSyncProgress(null)
+                      }
+                    }}
+                    disabled={sitemapSync.isPending}
+                    className="gap-2"
+                  >
+                    {sitemapSync.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        Sync from Sitemap
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => refetchStats()}
+                    disabled={statsLoading}
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${statsLoading ? 'animate-spin' : ''}`} />
+                    Refresh Stats
+                  </Button>
+                </div>
+
+                <Alert className="border-gray-200 bg-gray-50">
+                  <AlertCircle className="h-4 w-4 text-gray-600" />
+                  <AlertDescription className="text-gray-700">
+                    <strong>URL Patterns Synced:</strong> /online-degrees/, /online-college-ratings-and-rankings/, /resources/, /blog/, /online-schools/, /careers/
+                  </AlertDescription>
+                </Alert>
               </CardContent>
             </Card>
           </TabsContent>
