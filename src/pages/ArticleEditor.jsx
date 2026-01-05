@@ -327,13 +327,29 @@ function ArticleEditorContent() {
   }
 
   // Approve revision handler - per Dec 22, 2025 meeting
-  // Confirms the AI revision and logs it for training
+  // Confirms the AI revision, saves to database, and logs for training
   const handleApproveRevision = async () => {
     if (!pendingRevision) return
 
     const contributor = contributors.find(c => c.id === selectedContributorId)
 
     try {
+      // First, save the revised content to the database
+      await updateArticle.mutateAsync({
+        articleId,
+        updates: {
+          title,
+          content: pendingRevision.revisedContent, // Use the revised content
+          meta_description: metaDescription,
+          focus_keyword: focusKeyword,
+          content_type: contentType,
+          contributor_id: selectedContributorId,
+          faqs,
+          word_count: getWordCount(pendingRevision.revisedContent),
+          quality_score: qualityData?.score || article?.quality_score
+        }
+      })
+
       // Log the approved revision for AI training (per spec section 8.4)
       await createAIRevision.mutateAsync({
         articleId,
@@ -356,12 +372,12 @@ function ArticleEditorContent() {
         } : null,
       })
 
-      // Clear pending revision - content is already updated
+      // Clear pending revision - content is saved
       setPendingRevision(null)
 
-      toast.success('Revision approved and logged for AI training!')
+      toast.success('Revision approved and saved!')
     } catch (error) {
-      toast.error('Failed to log revision: ' + error.message)
+      toast.error('Failed to save revision: ' + error.message)
     }
   }
 

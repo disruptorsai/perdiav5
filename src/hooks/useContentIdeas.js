@@ -268,21 +268,12 @@ export function useApproveIdeaWithFeedback() {
 export function useGenerateTitleSuggestions() {
   return useMutation({
     mutationFn: async ({ description, topics, count = 3 }) => {
-      console.log('[useGenerateTitleSuggestions] mutationFn called with:', { description, topics, count })
-
-      try {
-        console.log('[useGenerateTitleSuggestions] Calling grokClient.generateTitleSuggestions...')
-        const suggestions = await grokClient.generateTitleSuggestions(
-          description,
-          topics,
-          count
-        )
-        console.log('[useGenerateTitleSuggestions] Got suggestions:', suggestions)
-        return suggestions
-      } catch (error) {
-        console.error('[useGenerateTitleSuggestions] Error:', error)
-        throw error
-      }
+      const suggestions = await grokClient.generateTitleSuggestions(
+        description,
+        topics,
+        count
+      )
+      return suggestions
     },
   })
 }

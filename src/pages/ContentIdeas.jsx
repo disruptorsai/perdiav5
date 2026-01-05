@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
   useContentIdeas,
   useCreateContentIdea,
@@ -15,6 +15,7 @@ import {
   useFeedbackStats,
   REJECTION_CATEGORIES,
 } from '../hooks/useIdeaFeedbackHistory'
+import IdeaDiscoveryService from '../services/ideaDiscoveryService'
 import {
   Plus,
   Loader2,
@@ -36,6 +37,7 @@ import {
   Lightbulb,
   ToggleLeft,
   ToggleRight,
+  Wand2,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
@@ -269,6 +271,84 @@ function ContentIdeas() {
     }
   }
 
+  // Handle AI-powered idea discovery for monetization mode
+  // Uses IdeaDiscoveryService with monetization-first approach
+  const handleAIDiscoverIdeas = useCallback(async () => {
+    setIsDiscovering(true)
+
+    // Start progress modal
+    progressModal.start(
+      'AI Idea Discovery',
+      'Analyzing monetizable categories and generating content ideas...'
+    )
+
+    try {
+      const ideaDiscoveryService = new IdeaDiscoveryService()
+
+      // Get existing idea titles to avoid duplicates
+      const existingTitles = ideas.map(idea => idea.title)
+
+      progressModal.addStep('Loading monetization context...')
+      progressModal.updateProgress(10)
+
+      progressModal.addStep('Discovering monetizable content opportunities...')
+      progressModal.updateProgress(30)
+
+      // Call the AI discovery service with monetization-first settings
+      const result = await ideaDiscoveryService.discoverIdeas({
+        sources: ['reddit', 'news', 'trends', 'general'],
+        existingTopics: existingTitles,
+        strictMonetization: true,
+        minMonetizationScore: 25,
+      })
+
+      const { ideas: discoveredIdeas, rejected, stats } = result
+
+      progressModal.addStep(`Found ${discoveredIdeas.length} monetizable ideas`)
+      progressModal.updateProgress(50)
+
+      if (rejected?.length > 0) {
+        progressModal.addStep(`Filtered out ${rejected.length} non-monetizable ideas`)
+      }
+
+      // Save each discovered idea to the database
+      let savedCount = 0
+      for (const idea of discoveredIdeas) {
+        try {
+          await createIdea.mutateAsync({
+            title: idea.title,
+            description: idea.description,
+            seed_topics: idea.target_keywords || [],
+            content_type: idea.content_type || 'guide',
+            source: idea.source || 'ai_discovery',
+            status: 'pending',
+            monetization_score: idea.monetization_score || 0,
+            monetization_confidence: idea.monetization_confidence || 'medium',
+            monetization_category: idea.monetization_category || idea.ai_monetization_category || null,
+          })
+          savedCount++
+          progressModal.updateProgress(50 + (savedCount / discoveredIdeas.length) * 40)
+        } catch (saveError) {
+          console.warn(`Failed to save idea "${idea.title}":`, saveError)
+        }
+      }
+
+      progressModal.addStep(`Saved ${savedCount} new ideas to your library`)
+      progressModal.updateProgress(100)
+      progressModal.completeStep(`Saved ${savedCount} new ideas to your library`)
+      progressModal.complete()
+
+      console.log('[ContentIdeas] AI discovery stats:', stats)
+    } catch (error) {
+      console.error('AI idea discovery error:', error)
+      progressModal.addStep(`Error: ${error.message}`)
+      progressModal.errorStep(`Error: ${error.message}`)
+      progressModal.error(error.message)
+    } finally {
+      setIsDiscovering(false)
+    }
+  }, [ideas, createIdea, progressModal])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -332,6 +412,22 @@ function ContentIdeas() {
               <Badge className="bg-purple-600 text-white text-xs">
                 {untrainedFeedback.length}
               </Badge>
+            </button>
+          )}
+
+          {/* Monetization Mode: AI Suggest Ideas Button */}
+          {ideaMode === 'monetization' && (
+            <button
+              onClick={handleAIDiscoverIdeas}
+              disabled={isDiscovering}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50"
+            >
+              {isDiscovering ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Wand2 className="w-5 h-5" />
+              )}
+              {isDiscovering ? 'Discovering...' : 'AI Suggest Ideas'}
             </button>
           )}
 

@@ -20,20 +20,12 @@ function TitleSuggestions({ description, topics, onSelectTitle, disabled }) {
   const generateSuggestions = useGenerateTitleSuggestions()
 
   const handleGenerate = async () => {
-    console.log('[TitleSuggestions] handleGenerate called')
-    console.log('[TitleSuggestions] description:', description)
-
-    if (!description?.trim()) {
-      console.log('[TitleSuggestions] No description, returning early')
-      return
-    }
+    if (!description?.trim()) return
 
     try {
       const topicsArray = typeof topics === 'string'
         ? topics.split(',').map(t => t.trim()).filter(Boolean)
         : topics || []
-
-      console.log('[TitleSuggestions] Calling mutateAsync with:', { description, topics: topicsArray, count: 3 })
 
       const results = await generateSuggestions.mutateAsync({
         description,
@@ -41,11 +33,10 @@ function TitleSuggestions({ description, topics, onSelectTitle, disabled }) {
         count: 3,
       })
 
-      console.log('[TitleSuggestions] Results received:', results)
       setSuggestions(results)
       setSelectedIndex(null)
     } catch (error) {
-      console.error('[TitleSuggestions] Failed to generate suggestions:', error)
+      console.error('Failed to generate title suggestions:', error)
     }
   }
 
