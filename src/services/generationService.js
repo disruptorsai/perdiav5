@@ -790,7 +790,7 @@ class GenerationService {
         faqs: draftData.faqs,
         contributor_id: contributor?.id || null,
         contributor_name: contributor?.name || null,
-        status: 'drafting',
+        status: 'qa_review', // Changed from 'drafting' - articles go to Review Queue after generation
         // NEW: Validation tracking fields
         validation_flags: validationFlags,
         requires_human_review: requiresHumanReview,

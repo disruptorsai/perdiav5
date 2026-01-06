@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   useContentIdeas,
   useCreateContentIdea,
@@ -38,6 +39,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Wand2,
+  Eye,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
@@ -809,8 +811,17 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
         )}
 
         {idea.status === 'completed' && (
-          <div className="flex-1 text-center text-sm text-gray-600 py-2">
-            Article generated
+          <div className="flex-1 flex items-center justify-center gap-2">
+            <span className="text-sm text-green-600 font-medium">✓ Article generated</span>
+            {idea.article_id && (
+              <Link
+                to={`/review/${idea.article_id}`}
+                className="bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 flex items-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                View Article
+              </Link>
+            )}
           </div>
         )}
 
