@@ -40,6 +40,10 @@ import {
   ToggleRight,
   Wand2,
   Eye,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  X,
 } from 'lucide-react'
 import { ProgressModal, useProgressModal, MinimizedProgressIndicator } from '../components/ui/progress-modal'
 import IdeaFeedbackHistory from '../components/ideas/IdeaFeedbackHistory'
@@ -652,9 +656,13 @@ function ContentIdeas() {
 }
 
 function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeedback, isGenerating }) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const statusConfig = STATUS_CONFIG[idea.status]
   const StatusIcon = statusConfig.icon
   const feedbackScore = idea.feedback_score || 0
+
+  // Check if content is long enough to need expansion
+  const needsExpansion = (idea.title?.length > 60) || (idea.description?.length > 150)
 
   // Monetization score badge configuration
   const getMonetizationBadge = () => {
@@ -731,11 +739,32 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
         </div>
       </div>
 
-      {/* Content */}
-      <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{idea.title}</h3>
-      {idea.description && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-3">{idea.description}</p>
-      )}
+      {/* Content - with expand/collapse */}
+      <div className="relative">
+        <h3 className={`font-semibold text-gray-900 mb-2 ${!isExpanded ? 'line-clamp-2' : ''}`}>{idea.title}</h3>
+        {idea.description && (
+          <p className={`text-sm text-gray-600 mb-2 ${!isExpanded ? 'line-clamp-3' : ''}`}>{idea.description}</p>
+        )}
+        {/* Expand/Collapse button */}
+        {needsExpansion && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium mb-2"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="w-3 h-3" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3 h-3" />
+                Show full content
+              </>
+            )}
+          </button>
+        )}
+      </div>
 
       {/* Rejection reason display (for rejected ideas) */}
       {idea.status === 'rejected' && idea.rejection_category && (

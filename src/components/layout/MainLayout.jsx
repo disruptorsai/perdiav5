@@ -18,7 +18,79 @@ import {
   Plug,
   Users,
   Brain,
+  CheckCircle2,
+  X,
+  Sparkles,
 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
+// System status banner component
+function SystemStatusBanner() {
+  const [isVisible, setIsVisible] = useState(true)
+  const [buildInfo, setBuildInfo] = useState(null)
+
+  useEffect(() => {
+    // Check if user has dismissed this version's banner
+    const dismissedVersion = localStorage.getItem('dismissedStatusVersion')
+    const currentVersion = '2026.01.08.1'
+    if (dismissedVersion === currentVersion) {
+      setIsVisible(false)
+    }
+    setBuildInfo({
+      version: currentVersion,
+      lastUpdate: 'Jan 8, 2026 9:00 AM PT',
+      status: 'operational',
+      recentFixes: [
+        'View Article button added to completed ideas',
+        'Articles now appear in Review Queue after generation',
+        'Idea content can now be expanded before approving'
+      ]
+    })
+  }, [])
+
+  const handleDismiss = () => {
+    localStorage.setItem('dismissedStatusVersion', buildInfo?.version || '')
+    setIsVisible(false)
+  }
+
+  if (!isVisible || !buildInfo) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200"
+    >
+      <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="w-5 h-5" />
+              <span className="font-medium">System Updated</span>
+            </div>
+            <span className="text-sm text-green-600">
+              Build {buildInfo.version} • {buildInfo.lastUpdate}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-2 text-sm text-green-700">
+              <Sparkles className="w-4 h-4" />
+              <span>{buildInfo.recentFixes[0]}</span>
+            </div>
+            <button
+              onClick={handleDismiss}
+              className="p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 function MainLayout() {
   const { user, signOut } = useAuth()
@@ -153,6 +225,7 @@ function MainLayout() {
 
       {/* Main Content */}
       <div className="pl-64">
+        <SystemStatusBanner />
         <main className="min-h-screen">
           <AnimatePresence mode="wait">
             <motion.div
