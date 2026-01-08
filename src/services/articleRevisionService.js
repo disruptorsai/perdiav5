@@ -388,6 +388,8 @@ class ArticleRevisionService {
       contributorId = null,
       humanize = true,
       onProgress = () => {},
+      userId = null, // Required to create review queue article
+      sendToReviewQueue = true, // Whether to create an article record for review
     } = options
 
     const strategy = REVISION_STRATEGIES[revisionType]
@@ -467,13 +469,28 @@ class ArticleRevisionService {
         aiModel: 'grok-beta + claude',
       })
 
-      // Step 9: Update revision queue if applicable
+      // Step 9: Create article record for review queue
+      let reviewArticleId = null
+      if (sendToReviewQueue && userId) {
+        onProgress({ stage: 'review_queue', message: 'Adding to review queue...', progress: 92 })
+        reviewArticleId = await this.createReviewQueueArticle(article, revisedContent, {
+          userId,
+          sourceVersionId: versionId,
+          revisionType,
+        })
+        console.log(`[RevisionService] Created review queue article: ${reviewArticleId}`)
+      } else if (sendToReviewQueue && !userId) {
+        console.warn('[RevisionService] Cannot send to review queue without userId')
+      }
+
+      // Step 10: Update revision queue if applicable
       onProgress({ stage: 'complete', message: 'Revision complete!', progress: 100 })
 
       return {
         success: true,
         articleId,
         versionId,
+        reviewArticleId,
         revisedContent,
         wordCount: this.countWords(revisedContent.content),
         changesSummary: revisedContent.changesSummary,
@@ -890,6 +907,68 @@ Rules:
       .eq('id', article.id)
 
     return version.id
+  }
+
+  /**
+   * Create an article record in the articles table for the review queue
+   * This bridges revised site catalog articles to the review workflow
+   */
+  async createReviewQueueArticle(sourceArticle, revisedContent, options = {}) {
+    const { userId, sourceVersionId, revisionType } = options
+
+    if (!userId) {
+      throw new Error('userId is required to create review queue article')
+    }
+
+    // Strip HTML for text excerpt
+    const textContent = revisedContent.content
+      ?.replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    // Create excerpt from first ~150 chars
+    const excerpt = textContent?.substring(0, 150) + (textContent?.length > 150 ? '...' : '')
+
+    // Generate a unique slug based on source article
+    const baseSlug = sourceArticle.slug || sourceArticle.title?.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    const slug = `${baseSlug}-revised-${Date.now()}`
+
+    // Calculate word count
+    const wordCount = this.countWords(revisedContent.content)
+
+    // Create the article record with status qa_review
+    const { data: article, error } = await supabase
+      .from('articles')
+      .insert({
+        title: `[REVISED] ${revisedContent.title || sourceArticle.title}`,
+        content: revisedContent.content,
+        excerpt,
+        status: 'qa_review', // Go directly to review queue
+        word_count: wordCount,
+        quality_score: 75, // Default score for revisions
+        meta_title: revisedContent.title || sourceArticle.title,
+        meta_description: revisedContent.meta_description || sourceArticle.meta_description,
+        focus_keyword: revisedContent.focus_keyword || sourceArticle.focus_keyword,
+        slug,
+        faqs: revisedContent.faqs || sourceArticle.faqs,
+        user_id: userId,
+        // Link back to source article
+        source_ge_article_id: sourceArticle.id,
+        source_ge_version_id: sourceVersionId,
+        is_revision: true,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[RevisionService] Error creating review queue article:', error)
+      throw new Error(`Failed to create review queue article: ${error.message}`)
+    }
+
+    console.log(`[RevisionService] Created review article ${article.id} for source ${sourceArticle.id}`)
+    return article.id
   }
 
   /**

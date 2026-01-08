@@ -604,6 +604,13 @@ export default function ArticleReview() {
                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
                   {article.content_type?.replace(/_/g, ' ') || 'Article'}
                 </Badge>
+                {article.is_revision && (
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />
+                    Revised
+                    {article.source_ge_article_id && ' (Catalog)'}
+                  </Badge>
+                )}
                 <Badge variant="outline">
                   {pendingRevisions.length} pending comment{pendingRevisions.length !== 1 ? 's' : ''}
                 </Badge>

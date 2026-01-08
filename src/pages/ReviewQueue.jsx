@@ -326,16 +326,13 @@ export default function ReviewQueue() {
     return allRevisions.filter(r => r.article_id === articleId && r.status === 'pending').length
   }
 
-  // Get set of article IDs that have been revised (have ai_revised revisions)
-  const revisedArticleIds = useMemo(() => {
-    const ids = new Set()
-    allRevisions.forEach(r => {
-      if (r.ai_revised) {
-        ids.add(r.article_id)
-      }
-    })
-    return ids
-  }, [allRevisions])
+  // Check if an article is a revision (either from is_revision field or has ai_revised revisions)
+  const isArticleRevision = (article) => {
+    // First check the direct is_revision field (for site catalog revisions)
+    if (article.is_revision === true) return true
+    // Fall back to checking revision history (for in-app revisions)
+    return allRevisions.some(r => r.article_id === article.id && r.ai_revised)
+  }
 
   // Filter articles by search and type
   const filteredArticles = articles.filter(article => {
@@ -348,8 +345,8 @@ export default function ReviewQueue() {
 
     // Article type filter
     if (articleTypeFilter === 'all') return true
-    if (articleTypeFilter === 'revised') return revisedArticleIds.has(article.id)
-    if (articleTypeFilter === 'generated') return !revisedArticleIds.has(article.id)
+    if (articleTypeFilter === 'revised') return isArticleRevision(article)
+    if (articleTypeFilter === 'generated') return !isArticleRevision(article)
 
     return true
   })
@@ -357,9 +354,9 @@ export default function ReviewQueue() {
   // Counts for type filter badges
   const typeCounts = useMemo(() => ({
     all: articles.length,
-    revised: articles.filter(a => revisedArticleIds.has(a.id)).length,
-    generated: articles.filter(a => !revisedArticleIds.has(a.id)).length
-  }), [articles, revisedArticleIds])
+    revised: articles.filter(a => isArticleRevision(a)).length,
+    generated: articles.filter(a => !isArticleRevision(a)).length
+  }), [articles, allRevisions])
 
   // Count by status
   const statusCounts = {
@@ -574,6 +571,31 @@ export default function ReviewQueue() {
                               deadline={article.autopublish_deadline}
                               humanReviewed={article.human_reviewed}
                             />
+
+                            {/* Revision Indicator */}
+                            {isArticleRevision(article) && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-1"
+                                    >
+                                      <RefreshCw className="w-3 h-3" />
+                                      Revised
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>This article is a revision of existing content</p>
+                                    {article.source_ge_article_id && (
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        From site catalog
+                                      </p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
 
                             {/* Comment Count */}
                             {commentCount > 0 && (

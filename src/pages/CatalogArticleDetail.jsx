@@ -172,6 +172,8 @@ export default function CatalogArticleDetail() {
         revisionType,
         customInstructions,
         humanize: true,
+        userId: user?.id, // Pass user ID to create review queue article
+        sendToReviewQueue: true, // Enable sending to review queue
         onProgress: (progress) => {
           setRevisionProgress(progress)
           // When content is ready from the service, capture it for the animation
@@ -188,9 +190,16 @@ export default function CatalogArticleDetail() {
       }
       queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
       queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+      // Invalidate review queue so the new article appears there
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['review-queue'] })
       // Auto-select the new revision for preview
       if (newVersion?.id) {
         selectVersionMutation.mutate({ articleId, versionId: newVersion.id })
+      }
+      // Log if article was sent to review queue
+      if (newVersion?.reviewArticleId) {
+        console.log(`[CatalogArticleDetail] Revision sent to Review Queue: ${newVersion.reviewArticleId}`)
       }
       // Don't close animation yet - let user see the result
     },
