@@ -68,7 +68,7 @@ export default function ArticlePreviewModal({
           article_contributors (
             id,
             name,
-            writing_style,
+            writing_style_profile,
             expertise_areas,
             contributor_page_url
           )
@@ -395,7 +395,7 @@ export default function ArticlePreviewModal({
                           </div>
                           <div>
                             <p className="font-medium text-gray-900">{contributor.name}</p>
-                            <p className="text-sm text-gray-500">{contributor.writing_style}</p>
+                            <p className="text-sm text-gray-500">{contributor.writing_style_profile?.tone || 'Professional writer'}</p>
                           </div>
                         </div>
                       </div>
