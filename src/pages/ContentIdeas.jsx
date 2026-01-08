@@ -52,6 +52,8 @@ import TitleSuggestions from '../components/ideas/TitleSuggestions'
 import { DeleteWithReasonModal } from '../components/ui/DeleteWithReasonModal'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
+import { useErrorModal } from '../components/ui/ErrorModal'
+import ArticlePreviewModal from '../components/ideas/ArticlePreviewModal'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: FileText },
@@ -70,6 +72,10 @@ function ContentIdeas() {
   const [learningModalOpen, setLearningModalOpen] = useState(false)
   const [deleteModalIdea, setDeleteModalIdea] = useState(null) // For delete with reason modal
 
+  // Article preview modal state
+  const [previewArticleId, setPreviewArticleId] = useState(null)
+  const [completedArticleIds, setCompletedArticleIds] = useState([])
+
   // Dual-Track Mode: monetization-first (default) or free-form research
   // Per Dec 22, 2025 meeting - allows user-initiated research mode
   const [ideaMode, setIdeaMode] = useState('monetization') // 'monetization' or 'research'
@@ -79,6 +85,9 @@ function ContentIdeas() {
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
+
+  // Error modal for structured error display
+  const { showError, errorModal } = useErrorModal()
 
   const { data: ideas = [], isLoading } = useContentIdeas({ status: filterStatus })
   const createIdea = useCreateContentIdea()
@@ -97,7 +106,11 @@ function ContentIdeas() {
       await createIdea.mutateAsync(formData)
       setIsModalOpen(false)
     } catch (error) {
-      alert('Failed to create idea: ' + error.message)
+      showError(error, {
+        action: 'create idea',
+        context: { ideaTitle: formData.title },
+        onRetry: () => handleCreateIdea(formData),
+      })
     }
   }
 
@@ -113,7 +126,11 @@ function ContentIdeas() {
         decision: 'approved',
       })
     } catch (error) {
-      alert('Failed to approve idea: ' + error.message)
+      showError(error, {
+        action: 'approve idea',
+        context: { ideaId },
+        onRetry: () => handleApprove(ideaId),
+      })
     }
   }
 
@@ -139,7 +156,11 @@ function ContentIdeas() {
       })
       setRejectModalIdea(null)
     } catch (error) {
-      alert('Failed to reject idea: ' + error.message)
+      showError(error, {
+        action: 'reject idea',
+        context: { ideaId: rejectModalIdea?.id, ideaTitle: rejectModalIdea?.title },
+        onRetry: () => handleRejectWithReason(rejectionData),
+      })
     }
   }
 
@@ -153,7 +174,10 @@ function ContentIdeas() {
         decision: isPositive ? 'thumbs_up' : 'thumbs_down',
       })
     } catch (error) {
-      alert('Failed to submit feedback: ' + error.message)
+      showError(error, {
+        action: 'submit feedback',
+        context: { ideaId, feedbackType: isPositive ? 'positive' : 'negative' },
+      })
     }
   }
 
@@ -171,7 +195,11 @@ function ContentIdeas() {
       })
       setDeleteModalIdea(null)
     } catch (error) {
-      alert('Failed to delete idea: ' + error.message)
+      showError(error, {
+        action: 'delete idea',
+        context: { ideaId: deleteModalIdea?.id, ideaTitle: deleteModalIdea?.title },
+        onRetry: () => handleDeleteWithReason(deletionData),
+      })
     }
   }
 
@@ -222,7 +250,9 @@ function ContentIdeas() {
   // Handle free-form research discovery (per Dec 22, 2025 meeting - Dual-Track)
   const handleResearchDiscover = async () => {
     if (!researchTopic.trim()) {
-      alert('Please enter a topic to research')
+      showError({ message: 'Please enter a topic to research' }, {
+        action: 'start research discovery',
+      })
       return
     }
 
@@ -577,6 +607,14 @@ function ContentIdeas() {
                 onDelete={handleDelete}
                 onGenerate={handleGenerate}
                 onQuickFeedback={handleQuickFeedback}
+                onPreview={(articleId) => {
+                  // Build list of all completed article IDs for navigation
+                  const completedIds = ideas
+                    .filter(i => i.status === 'completed' && i.article_id)
+                    .map(i => i.article_id)
+                  setCompletedArticleIds(completedIds)
+                  setPreviewArticleId(articleId)
+                }}
                 isGenerating={generatingIdea === idea.id}
               />
             ))}
@@ -651,11 +689,35 @@ function ContentIdeas() {
         entityType="content idea"
         isDeleting={deleteIdeaWithReason.isPending}
       />
+
+      {/* Article Preview Modal - allows full content viewing without navigation */}
+      <ArticlePreviewModal
+        articleId={previewArticleId}
+        isOpen={!!previewArticleId}
+        onClose={() => setPreviewArticleId(null)}
+        hasPrev={completedArticleIds.indexOf(previewArticleId) > 0}
+        hasNext={completedArticleIds.indexOf(previewArticleId) < completedArticleIds.length - 1}
+        onNavigatePrev={() => {
+          const currentIndex = completedArticleIds.indexOf(previewArticleId)
+          if (currentIndex > 0) {
+            setPreviewArticleId(completedArticleIds[currentIndex - 1])
+          }
+        }}
+        onNavigateNext={() => {
+          const currentIndex = completedArticleIds.indexOf(previewArticleId)
+          if (currentIndex < completedArticleIds.length - 1) {
+            setPreviewArticleId(completedArticleIds[currentIndex + 1])
+          }
+        }}
+      />
+
+      {/* Error Modal - structured error display with copyable details */}
+      {errorModal}
     </div>
   )
 }
 
-function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeedback, isGenerating }) {
+function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeedback, onPreview, isGenerating }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const statusConfig = STATUS_CONFIG[idea.status]
   const StatusIcon = statusConfig.icon
@@ -839,18 +901,30 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
           </button>
         )}
 
-        {idea.status === 'completed' && (
-          <div className="flex-1 flex items-center justify-center gap-2">
-            <span className="text-sm text-green-600 font-medium">✓ Article generated</span>
-            {idea.article_id && (
-              <Link
-                to={`/review/${idea.article_id}`}
-                className="bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 flex items-center gap-1.5 transition-colors"
+        {idea.status === 'completed' && idea.article_id && (
+          <div className="flex-1 flex flex-col gap-2">
+            {/* Success message */}
+            <div className="flex items-center justify-center gap-2 py-1">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <span className="text-sm text-green-700 font-medium">Article generated successfully</span>
+            </div>
+            {/* Action buttons - more prominent */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onPreview(idea.article_id)}
+                className="flex-1 bg-indigo-600 text-white text-sm py-2.5 px-4 rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-2 transition-colors font-medium"
               >
                 <Eye className="w-4 h-4" />
-                View Article
+                Preview Full Article
+              </button>
+              <Link
+                to={`/review/${idea.article_id}`}
+                className="flex-1 bg-blue-600 text-white text-sm py-2.5 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors font-medium"
+              >
+                <Maximize2 className="w-4 h-4" />
+                Edit & Review
               </Link>
-            )}
+            </div>
           </div>
         )}
 

@@ -32,18 +32,19 @@ function SystemStatusBanner() {
   useEffect(() => {
     // Check if user has dismissed this version's banner
     const dismissedVersion = localStorage.getItem('dismissedStatusVersion')
-    const currentVersion = '2026.01.08.1'
+    const currentVersion = '2026.01.08.2'
     if (dismissedVersion === currentVersion) {
       setIsVisible(false)
     }
     setBuildInfo({
       version: currentVersion,
-      lastUpdate: 'Jan 8, 2026 9:00 AM PT',
+      lastUpdate: 'Jan 8, 2026 11:30 AM PT',
       status: 'operational',
       recentFixes: [
+        'NEW: Full Article Preview - click "Preview Full Article" to view complete content without leaving the page',
+        'NEW: Enhanced Error Display - errors now show copyable error codes for easy reporting',
         'View Article button added to completed ideas',
         'Articles now appear in Review Queue after generation',
-        'Idea content can now be expanded before approving'
       ]
     })
   }, [])
@@ -60,32 +61,40 @@ function SystemStatusBanner() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200"
+      className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b-2 border-green-300"
     >
       <div className="max-w-7xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-green-700">
-              <CheckCircle2 className="w-5 h-5" />
-              <span className="font-medium">System Updated</span>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-semibold">System Updated & Ready</span>
+              </div>
+              <span className="text-sm text-green-600 bg-green-100 px-2 py-0.5 rounded">
+                v{buildInfo.version}
+              </span>
+              <span className="text-sm text-green-600">
+                {buildInfo.lastUpdate}
+              </span>
             </div>
-            <span className="text-sm text-green-600">
-              Build {buildInfo.version} • {buildInfo.lastUpdate}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 text-sm text-green-700">
-              <Sparkles className="w-4 h-4" />
-              <span>{buildInfo.recentFixes[0]}</span>
+            {/* Show recent fixes */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {buildInfo.recentFixes.slice(0, 2).map((fix, index) => (
+                <div key={index} className="flex items-center gap-1.5 text-sm text-green-700">
+                  <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{fix}</span>
+                </div>
+              ))}
             </div>
-            <button
-              onClick={handleDismiss}
-              className="p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded transition-colors"
-              title="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
+          <button
+            onClick={handleDismiss}
+            className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-lg transition-colors flex-shrink-0"
+            title="Dismiss (won't show again for this version)"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </motion.div>
