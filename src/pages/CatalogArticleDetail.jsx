@@ -192,7 +192,7 @@ export default function CatalogArticleDetail() {
       queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
       // Invalidate review queue so the new article appears there
       queryClient.invalidateQueries({ queryKey: ['articles'] })
-      queryClient.invalidateQueries({ queryKey: ['review-queue'] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] })
       // Auto-select the new revision for preview
       if (newVersion?.id) {
         selectVersionMutation.mutate({ articleId, versionId: newVersion.id })

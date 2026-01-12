@@ -209,6 +209,12 @@ export function useGetEducatedCatalogStats() {
         .select('*', { count: 'exact', head: true })
         .not('content_text', 'is', null)
 
+      // Get revised count (version_count > 1)
+      const { count: revisedCount } = await supabase
+        .from('geteducated_articles')
+        .select('*', { count: 'exact', head: true })
+        .gt('version_count', 1)
+
       // Get content type breakdown
       const { data: contentTypes } = await supabase
         .from('geteducated_articles')
@@ -249,6 +255,7 @@ export function useGetEducatedCatalogStats() {
       return {
         totalArticles: totalCount || 0,
         enrichedArticles: enrichedCount || 0,
+        revisedArticles: revisedCount || 0,
         enrichmentProgress: totalCount > 0 ? Math.round((enrichedCount / totalCount) * 100) : 0,
         needsEnrichment: (totalCount || 0) - (enrichedCount || 0),
         contentTypes: contentTypeBreakdown,
@@ -514,6 +521,7 @@ export function useGetEducatedFilterOptions() {
  * @param {string} options.subjectArea - Filter by subject area
  * @param {string} options.sortBy - Sort field (default: updated_at)
  * @param {boolean} options.sortAsc - Sort ascending (default: false)
+ * @param {boolean} options.revisedOnly - Filter to only show revised articles (version_count > 1)
  */
 export function useGetEducatedArticlesPaginated(options = {}) {
   const { user } = useAuth()
@@ -526,10 +534,11 @@ export function useGetEducatedArticlesPaginated(options = {}) {
     subjectArea,
     sortBy = 'updated_at',
     sortAsc = false,
+    revisedOnly = false,
   } = options
 
   return useQuery({
-    queryKey: ['geteducated-articles-paginated', page, pageSize, search, contentType, degreeLevel, subjectArea, sortBy, sortAsc],
+    queryKey: ['geteducated-articles-paginated', page, pageSize, search, contentType, degreeLevel, subjectArea, sortBy, sortAsc, revisedOnly],
     queryFn: async () => {
       // Calculate offset
       const offset = (page - 1) * pageSize
@@ -556,6 +565,11 @@ export function useGetEducatedArticlesPaginated(options = {}) {
 
       if (search) {
         query = query.or(`title.ilike.%${search}%,slug.ilike.%${search}%`)
+      }
+
+      // Filter to only revised articles (has been revised at least once)
+      if (revisedOnly) {
+        query = query.gt('version_count', 1)
       }
 
       const { data, error, count } = await query

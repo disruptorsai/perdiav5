@@ -79,6 +79,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  History,
+  RefreshCw,
 } from 'lucide-react'
 
 export default function SiteCatalog() {
@@ -86,6 +88,7 @@ export default function SiteCatalog() {
 
   // State
   const [activeTab, setActiveTab] = useState('geteducated') // 'geteducated' or 'custom'
+  const [geSubTab, setGeSubTab] = useState('all') // 'all' or 'revised' - sub-tab for GetEducated
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCluster, setSelectedCluster] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -125,6 +128,7 @@ export default function SiteCatalog() {
     search: searchQuery || undefined,
     contentType: contentTypeFilter,
     degreeLevel: degreeLevelFilter,
+    revisedOnly: geSubTab === 'revised',
   })
 
   // Extract pagination data
@@ -328,7 +332,7 @@ export default function SiteCatalog() {
 
         {/* Stats Cards - GetEducated */}
         {activeTab === 'geteducated' && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <Card className="border-none shadow-sm">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
@@ -352,6 +356,23 @@ export default function SiteCatalog() {
                   <div>
                     <p className="text-sm text-gray-500">Enriched</p>
                     <p className="text-2xl font-bold text-gray-900">{geStats?.enrichedArticles?.toLocaleString() || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card
+              className={`border-none shadow-sm cursor-pointer transition-all ${geSubTab === 'revised' ? 'ring-2 ring-indigo-500 ring-offset-2' : 'hover:shadow-md'}`}
+              onClick={() => { setGeSubTab('revised'); setCurrentPage(1); }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-xl">
+                    <RefreshCw className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Revised</p>
+                    <p className="text-2xl font-bold text-gray-900">{geStats?.revisedArticles?.toLocaleString() || 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -398,6 +419,36 @@ export default function SiteCatalog() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Sub-tabs for GetEducated */}
+        {activeTab === 'geteducated' && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant={geSubTab === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setGeSubTab('all'); setCurrentPage(1); }}
+              className="gap-2"
+            >
+              <Database className="w-4 h-4" />
+              All Articles
+              <Badge variant="secondary" className="ml-1">
+                {geStats?.totalArticles?.toLocaleString() || 0}
+              </Badge>
+            </Button>
+            <Button
+              variant={geSubTab === 'revised' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setGeSubTab('revised'); setCurrentPage(1); }}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Revised Articles
+              <Badge variant={geSubTab === 'revised' ? 'secondary' : 'outline'} className="ml-1">
+                {geStats?.revisedArticles?.toLocaleString() || 0}
+              </Badge>
+            </Button>
           </div>
         )}
 
@@ -595,6 +646,7 @@ export default function SiteCatalog() {
                         <th className="text-left p-4 font-medium text-gray-600">Level</th>
                         <th className="text-left p-4 font-medium text-gray-600">Subject</th>
                         <th className="text-left p-4 font-medium text-gray-600">Words</th>
+                        <th className="text-left p-4 font-medium text-gray-600">Versions</th>
                         <th className="text-left p-4 font-medium text-gray-600">Linked</th>
                       </tr>
                     </thead>
@@ -648,6 +700,16 @@ export default function SiteCatalog() {
                             </td>
                             <td className="p-4">
                               <span className="text-gray-900">{article.word_count?.toLocaleString() || '-'}</span>
+                            </td>
+                            <td className="p-4">
+                              {(article.version_count || 1) > 1 ? (
+                                <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 gap-1">
+                                  <History className="w-3 h-3" />
+                                  v{article.version_count}
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400 text-sm">Original</span>
+                              )}
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
