@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { GenerationProgressProvider } from './contexts/GenerationProgressContext'
 import { HowToGuideProvider } from './contexts/HowToGuideContext'
@@ -60,7 +59,6 @@ function App() {
           <HowToGuideProvider>
             <ToastProvider>
               <BrowserRouter>
-              <AnimatePresence mode="wait">
                 <Routes>
                   {/* Public Routes */}
                   <Route path="/login" element={<Login />} />
@@ -108,7 +106,6 @@ function App() {
                   {/* Fallback */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
-              </AnimatePresence>
               {/* Global Floating Progress Window - persists across page navigation */}
               <FloatingProgressWindow />
               </BrowserRouter>

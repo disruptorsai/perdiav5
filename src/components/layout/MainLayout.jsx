@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import FloatingHelpButton from '../help/FloatingHelpButton'
 import HelpModal from '../help/HelpModal'
@@ -160,41 +160,26 @@ function MainLayout() {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            {navigation.map((item, index) => {
+            {navigation.map((item) => {
               const isActive = location.pathname === item.href
               const Icon = item.icon
 
               return (
-                <motion.div
+                <Link
                   key={item.name}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + index * 0.03 }}
+                  to={item.href}
+                  className={`
+                    flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200
+                    ${
+                      isActive
+                        ? 'text-blue-700 bg-blue-50'
+                        : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                    }
+                  `}
                 >
-                  <Link
-                    to={item.href}
-                    className={`
-                      relative flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200
-                      ${
-                        isActive
-                          ? 'text-blue-700'
-                          : 'text-gray-700 hover:text-gray-900'
-                      }
-                    `}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeNav"
-                        className="absolute inset-0 bg-blue-50 rounded-lg"
-                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      />
-                    )}
-                    <span className="relative flex items-center">
-                      <Icon className="w-5 h-5 mr-3" />
-                      {item.name}
-                    </span>
-                  </Link>
-                </motion.div>
+                  <Icon className="w-5 h-5 mr-3" />
+                  {item.name}
+                </Link>
               )
             })}
           </nav>
@@ -240,17 +225,7 @@ function MainLayout() {
       <div className="pl-64">
         <SystemStatusBanner />
         <main className="min-h-screen">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <Outlet />
         </main>
       </div>
 
