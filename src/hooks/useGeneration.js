@@ -161,10 +161,13 @@ export function useReviseArticle() {
 
       console.log('[useReviseArticle] Validation result:', validation)
 
-      // Update article with revised content
+      // Update article with revised content and mark as revision
       const { data, error } = await supabase
         .from('articles')
-        .update({ content: revisedContent })
+        .update({
+          content: revisedContent,
+          is_revision: true  // Mark as revised so it shows in Revised tab
+        })
         .eq('id', articleId)
         .select()
         .single()
@@ -210,6 +213,8 @@ export function useReviseArticle() {
       queryClient.invalidateQueries({ queryKey: ['article', data.id] })
       queryClient.invalidateQueries({ queryKey: ['revisions'] })
       queryClient.invalidateQueries({ queryKey: ['article-revisions'] })
+      queryClient.invalidateQueries({ queryKey: ['all-revisions'] })
+      queryClient.invalidateQueries({ queryKey: ['review-articles'] })  // Refresh review queue
     },
   })
 }
