@@ -351,9 +351,9 @@ Top schools by program count:
         .select('learned_patterns, improved_prompt, improvement_notes')
         .eq('session_type', 'idea_generation')
         .eq('is_active', true)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.warn('Failed to load learning session:', error)
         return null
       }

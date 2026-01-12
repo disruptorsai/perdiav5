@@ -303,9 +303,9 @@ export function useActiveLearningSession(sessionType = 'idea_generation') {
         .select('*')
         .eq('session_type', sessionType)
         .eq('is_active', true)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows
+      if (error) throw error
       return data || null
     },
     enabled: !!user,
