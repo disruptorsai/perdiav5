@@ -22,6 +22,7 @@ import {
   recommendAuthor,
 } from '../hooks/useContributors'
 import { contentValidator, validateDraft, validateForPublish } from './validation/contentValidator'
+import { calculateQualityScore, getQualityThresholds, calculateQualityScoreAsync } from './qualityScoreService'
 
 class GenerationService {
   constructor() {
@@ -1003,80 +1004,65 @@ OUTPUT ONLY THE COMPLETE FIXED HTML CONTENT (no explanations or commentary).`
 
   /**
    * Calculate quality metrics for an article
-   * Now accepts optional thresholds from content rules configuration
+   * UNIFIED: Uses the shared qualityScoreService for consistent scoring
+   * This ensures the score shown in lists matches the score in the editor
+   *
    * @param {string} content - Article HTML content
    * @param {Array} faqs - FAQ array
-   * @param {Object} thresholds - Optional quality thresholds from content rules
+   * @param {Object} thresholds - Optional quality thresholds (will use system_settings if not provided)
    */
   calculateQualityMetrics(content, faqs = [], thresholds = null) {
-    // Use provided thresholds or defaults
-    const t = thresholds || {
-      minWordCount: 1500,
-      maxWordCount: 2500,
-      minInternalLinks: 3,
-      minExternalLinks: 2,
-      minFaqs: 3,
-      minH2Headings: 3,
-      maxAvgSentenceLength: 25,
-    }
+    // Convert old-style thresholds to new format if provided
+    const unifiedThresholds = thresholds ? {
+      minWordCount: thresholds.minWordCount || 800,
+      maxWordCount: thresholds.maxWordCount || 2500,
+      minInternalLinks: thresholds.minInternalLinks || 3,
+      minExternalLinks: thresholds.minExternalLinks || 1,
+      requireBLS: false,
+      requireFAQ: (thresholds.minFaqs || 0) > 0,
+      requireHeadings: true,
+      minHeadingCount: thresholds.minH2Headings || 3,
+      minImages: 0, // Don't require images during generation
+      requireImageAlt: false, // Don't check image alt during generation
+      keywordDensityMin: 0.5,
+      keywordDensityMax: 2.5,
+      minReadability: 60,
+      maxReadability: 80,
+    } : null
 
-    const issues = []
-    let score = 100
+    // Build article object for the unified service
+    const article = { faqs: faqs || [] }
 
-    // Strip HTML for word count
-    const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    const wordCount = textContent.split(' ').filter(w => w.length > 0).length
+    // Use the unified quality score service
+    // If no thresholds provided, it will use defaults (matching system_settings)
+    const result = calculateQualityScore(
+      content,
+      article,
+      unifiedThresholds || {
+        minWordCount: 800,
+        maxWordCount: 2500,
+        minInternalLinks: 3,
+        minExternalLinks: 1,
+        requireBLS: false,
+        requireFAQ: false,
+        requireHeadings: true,
+        minHeadingCount: 3,
+        minImages: 0,
+        requireImageAlt: false,
+        keywordDensityMin: 0.5,
+        keywordDensityMax: 2.5,
+        minReadability: 60,
+        maxReadability: 80,
+      }
+    )
 
-    // Word count check (uses configurable thresholds)
-    if (wordCount < t.minWordCount) {
-      issues.push({ type: 'word_count_low', severity: 'major', details: `${wordCount} < ${t.minWordCount}` })
-      score -= 15
-    } else if (wordCount > t.maxWordCount) {
-      issues.push({ type: 'word_count_high', severity: 'minor', details: `${wordCount} > ${t.maxWordCount}` })
-      score -= 5
-    }
-
-    // Internal links check (uses configurable threshold)
-    const internalLinks = (content.match(/<a href/gi) || []).length
-    if (internalLinks < t.minInternalLinks) {
-      issues.push({ type: 'missing_internal_links', severity: 'major', details: `${internalLinks} < ${t.minInternalLinks}` })
-      score -= 15
-    }
-
-    // External links check (uses configurable threshold)
-    const externalLinkMatches = content.match(/href="http/gi) || []
-    const externalLinks = externalLinkMatches.length
-    if (externalLinks < t.minExternalLinks) {
-      issues.push({ type: 'missing_external_links', severity: 'minor', details: `${externalLinks} < ${t.minExternalLinks}` })
-      score -= 10
-    }
-
-    // FAQ check (uses configurable threshold)
-    if (!faqs || faqs.length < t.minFaqs) {
-      issues.push({ type: 'missing_faqs', severity: 'minor', details: `${faqs?.length || 0} < ${t.minFaqs}` })
-      score -= 10
-    }
-
-    // Heading structure check (uses configurable threshold)
-    const h2Count = (content.match(/<h2/gi) || []).length
-    if (h2Count < t.minH2Headings) {
-      issues.push({ type: 'weak_headings', severity: 'minor', details: `${h2Count} < ${t.minH2Headings}` })
-      score -= 10
-    }
-
-    // Readability (uses configurable threshold)
-    const sentences = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0)
-    const avgSentenceLength = sentences.length > 0 ? wordCount / sentences.length : 0
-    if (avgSentenceLength > t.maxAvgSentenceLength) {
-      issues.push({ type: 'poor_readability', severity: 'minor', details: `avg ${Math.round(avgSentenceLength)} words/sentence > ${t.maxAvgSentenceLength}` })
-      score -= 10
-    }
-
+    // Return in the expected format for backward compatibility
     return {
-      score: Math.max(0, score),
-      word_count: wordCount,
-      issues,
-      thresholds_used: t, // Include thresholds used for transparency
+      score: result.score,
+      word_count: result.word_count,
+      issues: result.issues,
+      thresholds_used: result.thresholds_used,
+      checks: result.checks, // Include checks for transparency
     }
   }
 

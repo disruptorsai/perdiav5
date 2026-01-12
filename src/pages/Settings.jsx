@@ -36,6 +36,7 @@ import { APPROVED_AUTHORS, AUTHOR_DISPLAY_NAMES } from '@/hooks/useContributors'
 import { useHowToGuide } from '@/contexts/HowToGuideContext'
 import { ContentRulesTab } from '@/components/settings/content-rules'
 import AuditLogViewer from '@/components/settings/AuditLogViewer'
+import QualityScoreRecalculator from '@/components/settings/QualityScoreRecalculator'
 import { useSitemapSync, useCatalogStats } from '@/hooks/useSitemap'
 
 function SettingsContent() {
@@ -1705,6 +1706,9 @@ function SettingsContent() {
                 </Alert>
               </CardContent>
             </Card>
+
+            {/* Quality Score Recalculation */}
+            <QualityScoreRecalculator />
           </TabsContent>
         </Tabs>
       </div>
