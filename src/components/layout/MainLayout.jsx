@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import FloatingHelpButton from '../help/FloatingHelpButton'
@@ -21,47 +21,46 @@ import {
   CheckCircle2,
   X,
   Sparkles,
+  ChevronRight,
+  History,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { CURRENT_VERSION, CURRENT_RELEASE_DATE, getRecentFixes } from '../../data/changelog'
 
-// System status banner component
+// System status banner component - now a clickable button
 function SystemStatusBanner() {
+  const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(true)
-  const [buildInfo, setBuildInfo] = useState(null)
 
   useEffect(() => {
     // Check if user has dismissed this version's banner
     const dismissedVersion = localStorage.getItem('dismissedStatusVersion')
-    const currentVersion = '2026.01.12.1'
-    if (dismissedVersion === currentVersion) {
+    if (dismissedVersion === CURRENT_VERSION) {
       setIsVisible(false)
     }
-    setBuildInfo({
-      version: currentVersion,
-      lastUpdate: 'Jan 12, 2026 9:00 AM PT',
-      status: 'operational',
-      recentFixes: [
-        'FIXED: AI revision validation - revisions now verify changes were actually applied',
-        'FIXED: Ranking link insertion - system validates links exist before marking "addressed"',
-        'NEW: Preview Full Article button more prominent on completed ideas',
-        'NEW: Revision results show exactly what changed with diff view',
-      ]
-    })
   }, [])
 
-  const handleDismiss = () => {
-    localStorage.setItem('dismissedStatusVersion', buildInfo?.version || '')
+  const handleDismiss = (e) => {
+    e.stopPropagation() // Prevent navigation when clicking X
+    localStorage.setItem('dismissedStatusVersion', CURRENT_VERSION)
     setIsVisible(false)
   }
 
-  if (!isVisible || !buildInfo) return null
+  const handleClick = () => {
+    navigate('/releases')
+  }
+
+  if (!isVisible) return null
+
+  const recentFixes = getRecentFixes(2)
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b-2 border-green-300"
+      onClick={handleClick}
+      className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b-2 border-green-300 cursor-pointer hover:from-green-100 hover:via-emerald-100 hover:to-teal-100 transition-colors group"
     >
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-start justify-between gap-4">
@@ -72,15 +71,20 @@ function SystemStatusBanner() {
                 <span className="font-semibold">System Updated & Ready</span>
               </div>
               <span className="text-sm text-green-600 bg-green-100 px-2 py-0.5 rounded">
-                v{buildInfo.version}
+                v{CURRENT_VERSION}
               </span>
               <span className="text-sm text-green-600">
-                {buildInfo.lastUpdate}
+                {CURRENT_RELEASE_DATE}
               </span>
+              <div className="flex items-center gap-1 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                <History className="w-4 h-4" />
+                <span className="text-sm font-medium">View all updates</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
             </div>
             {/* Show recent fixes */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              {buildInfo.recentFixes.slice(0, 2).map((fix, index) => (
+              {recentFixes.map((fix, index) => (
                 <div key={index} className="flex items-center gap-1.5 text-sm text-green-700">
                   <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>{fix}</span>

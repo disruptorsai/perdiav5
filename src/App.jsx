@@ -28,6 +28,7 @@ import ContributorDetail from './pages/ContributorDetail'
 import AITraining from './pages/AITraining'
 import SecretJosh from './pages/SecretJosh'
 import BatchProgress from './pages/BatchProgress'
+import ReleaseHistory from './pages/ReleaseHistory'
 
 // Layout
 import MainLayout from './components/layout/MainLayout'
@@ -101,6 +102,7 @@ function App() {
                     <Route path="ai-training" element={<AITraining />} />
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="releases" element={<ReleaseHistory />} />
                   </Route>
 
                   {/* Fallback */}

@@ -12,7 +12,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const CLAUDE_MODEL = 'claude-3-5-sonnet-20250122'
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514'
 
 function buildHumanizationPrompt(content: string, contributorProfile: any, perplexity: string, burstiness: string): string {
   let styleInstructions = ''
