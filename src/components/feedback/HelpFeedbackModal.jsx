@@ -93,27 +93,31 @@ function FAQItem({ question, answer }) {
 }
 
 function HelpFeedbackModal() {
-  const { isHelpModalOpen, closeHelpModal, isEnabled } = useHowToGuide()
+  const { isHelpModalOpen, closeHelpModal } = useHowToGuide()
   const location = useLocation()
   const [activeTab, setActiveTab] = useState('help')
 
-  // Draggable state
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStartPos = useRef({ x: 0, y: 0 })
-  const modalRef = useRef(null)
-
-  // Resizable state
+  // Size state
   const [size, setSize] = useState({ width: 520, height: 600 })
+
+  // Position state - calculated as offset from center
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
+
+  // Resize state
   const [isResizing, setIsResizing] = useState(false)
-  const resizeStartPos = useRef({ x: 0, y: 0 })
-  const resizeStartSize = useRef({ width: 520, height: 600 })
+  const resizeStart = useRef({ x: 0, y: 0, width: 520, height: 600 })
+
+  // Maximize state
   const [isMaximized, setIsMaximized] = useState(false)
   const savedState = useRef({ position: { x: 0, y: 0 }, size: { width: 520, height: 600 } })
 
   const helpContent = getHelpContentForPath(location.pathname)
 
-  // Reset position when modal opens
+  // Reset when modal opens
   useEffect(() => {
     if (isHelpModalOpen) {
       setPosition({ x: 0, y: 0 })
@@ -122,72 +126,77 @@ function HelpFeedbackModal() {
     }
   }, [isHelpModalOpen])
 
-  // Dragging handlers
-  const handleDragStart = useCallback((e) => {
-    if (e.target.closest('button') && !e.target.closest('.drag-handle')) return
+  // Calculate centered position
+  const getModalStyle = useCallback(() => {
+    const left = (window.innerWidth - size.width) / 2 + position.x
+    const top = (window.innerHeight - size.height) / 2 + position.y
+    return {
+      width: size.width,
+      height: size.height,
+      left: Math.max(0, Math.min(left, window.innerWidth - size.width)),
+      top: Math.max(0, Math.min(top, window.innerHeight - size.height)),
+    }
+  }, [size, position])
+
+  // Drag handlers
+  const handleMouseDown = useCallback((e) => {
+    // Only start drag if clicking on the header area, not buttons
+    if (e.target.closest('button')) return
+
+    e.preventDefault()
     setIsDragging(true)
-    dragStartPos.current = {
+    dragOffset.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y,
     }
   }, [position])
 
-  const handleDrag = useCallback((e) => {
-    if (!isDragging) return
-    setPosition({
-      x: e.clientX - dragStartPos.current.x,
-      y: e.clientY - dragStartPos.current.y,
-    })
-  }, [isDragging])
+  const handleMouseMove = useCallback((e) => {
+    if (isDragging) {
+      setPosition({
+        x: e.clientX - dragOffset.current.x,
+        y: e.clientY - dragOffset.current.y,
+      })
+    }
+    if (isResizing) {
+      const deltaX = e.clientX - resizeStart.current.x
+      const deltaY = e.clientY - resizeStart.current.y
+      setSize({
+        width: Math.max(400, Math.min(window.innerWidth - 40, resizeStart.current.width + deltaX)),
+        height: Math.max(400, Math.min(window.innerHeight - 40, resizeStart.current.height + deltaY)),
+      })
+    }
+  }, [isDragging, isResizing])
 
-  const handleDragEnd = useCallback(() => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false)
+    setIsResizing(false)
   }, [])
 
   // Resize handlers
   const handleResizeStart = useCallback((e) => {
+    e.preventDefault()
     e.stopPropagation()
     setIsResizing(true)
-    resizeStartPos.current = { x: e.clientX, y: e.clientY }
-    resizeStartSize.current = { ...size }
+    resizeStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height,
+    }
   }, [size])
-
-  const handleResize = useCallback((e) => {
-    if (!isResizing) return
-    const deltaX = e.clientX - resizeStartPos.current.x
-    const deltaY = e.clientY - resizeStartPos.current.y
-    setSize({
-      width: Math.max(400, Math.min(900, resizeStartSize.current.width + deltaX)),
-      height: Math.max(400, Math.min(800, resizeStartSize.current.height + deltaY)),
-    })
-  }, [isResizing])
-
-  const handleResizeEnd = useCallback(() => {
-    setIsResizing(false)
-  }, [])
 
   // Global mouse event listeners
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleDrag)
-      window.addEventListener('mouseup', handleDragEnd)
+    if (isDragging || isResizing) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
       return () => {
-        window.removeEventListener('mousemove', handleDrag)
-        window.removeEventListener('mouseup', handleDragEnd)
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
       }
     }
-  }, [isDragging, handleDrag, handleDragEnd])
-
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', handleResize)
-      window.addEventListener('mouseup', handleResizeEnd)
-      return () => {
-        window.removeEventListener('mousemove', handleResize)
-        window.removeEventListener('mouseup', handleResizeEnd)
-      }
-    }
-  }, [isResizing, handleResize, handleResizeEnd])
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp])
 
   // Toggle maximize
   const toggleMaximize = useCallback(() => {
@@ -212,6 +221,8 @@ function HelpFeedbackModal() {
     // Modal stays open after feedback submission
   }
 
+  const modalStyle = getModalStyle()
+
   return (
     <AnimatePresence>
       {isHelpModalOpen && (
@@ -228,22 +239,17 @@ function HelpFeedbackModal() {
 
           {/* Modal - draggable, resizable, semi-transparent */}
           <motion.div
-            ref={modalRef}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            style={{
-              width: size.width,
-              height: size.height,
-              transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
-            }}
-            className={`fixed left-1/2 top-1/2 z-50 flex flex-col overflow-hidden rounded-xl shadow-2xl bg-white/95 backdrop-blur-sm border border-gray-200/50 ${isDragging ? 'cursor-grabbing' : ''} ${isResizing ? 'select-none' : ''}`}
+            style={modalStyle}
+            className={`fixed z-50 flex flex-col overflow-hidden rounded-xl shadow-2xl bg-white/95 backdrop-blur-sm border border-gray-200/50 ${isDragging ? 'cursor-grabbing select-none' : ''} ${isResizing ? 'select-none' : ''}`}
           >
             {/* Drag Handle Header */}
             <div
-              onMouseDown={handleDragStart}
-              className="drag-handle flex items-center justify-between p-4 border-b border-gray-200/80 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 cursor-grab active:cursor-grabbing"
+              onMouseDown={handleMouseDown}
+              className="flex items-center justify-between p-4 border-b border-gray-200/80 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 cursor-grab active:cursor-grabbing select-none"
             >
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 text-gray-400">
@@ -375,11 +381,10 @@ function HelpFeedbackModal() {
             {/* Resize Handle */}
             <div
               onMouseDown={handleResizeStart}
-              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize group"
-              style={{ touchAction: 'none' }}
+              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group flex items-end justify-end p-1"
             >
               <svg
-                className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors"
+                className="w-3 h-3 text-gray-400 group-hover:text-gray-600 transition-colors"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >

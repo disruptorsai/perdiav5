@@ -349,6 +349,9 @@ function ContentIdeas() {
 
       // Save each discovered idea to the database
       let savedCount = 0
+      let failedCount = 0
+      let lastError = null
+
       for (const idea of discoveredIdeas) {
         // Check if user cancelled the process
         if (progressModal.isCancelled) {
@@ -371,12 +374,22 @@ function ContentIdeas() {
           savedCount++
           progressModal.updateProgress(50 + (savedCount / discoveredIdeas.length) * 40)
         } catch (saveError) {
-          console.warn(`Failed to save idea "${idea.title}":`, saveError)
+          failedCount++
+          lastError = saveError
+          console.warn(`Failed to save idea "${idea.title}":`, saveError?.message || saveError)
         }
       }
 
       // Only show completion if not cancelled
       if (!progressModal.isCancelled) {
+        if (failedCount > 0) {
+          progressModal.addStep(`Warning: ${failedCount} ideas failed to save`)
+          console.error('[ContentIdeas] Save failures:', {
+            failedCount,
+            lastError: lastError?.message || lastError,
+            hint: 'Check if source value is in database constraint'
+          })
+        }
         progressModal.addStep(`Saved ${savedCount} new ideas to your library`)
         progressModal.updateProgress(100)
         progressModal.completeStep(`Saved ${savedCount} new ideas to your library`)
