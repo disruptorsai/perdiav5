@@ -139,6 +139,8 @@ export function useAutoFixQuality() {
 
 /**
  * Revise article with editorial feedback
+ * Enhanced with validation to ensure AI actually addressed feedback items
+ * Per GetEducated issue report - addresses Issues 5 & 6 (edits not sticking, missing links)
  */
 export function useReviseArticle() {
   const queryClient = useQueryClient()
@@ -151,7 +153,15 @@ export function useReviseArticle() {
         feedbackItems
       )
 
-      // Update article
+      // Import validation dynamically to avoid circular dependencies
+      const { validateRevision, generateValidationSummary } = await import('../utils/revisionValidator')
+
+      // Validate that the AI actually made the requested changes
+      const validation = validateRevision(content, revisedContent, feedbackItems)
+
+      console.log('[useReviseArticle] Validation result:', validation)
+
+      // Update article with revised content
       const { data, error } = await supabase
         .from('articles')
         .update({ content: revisedContent })
@@ -161,18 +171,45 @@ export function useReviseArticle() {
 
       if (error) throw error
 
-      // Mark feedback items as addressed
-      await supabase
-        .from('article_revisions')
-        .update({ status: 'addressed', ai_revised: true })
-        .in('id', feedbackItems.map(f => f.id))
+      // Update feedback items based on validation results
+      for (const item of validation.items) {
+        const updateData = {
+          ai_revised: true,
+          ai_validation_status: item.status,
+          ai_validation_evidence: item.evidence.join('; '),
+          ai_validation_warnings: item.warnings.join('; ') || null,
+        }
 
-      return data
+        // Only mark as 'addressed' if validation passed
+        if (item.status === 'addressed') {
+          updateData.status = 'addressed'
+        } else if (item.status === 'failed') {
+          // Keep status as 'pending' but mark that AI attempted revision
+          updateData.status = 'pending_review'
+          updateData.ai_revision_failed = true
+        } else {
+          // Partial - mark for manual review
+          updateData.status = 'pending_review'
+        }
+
+        await supabase
+          .from('article_revisions')
+          .update(updateData)
+          .eq('id', item.id)
+      }
+
+      // Return extended result with validation info
+      return {
+        ...data,
+        validationResult: validation,
+        validationSummary: generateValidationSummary(validation),
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
       queryClient.invalidateQueries({ queryKey: ['article', data.id] })
       queryClient.invalidateQueries({ queryKey: ['revisions'] })
+      queryClient.invalidateQueries({ queryKey: ['article-revisions'] })
     },
   })
 }

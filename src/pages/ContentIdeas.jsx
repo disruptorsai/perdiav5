@@ -860,6 +860,41 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
         ))}
       </div>
 
+      {/* AI Source/Reasoning - per GetEducated request Issue #7 */}
+      {idea.source === 'ai_discovery' && idea.monetization_category && (
+        <div className="mb-4 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700 mb-1">
+            <Brain className="w-3.5 h-3.5" />
+            Why this idea was suggested:
+          </div>
+          <p className="text-xs text-blue-600 leading-relaxed">
+            {idea.monetization_category && (
+              <>Matches monetizable category: <strong>{idea.monetization_category}</strong>. </>
+            )}
+            {idea.monetization_score > 0 && (
+              <>Revenue score: {idea.monetization_score}/100. </>
+            )}
+            {idea.seed_topics?.length > 0 && (
+              <>Target keywords: {idea.seed_topics.slice(0, 3).join(', ')}.</>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Research mode source */}
+      {idea.source === 'research' && (
+        <div className="mb-4 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 mb-1">
+            <Search className="w-3.5 h-3.5" />
+            Research-based idea
+          </div>
+          <p className="text-xs text-indigo-600">
+            Generated from free-form research mode.
+            {idea.seed_topics?.length > 0 && <> Based on topics: {idea.seed_topics.join(', ')}.</>}
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-2 mt-4">
         {idea.status === 'pending' && (
@@ -902,27 +937,29 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
         )}
 
         {idea.status === 'completed' && idea.article_id && (
-          <div className="flex-1 flex flex-col gap-2">
-            {/* Success message */}
-            <div className="flex items-center justify-center gap-2 py-1">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span className="text-sm text-green-700 font-medium">Article generated successfully</span>
+          <div className="flex-1 flex flex-col gap-3">
+            {/* Success message with helpful context */}
+            <div className="flex items-center justify-center gap-2 py-1.5 bg-green-50 rounded-lg border border-green-200">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-sm text-green-700 font-medium">Article ready - click below to review or edit</span>
             </div>
-            {/* Action buttons - more prominent */}
-            <div className="flex gap-2">
+            {/* Action buttons - HIGHLY PROMINENT per GetEducated feedback */}
+            <div className="flex flex-col gap-2">
+              {/* Primary action: View Full Article - this is what Tony needs */}
               <button
                 onClick={() => onPreview(idea.article_id)}
-                className="flex-1 bg-indigo-600 text-white text-sm py-2.5 px-4 rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-2 transition-colors font-medium"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-base py-3.5 px-4 rounded-lg hover:from-indigo-700 hover:to-purple-700 flex items-center justify-center gap-2 transition-all font-semibold shadow-lg hover:shadow-xl animate-pulse-subtle"
               >
-                <Eye className="w-4 h-4" />
-                Preview Full Article
+                <Eye className="w-5 h-5" />
+                👁️ View Full Article Content
               </button>
+              {/* Secondary action: Edit in Review Page */}
               <Link
                 to={`/review/${idea.article_id}`}
-                className="flex-1 bg-blue-600 text-white text-sm py-2.5 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors font-medium"
+                className="w-full bg-blue-600 text-white text-sm py-2.5 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors font-medium"
               >
                 <Maximize2 className="w-4 h-4" />
-                Edit & Review
+                Open Full Editor & Add Comments
               </Link>
             </div>
           </div>

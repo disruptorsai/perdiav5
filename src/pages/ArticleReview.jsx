@@ -98,6 +98,7 @@ export default function ArticleReview() {
   const [revisionFeedbackItems, setRevisionFeedbackItems] = useState([])
   const [originalContentSnapshot, setOriginalContentSnapshot] = useState(null)
   const [isRefreshingRules, setIsRefreshingRules] = useState(false)
+  const [validationResult, setValidationResult] = useState(null) // Store AI revision validation result
 
   // Fetch article
   const { data: article, isLoading, isError, error: queryError } = useQuery({
@@ -263,12 +264,19 @@ export default function ArticleReview() {
 
       // When content arrives, update state - animation will transition to "writing" phase
       setRevisedContent(result.content)
+
+      // Store validation result for display
+      if (result.validationResult) {
+        setValidationResult(result.validationResult)
+        console.log('[ArticleReview] Revision validation:', result.validationSummary)
+      }
     } catch (error) {
       console.error('Revision error:', error)
       alert('Revision failed: ' + error.message)
       setIsRevising(false)
       setRevisedContent(null)
       setRevisionFeedbackItems([])
+      setValidationResult(null)
     }
   }
 
@@ -286,6 +294,7 @@ export default function ArticleReview() {
       setRevisedContent(null)
       setRevisionFeedbackItems([])
       setOriginalContentSnapshot(null)
+      setValidationResult(null)
     } catch (error) {
       console.error('Error accepting revision:', error)
       alert('Failed to save revision: ' + error.message)
@@ -322,6 +331,7 @@ export default function ArticleReview() {
     setRevisedContent(null)
     setRevisionFeedbackItems([])
     setOriginalContentSnapshot(null)
+    setValidationResult(null)
   }, [revisedContent, originalContentSnapshot, articleId, queryClient])
 
   const handleApprove = () => {

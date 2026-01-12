@@ -32,19 +32,19 @@ function SystemStatusBanner() {
   useEffect(() => {
     // Check if user has dismissed this version's banner
     const dismissedVersion = localStorage.getItem('dismissedStatusVersion')
-    const currentVersion = '2026.01.08.2'
+    const currentVersion = '2026.01.12.1'
     if (dismissedVersion === currentVersion) {
       setIsVisible(false)
     }
     setBuildInfo({
       version: currentVersion,
-      lastUpdate: 'Jan 8, 2026 11:30 AM PT',
+      lastUpdate: 'Jan 12, 2026 9:00 AM PT',
       status: 'operational',
       recentFixes: [
-        'NEW: Full Article Preview - click "Preview Full Article" to view complete content without leaving the page',
-        'NEW: Enhanced Error Display - errors now show copyable error codes for easy reporting',
-        'View Article button added to completed ideas',
-        'Articles now appear in Review Queue after generation',
+        'FIXED: AI revision validation - revisions now verify changes were actually applied',
+        'FIXED: Ranking link insertion - system validates links exist before marking "addressed"',
+        'NEW: Preview Full Article button more prominent on completed ideas',
+        'NEW: Revision results show exactly what changed with diff view',
       ]
     })
   }, [])
