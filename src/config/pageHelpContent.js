@@ -280,6 +280,33 @@ export const pageHelpContent = {
     ]
   },
 
+  '/dev-feedback': {
+    title: 'Dev Feedback Queue',
+    description: 'View and manage feedback submitted by users.',
+    sections: [
+      {
+        heading: 'Overview',
+        content: 'This page displays all feedback submitted through the Help & Feedback button. Use it to track bugs, questions, suggestions, and points of confusion reported by users.'
+      },
+      {
+        heading: 'Filtering Feedback',
+        content: 'Use the status tabs (Pending, Reviewed, Resolved, Won\'t Fix) to filter feedback items. You can also filter by category or search for specific text.'
+      },
+      {
+        heading: 'Managing Items',
+        content: 'Click on any feedback item to expand it and see full details. Use the action buttons to mark items as reviewed, resolved, or won\'t fix. Add developer notes to track your progress.'
+      },
+      {
+        heading: 'Copy for Claude',
+        content: 'Click the "Copy All for Claude" button to generate a comprehensive markdown document containing all feedback items. Paste this into Claude Code for AI-assisted analysis and bug fixes.'
+      },
+      {
+        heading: 'Developer Notes',
+        content: 'Add internal notes to feedback items to track your investigation or planned fixes. These notes are only visible on this page, not to the user who submitted the feedback.'
+      }
+    ]
+  },
+
   // Editor routes (dynamic)
   '/editor': {
     title: 'Article Editor',

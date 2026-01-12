@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
-import FloatingHelpButton from '../help/FloatingHelpButton'
-import HelpModal from '../help/HelpModal'
+import HelpFeedbackButton from '../feedback/HelpFeedbackButton'
+import HelpFeedbackModal from '../feedback/HelpFeedbackModal'
 import {
   LayoutDashboard,
   FileText,
@@ -23,6 +23,7 @@ import {
   Sparkles,
   ChevronRight,
   History,
+  MessageSquare,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { CURRENT_VERSION, CURRENT_RELEASE_DATE, getRecentFixes } from '../../data/changelog'
@@ -122,6 +123,7 @@ function MainLayout() {
     { name: 'AI Training', href: '/ai-training', icon: Brain },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: SettingsIcon },
+    { name: 'Dev Feedback', href: '/dev-feedback', icon: MessageSquare },
   ]
 
   const handleSignOut = async () => {
@@ -229,9 +231,9 @@ function MainLayout() {
         </main>
       </div>
 
-      {/* How-To Guide Components */}
-      <FloatingHelpButton />
-      <HelpModal />
+      {/* Help & Feedback Components */}
+      <HelpFeedbackButton />
+      <HelpFeedbackModal />
     </div>
   )
 }
