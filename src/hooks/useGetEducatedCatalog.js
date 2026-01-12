@@ -522,6 +522,7 @@ export function useGetEducatedFilterOptions() {
  * @param {string} options.sortBy - Sort field (default: updated_at)
  * @param {boolean} options.sortAsc - Sort ascending (default: false)
  * @param {boolean} options.revisedOnly - Filter to only show revised articles (version_count > 1)
+ * @param {boolean} options.revisedFirst - Sort revised articles to top (default: true for 'all' view)
  */
 export function useGetEducatedArticlesPaginated(options = {}) {
   const { user } = useAuth()
@@ -535,10 +536,11 @@ export function useGetEducatedArticlesPaginated(options = {}) {
     sortBy = 'updated_at',
     sortAsc = false,
     revisedOnly = false,
+    revisedFirst = true,
   } = options
 
   return useQuery({
-    queryKey: ['geteducated-articles-paginated', page, pageSize, search, contentType, degreeLevel, subjectArea, sortBy, sortAsc, revisedOnly],
+    queryKey: ['geteducated-articles-paginated', page, pageSize, search, contentType, degreeLevel, subjectArea, sortBy, sortAsc, revisedOnly, revisedFirst],
     queryFn: async () => {
       // Calculate offset
       const offset = (page - 1) * pageSize
@@ -547,8 +549,18 @@ export function useGetEducatedArticlesPaginated(options = {}) {
       let query = supabase
         .from('geteducated_articles')
         .select('*', { count: 'exact' })
-        .order(sortBy, { ascending: sortAsc })
-        .range(offset, offset + pageSize - 1)
+
+      // Sort revised articles first when not filtering to revised-only
+      // version_count DESC puts revised articles (version_count > 1) at top
+      if (revisedFirst && !revisedOnly) {
+        query = query
+          .order('version_count', { ascending: false, nullsFirst: false })
+          .order(sortBy, { ascending: sortAsc })
+      } else {
+        query = query.order(sortBy, { ascending: sortAsc })
+      }
+
+      query = query.range(offset, offset + pageSize - 1)
 
       // Apply filters
       if (contentType && contentType !== 'all') {
