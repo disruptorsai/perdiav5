@@ -12,14 +12,20 @@
 
 export const CHANGELOG = [
   {
-    version: '2026.01.12.1',
+    version: '2026.01.12.2',
     date: 'January 12, 2026',
-    type: 'patch',
-    title: 'AI Revision Validation & UI Improvements',
+    type: 'minor',
+    title: 'Tony\'s Issue List - Complete Resolution',
     changes: [
+      { type: 'fix', description: 'Idea Generator - resolved error when clicking Generate Ideas button, now works reliably' },
       { type: 'fix', description: 'AI revision validation - revisions now verify changes were actually applied before marking as complete' },
       { type: 'fix', description: 'Ranking link insertion - system validates links exist in catalog before marking issue as "addressed"' },
+      { type: 'fix', description: 'Full article access - clicking articles now opens complete content in editor view' },
+      { type: 'fix', description: 'Approve/reject workflow - thumbs up/down controls now visible with full article content' },
       { type: 'feature', description: 'Preview Full Article button more prominent on completed ideas for easier access' },
+      { type: 'feature', description: 'Idea source labels - ideas now show clear source attribution (Reddit, Trending News, Google Trends)' },
+      { type: 'feature', description: 'Version indicator - footer displays current version, banner shows latest updates' },
+      { type: 'feature', description: 'Release History page - view all updates at /releases with full changelog' },
       { type: 'feature', description: 'Revision results show exactly what changed with diff view highlighting' },
     ]
   },
