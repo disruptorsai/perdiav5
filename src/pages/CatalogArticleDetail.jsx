@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
@@ -14,6 +14,9 @@ import {
   useQueueSelectedVersionForPublishing,
   useRestoreVersion,
 } from '@/hooks/useGetEducatedCatalog'
+import { useArticleRevisions, useCreateRevision, useBulkMarkAddressed } from '@/hooks/useArticleRevisions'
+import { useReviseArticle } from '@/hooks/useGeneration'
+import GenerationService from '@/services/generationService'
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -22,6 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -85,17 +89,65 @@ import {
   Info,
   Radio,
   GitCompare,
+  MessageSquare,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react'
-import { CatalogRevisionAnimation, VersionHistoryPanel, VersionComparisonTool, CompareButton } from '@/components/article'
+import { CatalogRevisionAnimation, VersionHistoryPanel, VersionComparisonTool, CompareButton, RevisionProgressAnimation } from '@/components/article'
+import QualityChecklist from '@/components/editor/QualityChecklist'
+
+// Comment categories - must match DB CHECK constraint
+const COMMENT_CATEGORIES = [
+  { value: 'accuracy', label: 'Accuracy' },
+  { value: 'clarity', label: 'Clarity' },
+  { value: 'tone', label: 'Tone' },
+  { value: 'structure', label: 'Structure' },
+  { value: 'seo', label: 'SEO' },
+  { value: 'style', label: 'Style' },
+  { value: 'other', label: 'Other' }
+]
+
+// Severity options - must match DB CHECK constraint
+const SEVERITY_OPTIONS = [
+  { value: 'suggestion', label: 'Suggestion', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'minor', label: 'Minor', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'major', label: 'Major', color: 'bg-orange-100 text-orange-700 border-orange-300' },
+  { value: 'critical', label: 'Critical', color: 'bg-red-100 text-red-700 border-red-300' }
+]
+
+// Highlight colors for different severity levels
+const SEVERITY_HIGHLIGHT_COLORS = {
+  suggestion: 'rgba(191, 219, 254, 0.3)',
+  minor: 'rgba(254, 243, 199, 0.4)',
+  major: 'rgba(254, 215, 170, 0.4)',
+  critical: 'rgba(254, 202, 202, 0.5)'
+}
 
 export default function CatalogArticleDetail() {
   const { articleId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuth()
+  const articleContentRef = useRef(null)
 
   // State
   const [activeTab, setActiveTab] = useState('overview')
+
+  // Comment system state
+  const [selectedText, setSelectedText] = useState('')
+  const [savedSelectedText, setSavedSelectedText] = useState('')
+  const [showCommentDialog, setShowCommentDialog] = useState(false)
+  const [commentData, setCommentData] = useState({
+    comment: '',
+    category: 'style',
+    severity: 'minor'
+  })
+  const [floatingButtonPos, setFloatingButtonPos] = useState({ x: 0, y: 0, show: false })
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null)
+  const [isAIRevising, setIsAIRevising] = useState(false)
+  const [aiRevisedContent, setAIRevisedContent] = useState(null)
+  const [revisionFeedbackItems, setRevisionFeedbackItems] = useState([])
+  const [originalAIContentSnapshot, setOriginalAIContentSnapshot] = useState(null)
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
   const [revisionType, setRevisionType] = useState('refresh')
   const [customInstructions, setCustomInstructions] = useState('')
@@ -154,6 +206,141 @@ export default function CatalogArticleDetail() {
   const publishSelectedMutation = usePublishSelectedVersion()
   const queueForPublishMutation = useQueueSelectedVersionForPublishing()
   const restoreVersionMutation = useRestoreVersion()
+
+  // Comment system hooks - use article ID for catalog articles
+  const { data: revisions = [] } = useArticleRevisions(articleId)
+  const createRevision = useCreateRevision()
+  const bulkMarkAddressed = useBulkMarkAddressed()
+  const reviseArticle = useReviseArticle()
+
+  // Text selection handler for comments
+  useEffect(() => {
+    const handleTextSelection = () => {
+      const selection = window.getSelection()
+      const text = selection.toString().trim()
+
+      if (text.length > 0 && articleContentRef.current?.contains(selection.anchorNode)) {
+        setSelectedText(text)
+        setSavedSelectedText(text)
+
+        const range = selection.getRangeAt(0)
+        const rect = range.getBoundingClientRect()
+
+        setFloatingButtonPos({
+          x: rect.right + 10,
+          y: rect.top + window.scrollY,
+          show: true
+        })
+      } else {
+        setFloatingButtonPos({ x: 0, y: 0, show: false })
+      }
+    }
+
+    document.addEventListener('mouseup', handleTextSelection)
+    return () => document.removeEventListener('mouseup', handleTextSelection)
+  }, [])
+
+  // Computed comment values
+  const pendingRevisions = useMemo(() =>
+    revisions.filter(r => r.status === 'pending'), [revisions])
+  const addressedRevisions = useMemo(() =>
+    revisions.filter(r => r.status === 'addressed'), [revisions])
+
+  // Handle opening comment dialog
+  const handleComment = useCallback(() => {
+    setSavedSelectedText(selectedText)
+    setShowCommentDialog(true)
+    setFloatingButtonPos({ x: 0, y: 0, show: false })
+  }, [selectedText])
+
+  // Handle submitting a comment
+  const handleSubmitComment = useCallback(async () => {
+    if (!commentData.comment.trim()) return
+
+    try {
+      await createRevision.mutateAsync({
+        article_id: articleId,
+        selected_text: savedSelectedText,
+        comment: commentData.comment,
+        category: commentData.category,
+        severity: commentData.severity,
+      })
+
+      setShowCommentDialog(false)
+      setCommentData({ comment: '', category: 'style', severity: 'minor' })
+      setSavedSelectedText('')
+    } catch (error) {
+      console.error('Failed to create comment:', error)
+    }
+  }, [articleId, savedSelectedText, commentData, createRevision])
+
+  // Handle AI revision from comments
+  const handleAIReviseFromComments = useCallback(async () => {
+    if (pendingRevisions.length === 0) return
+
+    setIsAIRevising(true)
+    setOriginalAIContentSnapshot(displayContent.html)
+    setRevisionFeedbackItems(pendingRevisions.map(r => ({
+      selectedText: r.selected_text,
+      comment: r.comment,
+      category: r.category,
+      severity: r.severity,
+    })))
+
+    try {
+      const generationService = new GenerationService()
+      const revised = await generationService.reviseWithFeedback(
+        displayContent.html,
+        pendingRevisions.map(r => ({
+          selectedText: r.selected_text,
+          comment: r.comment,
+          category: r.category,
+          severity: r.severity,
+        }))
+      )
+
+      setAIRevisedContent(revised)
+    } catch (error) {
+      console.error('AI revision failed:', error)
+      setIsAIRevising(false)
+    }
+  }, [pendingRevisions, displayContent.html])
+
+  // Accept AI revision
+  const handleAcceptAIRevision = useCallback(async () => {
+    if (!aiRevisedContent) return
+
+    try {
+      // Create new version with revised content
+      await articleRevisionService.createVersion(articleId, {
+        content_html: aiRevisedContent,
+        changes_summary: `AI-revised based on ${revisionFeedbackItems.length} feedback items`,
+        created_by: user?.id,
+      })
+
+      // Mark all addressed
+      await bulkMarkAddressed.mutateAsync(articleId)
+
+      setAIRevisedContent(null)
+      setIsAIRevising(false)
+      setRevisionFeedbackItems([])
+      setOriginalAIContentSnapshot(null)
+
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['catalog-article', articleId] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-article-versions', articleId] })
+    } catch (error) {
+      console.error('Failed to accept AI revision:', error)
+    }
+  }, [articleId, aiRevisedContent, revisionFeedbackItems, user?.id, bulkMarkAddressed, queryClient])
+
+  // Cancel AI revision
+  const handleCancelAIRevision = useCallback(() => {
+    setAIRevisedContent(null)
+    setIsAIRevising(false)
+    setRevisionFeedbackItems([])
+    setOriginalAIContentSnapshot(null)
+  }, [])
 
   // Analyze article
   const { data: analysis } = useQuery({
@@ -429,6 +616,16 @@ export default function CatalogArticleDetail() {
           </div>
 
           <div className="flex gap-2">
+            {/* Prominent View Live Button */}
+            <Button
+              variant="default"
+              className="gap-2 bg-green-600 hover:bg-green-700"
+              onClick={() => window.open(article.url, '_blank')}
+            >
+              <ExternalLink className="w-4 h-4" />
+              View Live
+            </Button>
+
             <Button
               variant="outline"
               onClick={() => setIsRevisionDialogOpen(true)}
@@ -711,88 +908,207 @@ export default function CatalogArticleDetail() {
             )}
           </TabsContent>
 
-          {/* Content Tab - Shows Selected Revision */}
+          {/* Content Tab - Shows Selected Revision with Comments */}
           <TabsContent value="content">
-            <Card className="border-none shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    {displayContent.source === 'selected' ? (
-                      <>
-                        <Check className="w-5 h-5 text-green-600" />
-                        Selected Revision (v{displayContent.versionNumber})
-                      </>
-                    ) : displayContent.versionNumber ? (
-                      <>
-                        <Radio className="w-5 h-5 text-blue-600" />
-                        Live Version (v{displayContent.versionNumber})
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="w-5 h-5 text-gray-600" />
-                        Current Content
-                      </>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Main Content Area */}
+              <div className="lg:col-span-2">
+                <Card className="border-none shadow-sm">
+                  <CardHeader className="flex flex-row items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        {displayContent.source === 'selected' ? (
+                          <>
+                            <Check className="w-5 h-5 text-green-600" />
+                            Selected Revision (v{displayContent.versionNumber})
+                          </>
+                        ) : displayContent.versionNumber ? (
+                          <>
+                            <Radio className="w-5 h-5 text-blue-600" />
+                            Live Version (v{displayContent.versionNumber})
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-5 h-5 text-gray-600" />
+                            Current Content
+                          </>
+                        )}
+                      </CardTitle>
+                      {displayContent.source === 'selected' && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Previewing selected revision. This is not the live version.
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-2">
+                        Select text to add training feedback
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">
+                        {displayContent.wordCount?.toLocaleString() || 0} words
+                      </Badge>
+                      {displayContent.source === 'selected' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleClearSelection}
+                        >
+                          View Live Version
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+
+                  {/* Content Preview Banner */}
+                  {displayContent.source === 'selected' && (
+                    <div className="mx-6 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-green-800">
+                        <Info className="w-4 h-4" />
+                        <span className="text-sm">
+                          Showing Version {displayContent.versionNumber} - Not yet published
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-green-300 text-green-700 hover:bg-green-100"
+                          onClick={handleClearSelection}
+                        >
+                          View Live
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => setIsPublishDialogOpen(true)}
+                        >
+                          <Send className="w-4 h-4 mr-1" />
+                          Publish This
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <CardContent>
+                    <div
+                      ref={articleContentRef}
+                      className="prose prose-sm max-w-none max-h-[600px] overflow-y-auto p-4 bg-gray-50 rounded-lg selection:bg-blue-200"
+                      dangerouslySetInnerHTML={{ __html: displayContent.html || '<p>No content available</p>' }}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Comments Sidebar */}
+              <div className="lg:col-span-1">
+                <Card className="border-none shadow-sm sticky top-4">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5 text-purple-600" />
+                        Feedback
+                      </CardTitle>
+                      <Badge variant={pendingRevisions.length > 0 ? "default" : "secondary"}>
+                        {pendingRevisions.length} pending
+                      </Badge>
+                    </div>
+                    {pendingRevisions.length > 0 && (
+                      <Button
+                        size="sm"
+                        className="w-full mt-2 gap-2"
+                        onClick={handleAIReviseFromComments}
+                        disabled={isAIRevising}
+                      >
+                        {isAIRevising ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        AI Revise ({pendingRevisions.length})
+                      </Button>
                     )}
-                  </CardTitle>
-                  {displayContent.source === 'selected' && (
-                    <p className="text-sm text-gray-500 mt-1">
-                      Previewing selected revision. This is not the live version.
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">
-                    {displayContent.wordCount?.toLocaleString() || 0} words
-                  </Badge>
-                  {displayContent.source === 'selected' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearSelection}
-                    >
-                      View Live Version
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[500px]">
+                      {revisions.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                          <p className="text-sm">No feedback yet</p>
+                          <p className="text-xs mt-1">Select text in the content to add feedback</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Pending Comments */}
+                          {pendingRevisions.map((revision) => (
+                            <div
+                              key={revision.id}
+                              className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                                highlightedCommentId === revision.id
+                                  ? 'ring-2 ring-blue-500'
+                                  : ''
+                              }`}
+                              style={{
+                                backgroundColor: SEVERITY_HIGHLIGHT_COLORS[revision.severity] || '#f9fafb',
+                                borderColor: SEVERITY_OPTIONS.find(s => s.value === revision.severity)?.color.split(' ')[2] || '#e5e7eb'
+                              }}
+                              onClick={() => setHighlightedCommentId(
+                                highlightedCommentId === revision.id ? null : revision.id
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <Badge
+                                  variant="outline"
+                                  className={SEVERITY_OPTIONS.find(s => s.value === revision.severity)?.color}
+                                >
+                                  {revision.severity}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {revision.category}
+                                </Badge>
+                              </div>
+                              {revision.selected_text && (
+                                <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">
+                                  "{revision.selected_text}"
+                                </p>
+                              )}
+                              <p className="text-sm text-gray-800">{revision.comment}</p>
+                              <p className="text-xs text-gray-400 mt-2">
+                                v{revision.version_number} • {format(new Date(revision.created_at), 'MMM d, h:mm a')}
+                              </p>
+                            </div>
+                          ))}
 
-              {/* Content Preview Banner */}
-              {displayContent.source === 'selected' && (
-                <div className="mx-6 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-green-800">
-                    <Info className="w-4 h-4" />
-                    <span className="text-sm">
-                      Showing Version {displayContent.versionNumber} - Not yet published
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-green-300 text-green-700 hover:bg-green-100"
-                      onClick={handleClearSelection}
-                    >
-                      View Live
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => setIsPublishDialogOpen(true)}
-                    >
-                      <Send className="w-4 h-4 mr-1" />
-                      Publish This
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <CardContent>
-                <div
-                  className="prose prose-sm max-w-none max-h-[600px] overflow-y-auto p-4 bg-gray-50 rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: displayContent.html || '<p>No content available</p>' }}
-                />
-              </CardContent>
-            </Card>
+                          {/* Addressed Comments */}
+                          {addressedRevisions.length > 0 && (
+                            <>
+                              <div className="flex items-center gap-2 py-2">
+                                <div className="flex-1 h-px bg-gray-200" />
+                                <span className="text-xs text-gray-500">Addressed ({addressedRevisions.length})</span>
+                                <div className="flex-1 h-px bg-gray-200" />
+                              </div>
+                              {addressedRevisions.map((revision) => (
+                                <div
+                                  key={revision.id}
+                                  className="p-3 rounded-lg border border-gray-200 bg-gray-50 opacity-60"
+                                >
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                    <Badge variant="outline" className="text-xs">
+                                      {revision.category}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-gray-600 line-clamp-2">{revision.comment}</p>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Versions Tab - With Enhanced Version History Panel */}
@@ -824,7 +1140,23 @@ export default function CatalogArticleDetail() {
 
           {/* Analysis Tab */}
           <TabsContent value="analysis">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* SEO Quality Checklist - Full Width on Top */}
+              <div className="lg:col-span-3">
+                <QualityChecklist
+                  article={{
+                    ...article,
+                    content_html: displayContent.html,
+                    quality_score: article.quality_score || analysis?.qualityScore || 0,
+                    quality_issues: article.quality_issues || analysis?.qualityIssues || [],
+                  }}
+                  onAutoFix={() => {
+                    setRevisionType('quality')
+                    setIsRevisionDialogOpen(true)
+                  }}
+                />
+              </div>
+
               {/* Quality Issues */}
               <Card className="border-none shadow-sm">
                 <CardHeader>
@@ -908,10 +1240,213 @@ export default function CatalogArticleDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Link Verification */}
+              <Card className="border-none shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-blue-600" />
+                    Link Verification
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm text-gray-500">Internal Links</Label>
+                      <ScrollArea className="h-24 mt-1">
+                        {article.internal_links?.length > 0 ? (
+                          <ul className="space-y-1 text-sm">
+                            {article.internal_links.slice(0, 10).map((link, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline truncate"
+                                >
+                                  {link.replace('https://www.geteducated.com', '')}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-400">No internal links found</p>
+                        )}
+                      </ScrollArea>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-gray-500">External Links</Label>
+                      <ScrollArea className="h-24 mt-1">
+                        {article.external_links?.length > 0 ? (
+                          <ul className="space-y-1 text-sm">
+                            {article.external_links.slice(0, 10).map((link, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline truncate"
+                                >
+                                  {new URL(link).hostname}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-400">No external links found</p>
+                        )}
+                      </ScrollArea>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Floating Comment Button */}
+      <AnimatePresence>
+        {floatingButtonPos.show && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed z-50"
+            style={{
+              left: floatingButtonPos.x,
+              top: floatingButtonPos.y,
+            }}
+          >
+            <Button
+              size="sm"
+              className="gap-2 shadow-lg"
+              onClick={handleComment}
+            >
+              <MessageSquare className="w-4 h-4" />
+              Add Feedback
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Comment Dialog */}
+      <Dialog open={showCommentDialog} onOpenChange={setShowCommentDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-purple-600" />
+              Add Training Feedback
+            </DialogTitle>
+            <DialogDescription>
+              Add feedback for AI training to improve content quality.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Selected Text Preview */}
+            {savedSelectedText && (
+              <div className="p-3 bg-gray-50 rounded-lg border">
+                <Label className="text-xs text-gray-500">Selected Text</Label>
+                <p className="text-sm text-gray-700 italic mt-1 line-clamp-3">
+                  "{savedSelectedText}"
+                </p>
+              </div>
+            )}
+
+            {/* Comment */}
+            <div className="space-y-2">
+              <Label>Feedback</Label>
+              <Textarea
+                placeholder="What should be improved or changed..."
+                value={commentData.comment}
+                onChange={(e) => setCommentData({ ...commentData, comment: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            {/* Category & Severity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={commentData.category}
+                  onValueChange={(value) => setCommentData({ ...commentData, category: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMENT_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Severity</Label>
+                <Select
+                  value={commentData.severity}
+                  onValueChange={(value) => setCommentData({ ...commentData, severity: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEVERITY_OPTIONS.map((sev) => (
+                      <SelectItem key={sev.value} value={sev.value}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${sev.color.split(' ')[0]}`}
+                          />
+                          {sev.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCommentDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitComment}
+              disabled={!commentData.comment.trim() || createRevision.isPending}
+              className="gap-2"
+            >
+              {createRevision.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MessageSquare className="w-4 h-4" />
+              )}
+              Add Feedback
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Revision Progress Animation */}
+      <AnimatePresence>
+        {isAIRevising && (
+          <RevisionProgressAnimation
+            isOpen={isAIRevising}
+            originalContent={originalAIContentSnapshot}
+            revisedContent={aiRevisedContent}
+            feedbackItems={revisionFeedbackItems}
+            onAccept={handleAcceptAIRevision}
+            onCancel={handleCancelAIRevision}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Revision Dialog */}
       <Dialog open={isRevisionDialogOpen} onOpenChange={setIsRevisionDialogOpen}>
