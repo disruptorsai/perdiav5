@@ -50,3 +50,4 @@ build
 .claude/mcp.json
 .claude/settings.local.json
 nul
+tmpclaude-*
