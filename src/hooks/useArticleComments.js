@@ -201,6 +201,36 @@ export function useMarkCommentsAddressed() {
 }
 
 /**
+ * Mark a comment as pending review (AI revision attempted but validation failed)
+ */
+export function useMarkCommentPendingReview() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ commentId, articleId, revisionId, validationDetails }) => {
+      const { data, error } = await supabase
+        .from('article_comments')
+        .update({
+          status: 'pending_review',
+          addressed_by_revision: revisionId,
+          ai_revision_failed: true,
+          validation_details: validationDetails,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', commentId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return { data, articleId }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['article-comments', result.articleId] })
+    },
+  })
+}
+
+/**
  * Dismiss a comment without AI revision
  */
 export function useDismissComment() {
@@ -234,6 +264,7 @@ export default {
   useUpdateComment,
   useDeleteComment,
   useMarkCommentsAddressed,
+  useMarkCommentPendingReview,
   useDismissComment,
   COMMENT_CATEGORIES,
   COMMENT_SEVERITIES,

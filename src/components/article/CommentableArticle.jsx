@@ -51,6 +51,7 @@ import {
   useDeleteComment,
   useDismissComment,
   useMarkCommentsAddressed,
+  useMarkCommentPendingReview,
   COMMENT_CATEGORIES,
   COMMENT_SEVERITIES,
   getSeverityConfig,
@@ -58,6 +59,7 @@ import {
 } from '@/hooks/useArticleComments'
 import { useCreateAIRevision } from '@/hooks/useAIRevisions'
 import ClaudeClient from '@/services/ai/claudeClient'
+import { validateRevision, generateValidationSummary } from '@/utils/revisionValidator'
 import { cn } from '@/lib/utils'
 
 /**
@@ -404,6 +406,7 @@ export function CommentableArticle({
   const deleteComment = useDeleteComment()
   const dismissComment = useDismissComment()
   const markAddressed = useMarkCommentsAddressed()
+  const markPendingReview = useMarkCommentPendingReview()
   const createAIRevision = useCreateAIRevision()
 
   // TipTap editor in read-only mode
@@ -522,7 +525,7 @@ export function CommentableArticle({
     // Could implement scroll-to-text functionality here if needed
   }
 
-  // Handle AI revision
+  // Handle AI revision with validation
   const handleAIRevise = async () => {
     if (pendingComments.length === 0) return
 
@@ -581,6 +584,19 @@ Revised content:`
         .replace(/^Here is the revised.*?:\s*/i, '')
         .trim()
 
+      // VALIDATE the revision before marking comments as addressed
+      setRevisionProgress('Validating revision...')
+      const feedbackForValidation = pendingComments.map((c) => ({
+        id: c.id,
+        comment: c.feedback,
+        selected_text: c.selected_text,
+        category: c.category,
+        severity: c.severity,
+      }))
+
+      const validationResult = validateRevision(content, cleanedContent, feedbackForValidation)
+      console.log('Revision validation result:', validationResult)
+
       setRevisionProgress('Saving revision...')
       const revisionData = await createAIRevision.mutateAsync({
         articleId,
@@ -605,18 +621,64 @@ Revised content:`
           severities_addressed: [...new Set(pendingComments.map(c => c.severity))],
         },
         promptUsed: prompt,
+        validationResult, // Store validation result with the revision
       })
 
-      await markAddressed.mutateAsync({
-        commentIds: pendingComments.map((c) => c.id),
-        revisionId: revisionData.id,
-        articleId,
-      })
+      // Process each comment based on validation status
+      const addressedIds = []
+      const failedItems = []
 
+      for (const item of validationResult.items) {
+        if (item.status === 'addressed') {
+          addressedIds.push(item.id)
+        } else {
+          // Failed or partial - mark as pending_review
+          failedItems.push(item)
+        }
+      }
+
+      // Mark successfully addressed comments
+      if (addressedIds.length > 0) {
+        await markAddressed.mutateAsync({
+          commentIds: addressedIds,
+          revisionId: revisionData.id,
+          articleId,
+        })
+      }
+
+      // Mark failed/partial comments as pending_review
+      for (const item of failedItems) {
+        await markPendingReview.mutateAsync({
+          commentId: item.id,
+          articleId,
+          revisionId: revisionData.id,
+          validationDetails: {
+            status: item.status,
+            evidence: item.evidence,
+            warnings: item.warnings,
+          },
+        })
+      }
+
+      // Update content regardless (AI did make changes)
       onContentChange?.(cleanedContent)
       setRevisionProgress('')
 
-      toast.success(`Successfully addressed ${pendingComments.length} comment${pendingComments.length !== 1 ? 's' : ''}.`, { title: 'Revision complete' })
+      // Show appropriate feedback based on validation results
+      if (validationResult.failedCount === 0 && validationResult.partialCount === 0) {
+        toast.success(`Successfully addressed all ${pendingComments.length} comment${pendingComments.length !== 1 ? 's' : ''}.`, { title: 'Revision complete' })
+      } else if (validationResult.failedCount > 0) {
+        const validationSummary = generateValidationSummary(validationResult)
+        toast.warning(
+          `${validationResult.addressedCount} addressed, ${validationResult.failedCount} need manual review.\n\n${validationSummary}`,
+          { title: 'Revision needs review', duration: 8000 }
+        )
+      } else {
+        toast.info(
+          `${validationResult.addressedCount} addressed, ${validationResult.partialCount} partially addressed. Please verify.`,
+          { title: 'Revision complete', duration: 5000 }
+        )
+      }
 
     } catch (error) {
       console.error('AI revision failed:', error)
