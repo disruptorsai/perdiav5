@@ -61,12 +61,29 @@ export function useCreateRevision() {
 
   return useMutation({
     mutationFn: async (revisionData) => {
+      // Get the next version number for this article
+      const { data: existingRevisions } = await supabase
+        .from('article_revisions')
+        .select('version_number')
+        .eq('article_id', revisionData.article_id)
+        .order('version_number', { ascending: false })
+        .limit(1)
+
+      const nextVersion = existingRevisions?.[0]?.version_number
+        ? existingRevisions[0].version_number + 1
+        : 1
+
       const { data, error } = await supabase
         .from('article_revisions')
         .insert({
-          ...revisionData,
-          reviewer_email: user?.email,
+          article_id: revisionData.article_id,
+          selected_text: revisionData.selected_text,
+          comment: revisionData.comment,
+          category: revisionData.category,
+          severity: revisionData.severity,
+          version_number: nextVersion,
           status: 'pending',
+          created_by: user?.id,
         })
         .select()
         .single()
