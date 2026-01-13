@@ -158,6 +158,36 @@ export function useUpdateArticleStatus() {
 }
 
 /**
+ * Approve article for publishing (marks as human reviewed with initials)
+ */
+export function useApproveArticle() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ articleId, initials }) => {
+      const { data, error } = await supabase
+        .from('articles')
+        .update({
+          human_reviewed: true,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user?.id,
+          approved_by_initials: initials,
+        })
+        .eq('id', articleId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+    },
+  })
+}
+
+/**
  * Publish article to WordPress
  */
 export function usePublishArticle() {

@@ -32,11 +32,15 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Button component with proper type="button" default to prevent
+ * accidental form submissions that interfere with navigation
+ */
 const Button = React.forwardRef(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? React.Fragment : "button"
+  ({ className, variant, size, type = "button", ...props }, ref) => {
     return (
-      <Comp
+      <button
+        type={type}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}

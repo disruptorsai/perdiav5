@@ -504,11 +504,14 @@ export default function ContributorDetail() {
                         placeholder="https://www.geteducated.com/article-contributors/..."
                       />
                       {formData.author_page_url && (
-                        <Button variant="outline" size="icon" asChild>
-                          <a href={formData.author_page_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </Button>
+                        <a
+                          href={formData.author_page_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-gray-300 bg-white shadow-sm hover:bg-gray-50"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
                       )}
                     </div>
                   </div>

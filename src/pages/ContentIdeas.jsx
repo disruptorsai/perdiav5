@@ -8,6 +8,7 @@ import {
   useRejectIdeaWithReason,
   useApproveIdeaWithFeedback,
 } from '../hooks/useContentIdeas'
+import { cleanTitle } from '../utils/titleUtils'
 import { useDeleteContentIdeaWithReason } from '../hooks/useDeletionLog'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import {
@@ -757,7 +758,53 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
     return configs[confidence] || null
   }
 
+  // SEO score badge from keyword research data
+  const getSEOBadge = () => {
+    const krd = idea.keyword_research_data
+    if (!krd) return null
+
+    // Calculate an SEO opportunity score from available data
+    const opportunityScore = krd.opportunity_score || 0
+    const searchVolume = krd.search_volume || 0
+    const difficulty = krd.difficulty || 50
+
+    // If we have an explicit opportunity score, use it
+    if (opportunityScore > 0) {
+      if (opportunityScore >= 70) {
+        return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: `SEO ${opportunityScore}`, score: opportunityScore }
+      } else if (opportunityScore >= 40) {
+        return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', label: `SEO ${opportunityScore}`, score: opportunityScore }
+      } else {
+        return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', label: `SEO ${opportunityScore}`, score: opportunityScore }
+      }
+    }
+
+    // Otherwise calculate from search volume and difficulty
+    if (searchVolume > 0) {
+      // Higher volume and lower difficulty = better opportunity
+      const calculatedScore = Math.round((searchVolume / 1000) * (100 - difficulty) / 100)
+      const level = calculatedScore >= 50 ? 'high' : calculatedScore >= 20 ? 'med' : 'low'
+
+      const configs = {
+        high: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+        med: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+        low: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+      }
+
+      return {
+        ...configs[level],
+        label: `${Math.round(searchVolume / 1000)}K vol`,
+        score: calculatedScore,
+        volume: searchVolume,
+        difficulty,
+      }
+    }
+
+    return null
+  }
+
   const monetizationBadge = getMonetizationBadge()
+  const seoBadge = getSEOBadge()
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow">
@@ -775,6 +822,16 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
             >
               <DollarSign className="w-3 h-3" />
               {monetizationBadge.label}
+            </span>
+          )}
+          {/* SEO/Keyword Research Score Badge */}
+          {seoBadge && (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${seoBadge.bg} ${seoBadge.text} border ${seoBadge.border}`}
+              title={`Keyword research: Vol ${idea.keyword_research_data?.search_volume || 0}, Diff ${idea.keyword_research_data?.difficulty || 'N/A'}`}
+            >
+              <TrendingUp className="w-3 h-3" />
+              {seoBadge.label}
             </span>
           )}
           {/* Feedback Score Badge */}
@@ -816,7 +873,7 @@ function IdeaCard({ idea, onApprove, onReject, onDelete, onGenerate, onQuickFeed
 
       {/* Content - with expand/collapse */}
       <div className="relative">
-        <h3 className={`font-semibold text-gray-900 mb-2 ${!isExpanded ? 'line-clamp-2' : ''}`}>{idea.title}</h3>
+        <h3 className={`font-semibold text-gray-900 mb-2 ${!isExpanded ? 'line-clamp-2' : ''}`}>{cleanTitle(idea.title)}</h3>
         {idea.description && (
           <p className={`text-sm text-gray-600 mb-2 ${!isExpanded ? 'line-clamp-3' : ''}`}>{idea.description}</p>
         )}

@@ -1,7 +1,7 @@
 # perdiav5 - Claude Code Context
 
-> **Initialized:** 2025-12-15
-> **Path:** /c/Users/Disruptors/Documents/Disruptors Projects/perdiav5
+> **Initialized:** 2025-12-15 | **Updated:** 2026-01-12
+> **Path:** C:\Users\Disruptors\Documents\Tech Integration Labs BB1\Projects\Perdiav5\perdiav5
 
 ## Project Description
 
@@ -26,15 +26,31 @@ All work is automatically logged to `~/.claude/timesheet/logs/`
 | `/timesheet` | Detailed breakdown |
 | `/notion-sync` | Push to Notion |
 | `/init` | Re-run this setup |
+| `/get-env` | Show project's service configs |
 
 ### MCP Servers
 - **Notion** - Page/database management
 - **GoHighLevel** - CRM integration
+- **Supabase** - Database (project: perdiav5)
+- **Netlify** - Deployments (site: perdiav5)
 
 ### Subagents
 - `timesheet-reporter` - "Generate my timesheet"
 - `notion-timesheet` - "Sync to Notion"
 - `project-init` - "Initialize this project"
+
+## Service Configuration
+
+| Service | Project/Site | ID |
+|---------|--------------|-----|
+| Supabase | perdiav5 | nvffvcjtrgxnunncdafz |
+| Netlify | perdiav5 | e6c79ffe-d40e-4123-b404-ade94e4ec295 |
+| GitHub | disruptorsai/perdiav5 | - |
+
+**Live URL:** https://perdiav5.netlify.app
+**DB Host:** db.nvffvcjtrgxnunncdafz.supabase.co
+
+Configuration sourced from: `/Operations/dev-config-system/projects/_registry.json`
 
 ## Project Notes
 

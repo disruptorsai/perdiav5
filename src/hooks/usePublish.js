@@ -3,8 +3,10 @@
  * React Query hooks for article publishing operations
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { publishArticle, bulkPublish, checkPublishEligibility, retryPublish } from '../services/publishService'
+import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
 
 /**
  * Hook to publish a single article
@@ -116,10 +118,63 @@ export function usePublishWithValidation() {
   }
 }
 
+/**
+ * Hook to get articles approved and ready for publishing
+ * @returns {Object} Query result with approved articles
+ */
+export function useApprovedForPublishing() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['articles', 'approved-for-publishing'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*, article_contributors(*)')
+        .eq('status', 'ready_to_publish')
+        .eq('human_reviewed', true)
+        .not('approved_by_initials', 'is', null)
+        .order('reviewed_at', { ascending: true }) // Oldest approved first
+
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 30000, // 30 seconds
+  })
+}
+
+/**
+ * Hook to get count of articles in publishing queue
+ * @returns {Object} Query result with queue count
+ */
+export function usePublishQueueCount() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['articles', 'publish-queue-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'ready_to_publish')
+        .eq('human_reviewed', true)
+        .not('approved_by_initials', 'is', null)
+
+      if (error) throw error
+      return count || 0
+    },
+    enabled: !!user,
+    staleTime: 30000, // 30 seconds
+  })
+}
+
 export default {
   usePublishArticle,
   useBulkPublish,
   useRetryPublish,
   usePublishEligibility,
   usePublishWithValidation,
+  useApprovedForPublishing,
+  usePublishQueueCount,
 }

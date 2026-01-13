@@ -99,7 +99,7 @@ function validateSingleFeedback(originalContent, revisedContent, item) {
     return result
   }
 
-  // Generic change detection
+  // Generic change detection - improved to handle context changes
   const contentChanged = originalContent !== revisedContent
   const selectedTextMoved = selectedText && !revisedContent.includes(selectedText) && originalContent.includes(selectedText)
 
@@ -108,9 +108,29 @@ function validateSingleFeedback(originalContent, revisedContent, item) {
       result.status = 'addressed'
       result.evidence.push('The highlighted text was modified or removed')
     } else {
-      result.status = 'partial'
-      result.evidence.push('Content was changed but the specific selection may not have been addressed')
-      result.warnings.push('Please verify this change manually')
+      // Check if the content around the selected text was modified
+      // Many valid revisions keep the text but improve context (e.g., "clarify this", "improve flow")
+      const contextChanged = checkContextChanged(originalContent, revisedContent, selectedText)
+
+      if (contextChanged.changed) {
+        result.status = 'addressed'
+        result.evidence.push('The context around the highlighted text was modified')
+        if (contextChanged.details) {
+          result.evidence.push(contextChanged.details)
+        }
+      } else {
+        // Check if overall content improved significantly
+        const significantChange = checkSignificantChange(originalContent, revisedContent)
+
+        if (significantChange) {
+          result.status = 'addressed'
+          result.evidence.push('Content was significantly revised')
+        } else {
+          result.status = 'partial'
+          result.evidence.push('Content was changed but the specific selection may not have been addressed')
+          result.warnings.push('Please verify this change manually')
+        }
+      }
     }
   } else {
     result.status = 'failed'
@@ -118,6 +138,85 @@ function validateSingleFeedback(originalContent, revisedContent, item) {
   }
 
   return result
+}
+
+/**
+ * Check if the context around selected text was changed
+ * Looks at the paragraph/section containing the selected text
+ */
+function checkContextChanged(originalContent, revisedContent, selectedText) {
+  if (!selectedText || selectedText.length < 5) {
+    return { changed: false }
+  }
+
+  // Find the paragraph containing the selected text in original
+  const paragraphs = originalContent.split(/<\/p>|<\/h[2-6]>|<\/li>/i)
+  let containingParagraph = null
+  let paragraphIndex = -1
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    if (paragraphs[i].includes(selectedText.substring(0, Math.min(50, selectedText.length)))) {
+      containingParagraph = paragraphs[i]
+      paragraphIndex = i
+      break
+    }
+  }
+
+  if (!containingParagraph) {
+    return { changed: false }
+  }
+
+  // Find the corresponding paragraph in revised content
+  const revisedParagraphs = revisedContent.split(/<\/p>|<\/h[2-6]>|<\/li>/i)
+
+  // Check if the paragraph was modified
+  if (paragraphIndex < revisedParagraphs.length) {
+    const originalPara = containingParagraph.replace(/<[^>]+>/g, '').trim()
+    const revisedPara = revisedParagraphs[paragraphIndex].replace(/<[^>]+>/g, '').trim()
+
+    // Calculate simple difference ratio
+    const lengthDiff = Math.abs(originalPara.length - revisedPara.length)
+    const avgLength = (originalPara.length + revisedPara.length) / 2
+    const diffRatio = avgLength > 0 ? lengthDiff / avgLength : 0
+
+    // If paragraph length changed by more than 10%, consider it modified
+    if (diffRatio > 0.1 || originalPara !== revisedPara) {
+      return {
+        changed: true,
+        details: `Paragraph containing selection was modified (${Math.round(diffRatio * 100)}% length change)`
+      }
+    }
+  }
+
+  return { changed: false }
+}
+
+/**
+ * Check if the content was significantly changed overall
+ * Useful for generic feedback like "improve this article"
+ */
+function checkSignificantChange(originalContent, revisedContent) {
+  // Strip HTML for comparison
+  const originalText = originalContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const revisedText = revisedContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+
+  // Calculate word-level differences
+  const originalWords = originalText.split(' ').length
+  const revisedWords = revisedText.split(' ').length
+  const wordDiff = Math.abs(originalWords - revisedWords)
+
+  // If more than 5% of words changed, consider it significant
+  if (wordDiff / Math.max(originalWords, revisedWords) > 0.05) {
+    return true
+  }
+
+  // Check character-level difference
+  const charDiff = Math.abs(originalText.length - revisedText.length)
+  if (charDiff / Math.max(originalText.length, 1) > 0.05) {
+    return true
+  }
+
+  return false
 }
 
 /**

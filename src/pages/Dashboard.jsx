@@ -1,14 +1,18 @@
-import { useState, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useArticles, useUpdateArticleStatus } from '../hooks/useArticles'
+import { useArticles, useUpdateArticleStatus, useApproveArticle } from '../hooks/useArticles'
+import { useApprovedForPublishing, useBulkPublish } from '../hooks/usePublish'
+import { useAuth } from '../contexts/AuthContext'
 import { useContentIdeas, useCreateContentIdea } from '../hooks/useContentIdeas'
+import { cleanTitle } from '../utils/titleUtils'
 import { useGenerateArticle } from '../hooks/useGeneration'
 import { useSystemSettings } from '../hooks/useSystemSettings'
 import { useBulkAddToQueue } from '../hooks/useAutomation'
 import { useGenerationProgress } from '../contexts/GenerationProgressContext'
 import { differenceInDays, differenceInHours, isPast, subDays } from 'date-fns'
-import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2, TrendingUp, ShieldCheck, AlertTriangle, Timer, DollarSign, BarChart3 } from 'lucide-react'
+import { Plus, Loader2, FileText, Clock, CheckCircle, AlertCircle, GripVertical, Sparkles, Search, Zap, Settings2, TrendingUp, ShieldCheck, AlertTriangle, Timer, DollarSign, BarChart3, UserCheck, Send } from 'lucide-react'
 import SourceSelector from '../components/ideas/SourceSelector'
 import IdeaDiscoveryService from '../services/ideaDiscoveryService'
 import { useToast } from '../components/ui/toast'
@@ -33,12 +37,26 @@ const STATUSES = [
   { value: 'ready_to_publish', label: 'Ready', icon: CheckCircle, color: 'bg-green-100 text-green-700' },
 ]
 
+// Helper function to get initials from email
+function getInitialsFromEmail(email) {
+  if (!email) return '??'
+  const parts = email.split('@')[0].split(/[._-]/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return email.substring(0, 2).toUpperCase()
+}
+
 function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
   const { data: articles = [], isLoading } = useArticles()
   const { data: ideas = [] } = useContentIdeas({ status: 'approved' })
   const { data: allIdeas = [] } = useContentIdeas({})
   const updateStatus = useUpdateArticleStatus()
+  const approveArticle = useApproveArticle()
   const generateArticle = useGenerateArticle()
   const createContentIdea = useCreateContentIdea()
   const { data: settings } = useSystemSettings()
@@ -46,12 +64,27 @@ function Dashboard() {
   const bulkAddToQueue = useBulkAddToQueue()
   const { startQueueProcessing } = useGenerationProgress()
 
+  // Publishing queue hooks
+  const { data: publishQueue = [], isLoading: isLoadingQueue } = useApprovedForPublishing()
+  const bulkPublish = useBulkPublish()
+  const [isPublishing, setIsPublishing] = useState(false)
+
+  // Get current user's initials for approval
+  const userInitials = useMemo(() => getInitialsFromEmail(user?.email), [user?.email])
+
   const [generatingIdea, setGeneratingIdea] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false)
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [automationMode, setAutomationMode] = useState('manual') // 'manual' | 'semiauto' | 'full_auto'
   const [isStartingBatch, setIsStartingBatch] = useState(false)
+
+  // Force refetch when navigating to dashboard to ensure fresh data
+  useEffect(() => {
+    // Invalidate and refetch articles and content ideas when dashboard is visited
+    queryClient.invalidateQueries({ queryKey: ['articles'] })
+    queryClient.invalidateQueries({ queryKey: ['content_ideas'] })
+  }, [location.pathname, queryClient])
 
   // Progress modal for article generation
   const progressModal = useProgressModal()
@@ -232,6 +265,66 @@ function Dashboard() {
       })
     } catch (error) {
       console.error('Status update error:', error)
+    }
+  }
+
+  // Handle article approval with user initials
+  const handleApproveArticle = async (article) => {
+    try {
+      await approveArticle.mutateAsync({
+        articleId: article.id,
+        initials: userInitials,
+      })
+      addToast({
+        title: 'Article Approved',
+        description: `"${article.title}" has been approved by ${userInitials}`,
+        variant: 'success',
+      })
+    } catch (error) {
+      console.error('Approval error:', error)
+      addToast({
+        title: 'Approval Failed',
+        description: error.message,
+        variant: 'error',
+      })
+    }
+  }
+
+  // Handle publishing approved articles from the queue
+  const handlePublishQueue = async () => {
+    if (publishQueue.length === 0) {
+      addToast({
+        title: 'No Articles to Publish',
+        description: 'Approve some articles first to add them to the publishing queue.',
+        variant: 'info',
+      })
+      return
+    }
+
+    setIsPublishing(true)
+    try {
+      const result = await bulkPublish.mutateAsync({
+        articles: publishQueue,
+        options: {
+          status: 'publish',
+          environment: 'staging', // Default to staging for safety
+        },
+      })
+
+      addToast({
+        title: 'Publishing Complete',
+        description: `Successfully published ${result.successful}/${result.total} articles.`,
+        variant: result.failed > 0 ? 'warning' : 'success',
+      })
+    } catch (error) {
+      console.error('Publishing error:', error)
+      addToast({
+        title: 'Publishing Failed',
+        description: error.message,
+        variant: 'error',
+      })
+    } finally {
+      setIsPublishing(false)
     }
   }
 
@@ -656,6 +749,32 @@ function Dashboard() {
             <p className="text-xs text-gray-500">ready to auto-publish</p>
           </motion.div>
 
+          {/* Publish Queue */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className={`rounded-lg p-4 border cursor-pointer ${
+              publishQueue.length > 0
+                ? 'bg-green-50 border-green-200'
+                : 'bg-white border-blue-100'
+            }`}
+            onClick={handlePublishQueue}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Send className={`w-4 h-4 ${publishQueue.length > 0 ? 'text-green-600' : 'text-gray-400'}`} />
+              <span className="text-xs text-gray-600">Publish Queue</span>
+            </div>
+            <p className={`text-2xl font-bold ${publishQueue.length > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+              {isPublishing ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                publishQueue.length
+              )}
+            </p>
+            <p className="text-xs text-gray-500">
+              {isPublishing ? 'publishing...' : 'approved to publish'}
+            </p>
+          </motion.div>
+
           {/* Avg Review Time */}
           <motion.div
             whileHover={{ scale: 1.02 }}
@@ -752,7 +871,7 @@ function Dashboard() {
                   whileHover={{ scale: 1.02 }}
                   className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
                 >
-                  <h4 className="font-medium text-gray-900 text-sm mb-2">{idea.title}</h4>
+                  <h4 className="font-medium text-gray-900 text-sm mb-2">{cleanTitle(idea.title)}</h4>
                   {idea.description && (
                     <p className="text-xs text-gray-600 mb-3 line-clamp-2">{idea.description}</p>
                   )}
@@ -837,6 +956,7 @@ function Dashboard() {
                           article={article}
                           onClick={() => handleArticleClick(article)}
                           onStatusChange={handleStatusChange}
+                          onApprove={handleApproveArticle}
                           index={index}
                         />
                       ))}
@@ -904,7 +1024,7 @@ function DroppableColumn({ id, children }) {
 }
 
 // Sortable Article Card Component
-function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
+function SortableArticleCard({ article, onClick, onStatusChange, onApprove, index = 0 }) {
   const {
     attributes,
     listeners,
@@ -919,6 +1039,9 @@ function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
     transition,
   }
 
+  const isReadyToPublish = article.status === 'ready_to_publish'
+  const isApproved = article.human_reviewed && article.approved_by_initials
+
   return (
     <motion.div
       ref={setNodeRef}
@@ -928,7 +1051,9 @@ function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2, delay: index * 0.02 }}
       whileHover={{ scale: isDragging ? 1 : 1.02 }}
-      className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group"
+      className={`bg-white p-4 rounded-lg border hover:shadow-md transition-shadow cursor-pointer group ${
+        isApproved ? 'border-green-300 bg-green-50' : 'border-gray-200'
+      }`}
     >
       <div className="flex items-start space-x-2">
         {/* Drag Handle */}
@@ -955,19 +1080,52 @@ function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
 
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-500">{article.word_count || 0} words</span>
-            {article.quality_score > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className={`px-2 py-1 rounded ${
-                  article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
-                  article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
-                }`}
-              >
-                {article.quality_score}
-              </motion.span>
-            )}
+            <div className="flex items-center gap-2">
+              {article.quality_score > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className={`px-2 py-1 rounded ${
+                    article.quality_score >= 85 ? 'bg-green-100 text-green-700' :
+                    article.quality_score >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {article.quality_score}
+                </motion.span>
+              )}
+
+              {/* Approval Badge or Button */}
+              {isReadyToPublish && (
+                isApproved ? (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="px-2 py-1 rounded bg-green-600 text-white font-medium flex items-center gap-1"
+                    title={`Approved by ${article.approved_by_initials}`}
+                  >
+                    <UserCheck className="w-3 h-3" />
+                    {article.approved_by_initials}
+                  </motion.span>
+                ) : (
+                  <motion.button
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onApprove?.(article)
+                    }}
+                    className="px-2 py-1 rounded bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
+                    title="Approve for publishing"
+                  >
+                    <UserCheck className="w-3 h-3" />
+                    Approve
+                  </motion.button>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -975,7 +1133,7 @@ function SortableArticleCard({ article, onClick, onStatusChange, index = 0 }) {
   )
 }
 
-// Simple Article Card (for drag overlay)
+// Simple Article Card (for drag overlay - kept separate for drag preview)
 function ArticleCard({ article, isDragging = false }) {
   return (
     <motion.div

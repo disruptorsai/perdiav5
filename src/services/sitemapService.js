@@ -23,6 +23,7 @@ const SITEMAP_INDEX_URLS = [
 ]
 
 // URL patterns to include (priority order)
+// CRITICAL: Must include ALL content types per Dec 2025 meeting
 const INCLUDE_PATTERNS = [
   '/online-degrees/',           // School directory - HIGHEST PRIORITY
   '/online-college-ratings-and-rankings/', // Ranking reports
@@ -30,6 +31,17 @@ const INCLUDE_PATTERNS = [
   '/blog/',                     // Blog posts
   '/online-schools/',           // School pages
   '/careers/',                  // Career guides
+  '/article-contributors/',     // Contributor/author pages (BERT pages)
+  '/degree-',                   // Degree type pages (e.g., /degree-programs/)
+  '/category/',                 // Category archive pages
+  '/accreditation/',            // Accreditation info pages
+  '/subject/',                  // Subject area pages
+  '/best-',                     // Best-of listicle pages
+  '/how-to-',                   // How-to guides
+  '/what-is-',                  // Explainer pages
+  '/guide/',                    // Guide pages
+  '/financial-aid/',            // Financial aid resources
+  '/scholarships/',             // Scholarship pages
 ]
 
 // URL patterns to exclude
@@ -40,7 +52,9 @@ const EXCLUDE_PATTERNS = [
   '/checkout/',
   '/my-account/',
   '/tag/',
-  '/author/',
+  '/page/',                     // Pagination pages like /page/2/
+  '/feed/',                     // RSS feeds
+  '/attachment/',               // Media attachments
 ]
 
 /**
@@ -159,6 +173,38 @@ export function categorizeUrl(url) {
     }
   }
 
+  // Contributor/author pages (BERT pages)
+  if (urlPath.includes('/article-contributors/')) {
+    return {
+      content_type: 'contributor',
+      is_monetizable: false,
+    }
+  }
+
+  // Category archive pages
+  if (urlPath.includes('/category/')) {
+    return {
+      content_type: 'category',
+      is_monetizable: false,
+    }
+  }
+
+  // Subject area pages
+  if (urlPath.includes('/subject/')) {
+    return {
+      content_type: 'subject',
+      is_monetizable: true,
+    }
+  }
+
+  // Accreditation pages
+  if (urlPath.includes('/accreditation/')) {
+    return {
+      content_type: 'accreditation',
+      is_monetizable: false,
+    }
+  }
+
   // Career guides
   if (urlPath.includes('/careers/')) {
     return {
@@ -180,6 +226,54 @@ export function categorizeUrl(url) {
     return {
       content_type: 'resource',
       is_monetizable: false,
+    }
+  }
+
+  // Financial aid and scholarships
+  if (urlPath.includes('/financial-aid/') || urlPath.includes('/scholarships/')) {
+    return {
+      content_type: 'financial_aid',
+      is_monetizable: false,
+    }
+  }
+
+  // Best-of listicles
+  if (urlPath.includes('/best-')) {
+    return {
+      content_type: 'listicle',
+      is_monetizable: true,
+    }
+  }
+
+  // How-to guides
+  if (urlPath.includes('/how-to-')) {
+    return {
+      content_type: 'how_to',
+      is_monetizable: false,
+    }
+  }
+
+  // What-is explainers
+  if (urlPath.includes('/what-is-')) {
+    return {
+      content_type: 'explainer',
+      is_monetizable: false,
+    }
+  }
+
+  // Guide pages
+  if (urlPath.includes('/guide/')) {
+    return {
+      content_type: 'guide',
+      is_monetizable: false,
+    }
+  }
+
+  // Degree type pages
+  if (urlPath.includes('/degree-')) {
+    return {
+      content_type: 'degree_type',
+      is_monetizable: true,
     }
   }
 

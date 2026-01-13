@@ -567,8 +567,12 @@ Revised content:`
 
       setRevisionProgress('AI is revising...')
       const claudeClient = new ClaudeClient()
-      const revisedContent = await claudeClient.humanize(prompt, {
+      // Use chat() for editorial revision, NOT humanize() which is for AI detection bypass
+      const revisedContent = await claudeClient.chat([
+        { role: 'user', content: prompt }
+      ], {
         temperature: 0.7,
+        max_tokens: 4500,
       })
 
       const cleanedContent = revisedContent
