@@ -23,6 +23,8 @@ import {
   Trash2,
   MessageSquare,
   Type,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -388,6 +390,7 @@ export function CommentableArticle({
   contributorName = null,
   contributorStyle = null,
   onContentChange,
+  onSave, // BUG #3 FIX: Optional callback to auto-save after approving revision
   className,
 }) {
   const [selectedText, setSelectedText] = useState('')
@@ -396,6 +399,8 @@ export function CommentableArticle({
   const [activeCommentId, setActiveCommentId] = useState(null)
   const [isRevising, setIsRevising] = useState(false)
   const [revisionProgress, setRevisionProgress] = useState('')
+  // Pending revision state for approve/reject workflow (Bug #2 fix - per Dec 22, 2025 meeting)
+  const [pendingRevision, setPendingRevision] = useState(null) // { previousContent, revisedContent, feedbackItems, revisionData, validationResult }
 
   const { toast } = useToast()
 
@@ -463,12 +468,16 @@ export function CommentableArticle({
     },
   })
 
-  // Update editor content when prop changes
+  // Update editor content when prop changes OR when pending revision exists
+  // When there's a pending revision, show the revised content for user review
   useEffect(() => {
-    if (editor && content && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false)
+    if (!editor) return
+
+    const contentToShow = pendingRevision ? pendingRevision.revisedContent : content
+    if (contentToShow && contentToShow !== editor.getHTML()) {
+      editor.commands.setContent(contentToShow, false)
     }
-  }, [content, editor])
+  }, [content, editor, pendingRevision])
 
   // Cleanup editor
   useEffect(() => {
@@ -579,11 +588,13 @@ Revised HTML:`
       setRevisionProgress('AI is revising...')
       const claudeClient = new ClaudeClient()
       // Use chat() for editorial revision, NOT humanize() which is for AI detection bypass
+      // NOTE: max_tokens increased from 4500 to 16000 to prevent content truncation
+      // for long articles (2000+ words). Claude supports up to 100k output tokens.
       const revisedContent = await claudeClient.chat([
         { role: 'user', content: prompt }
       ], {
         temperature: 0.7,
-        max_tokens: 4500,
+        max_tokens: 16000,
       })
 
       const cleanedContent = revisedContent
@@ -632,6 +643,43 @@ Revised HTML:`
         validationResult, // Store validation result with the revision
       })
 
+      // BUG #2 FIX: Instead of auto-applying, set pending revision for user approval
+      // This allows the user to review the AI changes before accepting them
+      setPendingRevision({
+        previousContent: content,
+        revisedContent: cleanedContent,
+        feedbackItems: pendingComments.map(c => ({
+          id: c.id,
+          selected_text: c.selected_text,
+          category: c.category,
+          severity: c.severity,
+          feedback: c.feedback,
+        })),
+        revisionData,
+        validationResult,
+        timestamp: new Date().toISOString(),
+      })
+
+      setRevisionProgress('')
+      toast.info('AI revision ready for review. Please approve or reject the changes.', { title: 'Review Required' })
+
+    } catch (error) {
+      console.error('AI revision failed:', error)
+      setRevisionProgress('')
+      toast.error(error?.message || 'An error occurred while revising the article.', { title: 'AI Revision Failed' })
+    } finally {
+      setIsRevising(false)
+    }
+  }
+
+  // Approve revision handler - BUG #2 FIX (per Dec 22, 2025 meeting)
+  // Confirms the AI revision, applies content, marks comments as addressed
+  const handleApproveRevision = async () => {
+    if (!pendingRevision) return
+
+    try {
+      const { revisedContent, feedbackItems, revisionData, validationResult } = pendingRevision
+
       // Process each comment based on validation status
       const addressedIds = []
       const failedItems = []
@@ -640,7 +688,6 @@ Revised HTML:`
         if (item.status === 'addressed') {
           addressedIds.push(item.id)
         } else {
-          // Failed or partial - mark as pending_review
           failedItems.push(item)
         }
       }
@@ -668,32 +715,71 @@ Revised HTML:`
         })
       }
 
-      // Update content regardless (AI did make changes)
-      onContentChange?.(cleanedContent)
-      setRevisionProgress('')
+      // BUG #3 FIX: Apply the content change and auto-save to database
+      onContentChange?.(revisedContent)
 
-      // Show appropriate feedback based on validation results
-      if (validationResult.failedCount === 0 && validationResult.partialCount === 0) {
-        toast.success(`Successfully addressed all ${pendingComments.length} comment${pendingComments.length !== 1 ? 's' : ''}.`, { title: 'Revision complete' })
-      } else if (validationResult.failedCount > 0) {
-        const validationSummary = generateValidationSummary(validationResult)
-        toast.warning(
-          `${validationResult.addressedCount} addressed, ${validationResult.failedCount} need manual review.\n\n${validationSummary}`,
-          { title: 'Revision needs review', duration: 8000 }
-        )
+      // Clear pending revision
+      setPendingRevision(null)
+
+      // BUG #3 FIX: Auto-save to database if onSave callback is provided
+      // This ensures revisions persist and comments stay in sync with content
+      if (onSave) {
+        try {
+          await onSave(revisedContent)
+          // Show success with save confirmation
+          if (validationResult.failedCount === 0 && validationResult.partialCount === 0) {
+            toast.success(`Revision approved and saved! All ${feedbackItems.length} comment${feedbackItems.length !== 1 ? 's' : ''} addressed.`, { title: 'Changes Applied' })
+          } else {
+            toast.success(`Revision approved and saved. ${validationResult.addressedCount} addressed, ${validationResult.failedCount + validationResult.partialCount} need review.`, { title: 'Changes Applied' })
+          }
+        } catch (saveError) {
+          console.error('Auto-save failed:', saveError)
+          toast.warning('Revision applied but auto-save failed. Please click Save manually.', { title: 'Save Required' })
+        }
       } else {
-        toast.info(
-          `${validationResult.addressedCount} addressed, ${validationResult.partialCount} partially addressed. Please verify.`,
-          { title: 'Revision complete', duration: 5000 }
-        )
+        // No onSave callback - show reminder to save manually
+        if (validationResult.failedCount === 0 && validationResult.partialCount === 0) {
+          toast.success(`Revision approved! All ${feedbackItems.length} comment${feedbackItems.length !== 1 ? 's' : ''} addressed. Remember to save your changes.`, { title: 'Changes Applied' })
+        } else {
+          toast.success(`Revision approved. ${validationResult.addressedCount} addressed, ${validationResult.failedCount + validationResult.partialCount} need review. Remember to save.`, { title: 'Changes Applied' })
+        }
       }
 
     } catch (error) {
-      console.error('AI revision failed:', error)
-      setRevisionProgress('')
-      toast.error(error?.message || 'An error occurred while revising the article.', { title: 'AI Revision Failed' })
-    } finally {
-      setIsRevising(false)
+      console.error('Failed to approve revision:', error)
+      toast.error('Failed to apply revision: ' + error.message)
+    }
+  }
+
+  // Reject revision handler - BUG #2 FIX (per Dec 22, 2025 meeting)
+  // Reverts to previous content and logs rejection for AI training
+  const handleRejectRevision = async () => {
+    if (!pendingRevision) return
+
+    try {
+      // Log the rejection for AI training (RLHF negative signal)
+      // The revision was already saved with approved: null, we could update it here if needed
+
+      // Revert editor to original content before clearing pending revision
+      // The useEffect will handle this when pendingRevision becomes null
+      // and content prop remains unchanged
+
+      // Clear pending revision without applying changes
+      setPendingRevision(null)
+
+      // Force editor back to original content immediately
+      if (editor) {
+        editor.commands.setContent(content, false)
+      }
+
+      toast.success('Revision rejected. Original content preserved.', { title: 'Changes Reverted' })
+    } catch (error) {
+      // Still clear the pending revision even if logging fails
+      setPendingRevision(null)
+      if (editor) {
+        editor.commands.setContent(content, false)
+      }
+      toast.info('Revision rejected.')
     }
   }
 
@@ -729,6 +815,45 @@ Revised HTML:`
           </span>
         )}
       </div>
+
+      {/* Pending Revision Banner - BUG #2 FIX (per Dec 22, 2025 meeting - approve/reject UX) */}
+      {pendingRevision && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                <Brain className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-900">AI Revision Ready for Review</p>
+                <p className="text-xs text-amber-700">
+                  {pendingRevision.feedbackItems.length} feedback item(s) applied •{' '}
+                  Review the changes below and approve or reject
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleRejectRevision}
+                variant="outline"
+                size="sm"
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <ThumbsDown className="w-4 h-4 mr-2" />
+                Reject & Revert
+              </Button>
+              <Button
+                onClick={handleApproveRevision}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <ThumbsUp className="w-4 h-4 mr-2" />
+                Approve Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
