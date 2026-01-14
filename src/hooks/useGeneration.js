@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../services/supabaseClient'
 import GenerationService from '../services/generationService'
+import { stripImagesFromHtml } from '../utils/contentUtils'
 
 const generationService = new GenerationService()
 
@@ -147,9 +148,13 @@ export function useReviseArticle() {
 
   return useMutation({
     mutationFn: async ({ articleId, content, feedbackItems }) => {
+      // Strip images from content before sending to AI
+      // Per Bug #3: Prevents logos/images from appearing in AI-revised content
+      const contentWithoutImages = stripImagesFromHtml(content)
+
       // Use Claude to revise based on feedback
       const revisedContent = await generationService.claude.reviseWithFeedback(
-        content,
+        contentWithoutImages,
         feedbackItems
       )
 
@@ -249,6 +254,10 @@ export function useHumanizeContent() {
 export function useReviseWithFeedback() {
   return useMutation({
     mutationFn: async ({ content, title, feedbackItems, contentType, focusKeyword }) => {
+      // Strip images from content before sending to AI
+      // Per Bug #3: Prevents logos/images from appearing in AI-revised content
+      const contentWithoutImages = stripImagesFromHtml(content)
+
       // Format feedback items for the prompt
       const feedbackText = feedbackItems
         .map((item, i) => `${i + 1}. ${item.comment}`)
@@ -264,7 +273,7 @@ EDITORIAL FEEDBACK TO ADDRESS:
 ${feedbackText}
 
 CURRENT ARTICLE CONTENT:
-${content}
+${contentWithoutImages}
 
 INSTRUCTIONS:
 1. Carefully address ALL the feedback items listed above
