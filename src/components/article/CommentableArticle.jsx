@@ -542,31 +542,39 @@ export function CommentableArticle({
    Feedback: "${comment.feedback}"`
       })
 
-      const prompt = `You are revising an article based on editorial feedback. Apply ALL the feedback items below while preserving:
-- All H2 IDs (for anchor links)
-- All BLS citations and external links
-- The overall structure and heading hierarchy
-- Any shortcodes like [degree_table] or [ge_internal_link]
+      const prompt = `You are revising an article based on editorial feedback. Your output MUST be valid HTML that preserves the original formatting structure.
 
-ARTICLE TITLE: ${title}
-${focusKeyword ? `FOCUS KEYWORD: ${focusKeyword}` : ''}
-${contentType ? `CONTENT TYPE: ${contentType}` : ''}
-${contributorName ? `AUTHOR STYLE: ${contributorName}${contributorStyle ? ` - ${contributorStyle}` : ''}` : ''}
+CRITICAL FORMATTING RULES:
+1. Output ONLY valid HTML - no markdown, no code fences, no explanations
+2. Preserve ALL existing HTML elements: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <a>, <strong>, <em>, <blockquote>
+3. Preserve ALL H2 IDs exactly (e.g., <h2 id="section-name">)
+4. Preserve ALL links (<a> tags) with their href attributes
+5. Preserve ALL shortcodes: [degree_table], [ge_internal_link], [ge_cta], etc.
+6. Keep paragraphs as <p> tags, lists as <ul>/<ol> with <li> items
+7. Do NOT convert HTML to markdown or any other format
+8. Do NOT wrap output in code blocks or add any prefix/suffix text
 
-CURRENT CONTENT:
+ARTICLE CONTEXT:
+Title: ${title}
+${focusKeyword ? `Focus Keyword: ${focusKeyword}` : ''}
+${contentType ? `Content Type: ${contentType}` : ''}
+${contributorName ? `Author Style: ${contributorName}${contributorStyle ? ` - ${contributorStyle}` : ''}` : ''}
+
+CURRENT HTML CONTENT:
 ${content}
 
 EDITORIAL FEEDBACK TO ADDRESS:
 ${feedbackItems.join('\n\n')}
 
-INSTRUCTIONS:
+REVISION INSTRUCTIONS:
 1. Apply ALL feedback items to the content
-2. Make changes that address each specific feedback point
-3. Maintain the same HTML structure
-4. Keep the same approximate length unless told to expand/shorten
-5. Return ONLY the revised HTML content, no explanations
+2. Make targeted changes that address each specific feedback point
+3. Preserve the EXACT same HTML structure and formatting
+4. Keep images (<img> tags) in their current positions unless feedback specifically mentions them
+5. Keep the same approximate length unless told to expand/shorten
+6. Return ONLY the revised HTML content, starting directly with the first HTML tag
 
-Revised content:`
+Revised HTML:`
 
       setRevisionProgress('AI is revising...')
       const claudeClient = new ClaudeClient()

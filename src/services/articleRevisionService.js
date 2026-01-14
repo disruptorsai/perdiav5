@@ -30,6 +30,7 @@ const REVISION_STRATEGIES = {
     requiresHumanization: true,
     preserveLinks: true,
     preserveFaqs: false,
+    preserveMedia: false, // Don't force-reinsert images on full rewrite
   },
   refresh: {
     name: 'Content Refresh',
@@ -38,6 +39,7 @@ const REVISION_STRATEGIES = {
     requiresHumanization: true,
     preserveLinks: true,
     preserveFaqs: true,
+    preserveMedia: true, // Preserve images on refresh
   },
   seo_optimize: {
     name: 'SEO Optimization',
@@ -46,6 +48,7 @@ const REVISION_STRATEGIES = {
     requiresHumanization: false,
     preserveLinks: true,
     preserveFaqs: true,
+    preserveMedia: true, // Preserve images on SEO
   },
   add_sections: {
     name: 'Add Sections',
@@ -54,6 +57,7 @@ const REVISION_STRATEGIES = {
     requiresHumanization: true,
     preserveLinks: true,
     preserveFaqs: true,
+    preserveMedia: true, // Preserve images when adding sections
   },
   improve_quality: {
     name: 'Quality Improvement',
@@ -62,6 +66,7 @@ const REVISION_STRATEGIES = {
     requiresHumanization: true,
     preserveLinks: true,
     preserveFaqs: true,
+    preserveMedia: false, // Don't force-reinsert on quality improvement
   },
   update_links: {
     name: 'Update Links',
@@ -70,6 +75,17 @@ const REVISION_STRATEGIES = {
     requiresHumanization: false,
     preserveLinks: false,
     preserveFaqs: true,
+    preserveMedia: true, // Preserve images on link updates
+  },
+  // Special strategy for feedback-based AI revision (from CommentableArticle)
+  feedback: {
+    name: 'Feedback Revision',
+    description: 'Revise based on editorial feedback comments',
+    prompt: 'feedback',
+    requiresHumanization: false,
+    preserveLinks: true,
+    preserveFaqs: true,
+    preserveMedia: false, // Don't auto-reinsert images - let AI handle naturally
   },
 }
 
@@ -448,11 +464,14 @@ class ArticleRevisionService {
         revisedContent.content = finalContent
       }
 
-      // Step 6.5: Re-insert preserved media elements
-      if (mediaCount > 0) {
+      // Step 6.5: Re-insert preserved media elements (only if strategy.preserveMedia is true)
+      // Bug fix: Don't force-reinsert images for feedback/quality revisions - causes unwanted logos
+      if (mediaCount > 0 && strategy.preserveMedia) {
         onProgress({ stage: 'media_insert', message: 'Re-inserting media elements...', progress: 70 })
         revisedContent.content = this.reinsertMediaElements(revisedContent.content, originalMedia)
         console.log(`[RevisionService] Re-inserted media elements into revised content`)
+      } else if (mediaCount > 0) {
+        console.log(`[RevisionService] Skipping media reinsertion (preserveMedia: ${strategy.preserveMedia || false})`)
       }
 
       // Step 7: Update internal links
