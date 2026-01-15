@@ -622,7 +622,7 @@ export default function ReviewQueue() {
                           <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
                             {article.content_type && (
                               <span className="capitalize">
-                                {article.content_type.replace(/_/g, ' ')}
+                                {article.content_type?.replace(/_/g, ' ')}
                               </span>
                             )}
                             <span>•</span>
@@ -655,7 +655,7 @@ export default function ReviewQueue() {
                                     variant="outline"
                                     className="bg-white text-yellow-700 border-yellow-300"
                                   >
-                                    {flag.replace(/_/g, ' ')}
+                                    {flag?.replace(/_/g, ' ') || flag}
                                   </Badge>
                                 ))}
                               </div>

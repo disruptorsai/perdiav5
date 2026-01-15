@@ -182,6 +182,30 @@ function ArticleEditorContent() {
     }
   }
 
+  // BUG #3 FIX: Save handler that accepts content as parameter (for CommentableArticle auto-save)
+  // This is called when user approves an AI revision in comment mode
+  const handleSaveWithContent = useCallback(async (newContent) => {
+    try {
+      await updateArticle.mutateAsync({
+        articleId,
+        updates: {
+          title,
+          content: newContent,
+          meta_description: metaDescription,
+          focus_keyword: focusKeyword,
+          content_type: contentType,
+          contributor_id: selectedContributorId,
+          faqs,
+          word_count: getWordCount(newContent),
+          quality_score: qualityData?.score || article?.quality_score
+        }
+      })
+      // Don't show toast here - CommentableArticle handles the success message
+    } catch (error) {
+      throw error // Re-throw so CommentableArticle can handle it
+    }
+  }, [articleId, title, metaDescription, focusKeyword, contentType, selectedContributorId, faqs, qualityData, article, updateArticle])
+
   // Status change handler
   const handleStatusChange = async (newStatus) => {
     try {
@@ -867,6 +891,7 @@ function ArticleEditorContent() {
               contributorName={contributors.find(c => c.id === selectedContributorId)?.name}
               contributorStyle={contributors.find(c => c.id === selectedContributorId)?.writing_style}
               onContentChange={setContent}
+              onSave={handleSaveWithContent}
               className="flex-1"
             />
           ) : showPreview ? (

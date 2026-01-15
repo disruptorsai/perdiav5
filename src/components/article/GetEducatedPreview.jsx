@@ -193,6 +193,20 @@ const GetEducatedPreview = forwardRef(function GetEducatedPreview(
           border-radius: 4px;
         }
 
+        /* School/University logos should be constrained */
+        .ge-article-content img[src*="logo"],
+        .ge-article-content img[src*="school"],
+        .ge-article-content img[class*="logo"],
+        .ge-article-content img.school-logo,
+        .ge-article-content img.university-logo {
+          max-width: 200px;
+          max-height: 100px;
+          width: auto;
+          height: auto;
+          object-fit: contain;
+          margin: 0.75rem 0;
+        }
+
         /* FAQ Section styling */
         .ge-article-content .faq-item,
         .ge-article-content details {
