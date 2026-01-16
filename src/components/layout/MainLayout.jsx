@@ -26,24 +26,57 @@ import {
   MessageSquare,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { CURRENT_VERSION, CURRENT_RELEASE_DATE, getRecentFixes } from '../../data/changelog'
 
-// System status banner component - now a clickable button
+// Import git info (generated at build time)
+// Falls back to empty object if file doesn't exist yet
+let gitInfo = { recentCommits: [], version: 'dev', buildDate: '' }
+try {
+  gitInfo = await import('../../data/git-info.json')
+} catch (e) {
+  console.warn('git-info.json not found - run npm run generate-git-info')
+}
+
+// Get icon based on commit type
+function getCommitIcon(type) {
+  switch (type) {
+    case 'fix': return '🔧'
+    case 'feature': return '✨'
+    case 'chore': return '🔨'
+    case 'docs': return '📚'
+    case 'refactor': return '♻️'
+    case 'perf': return '⚡'
+    case 'test': return '🧪'
+    default: return '📝'
+  }
+}
+
+// Format commit message for display (remove type prefix)
+function formatCommitMessage(message) {
+  // Remove conventional commit prefix like "fix: " or "feat(scope): "
+  return message.replace(/^(fix|feat|chore|docs|refactor|perf|test|style)(\([^)]+\))?:\s*/i, '')
+}
+
+// System status banner component - now shows real git commits
 function SystemStatusBanner() {
   const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(true)
 
+  const version = gitInfo.version || 'dev'
+  const buildDate = gitInfo.buildDate || ''
+  const latestCommitHash = gitInfo.latestCommit?.hash || ''
+  const recentCommits = (gitInfo.recentCommits || []).slice(0, 3)
+
   useEffect(() => {
-    // Check if user has dismissed this version's banner
+    // Check if user has dismissed this version's banner (using commit hash)
     const dismissedVersion = localStorage.getItem('dismissedStatusVersion')
-    if (dismissedVersion === CURRENT_VERSION) {
+    if (dismissedVersion === latestCommitHash && latestCommitHash) {
       setIsVisible(false)
     }
-  }, [])
+  }, [latestCommitHash])
 
   const handleDismiss = (e) => {
     e.stopPropagation() // Prevent navigation when clicking X
-    localStorage.setItem('dismissedStatusVersion', CURRENT_VERSION)
+    localStorage.setItem('dismissedStatusVersion', latestCommitHash)
     setIsVisible(false)
   }
 
@@ -51,9 +84,8 @@ function SystemStatusBanner() {
     navigate('/releases')
   }
 
-  if (!isVisible) return null
-
-  const recentFixes = getRecentFixes(2)
+  // Don't show if no commits or already dismissed
+  if (!isVisible || recentCommits.length === 0) return null
 
   return (
     <motion.div
@@ -72,10 +104,10 @@ function SystemStatusBanner() {
                 <span className="font-semibold">System Updated & Ready</span>
               </div>
               <span className="text-sm text-green-600 bg-green-100 px-2 py-0.5 rounded">
-                v{CURRENT_VERSION}
+                v{version}
               </span>
               <span className="text-sm text-green-600">
-                {CURRENT_RELEASE_DATE}
+                {buildDate}
               </span>
               <div className="flex items-center gap-1 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity">
                 <History className="w-4 h-4" />
@@ -83,12 +115,13 @@ function SystemStatusBanner() {
                 <ChevronRight className="w-4 h-4" />
               </div>
             </div>
-            {/* Show recent fixes */}
+            {/* Show recent commits */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              {recentFixes.map((fix, index) => (
-                <div key={index} className="flex items-center gap-1.5 text-sm text-green-700">
-                  <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>{fix}</span>
+              {recentCommits.map((commit, index) => (
+                <div key={commit.hash || index} className="flex items-center gap-1.5 text-sm text-green-700">
+                  <span className="flex-shrink-0">{getCommitIcon(commit.type)}</span>
+                  <span>{formatCommitMessage(commit.message)}</span>
+                  <span className="text-green-500 text-xs">({commit.hash})</span>
                 </div>
               ))}
             </div>

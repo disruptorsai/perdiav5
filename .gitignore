@@ -51,3 +51,6 @@ build
 .claude/settings.local.json
 nul
 tmpclaude-*
+
+# Auto-generated build files
+src/data/git-info.json

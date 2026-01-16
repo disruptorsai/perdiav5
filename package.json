@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate-git-info": "node scripts/generate-git-info.js",
+    "predev": "npm run generate-git-info",
     "dev": "vite",
+    "prebuild": "npm run generate-git-info",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
