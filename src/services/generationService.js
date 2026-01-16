@@ -1663,10 +1663,46 @@ OUTPUT ONLY THE UPDATED HTML CONTENT with links added.`
   }
 
   /**
+   * Generate a unique slug by checking for existing slugs and appending suffix if needed
+   */
+  async generateUniqueSlug(baseSlug) {
+    // Check if the base slug exists
+    const { data: existing } = await supabase
+      .from('articles')
+      .select('slug')
+      .like('slug', `${baseSlug}%`)
+
+    if (!existing || existing.length === 0) {
+      return baseSlug
+    }
+
+    // Find existing slugs that match our pattern
+    const existingSlugs = new Set(existing.map(a => a.slug))
+
+    // If base slug doesn't exist, use it
+    if (!existingSlugs.has(baseSlug)) {
+      return baseSlug
+    }
+
+    // Find the next available suffix
+    let suffix = 2
+    while (existingSlugs.has(`${baseSlug}-${suffix}`)) {
+      suffix++
+    }
+
+    return `${baseSlug}-${suffix}`
+  }
+
+  /**
    * Save generated article to database
    */
   async saveArticle(articleData, ideaId, userId) {
     try {
+      // Ensure unique slug before saving
+      if (articleData.slug) {
+        articleData.slug = await this.generateUniqueSlug(articleData.slug)
+      }
+
       const { data, error } = await supabase
         .from('articles')
         .insert({

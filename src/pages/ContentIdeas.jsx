@@ -366,7 +366,7 @@ function ContentIdeas() {
             description: idea.description,
             seed_topics: idea.target_keywords || [],
             content_type: idea.content_type || 'guide',
-            source: idea.source || 'ai_discovery',
+            source: idea.source || 'ai_generated',
             status: 'pending',
             monetization_score: idea.monetization_score || 0,
             monetization_confidence: idea.monetization_confidence || 'medium',
