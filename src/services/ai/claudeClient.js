@@ -48,54 +48,36 @@ class ClaudeClient {
 
   /**
    * Mock humanized content for testing
+   * CRITICAL: This must return the original content when API key is missing,
+   * never a generic template that doesn't match the article!
    */
   getMockHumanizedContent(messages) {
     const userMessage = messages.find(m => m.role === 'user')?.content || ''
 
-    // If it's a humanization request, return slightly modified content
-    if (userMessage.includes('ORIGINAL CONTENT')) {
-      // Extract content between markers (simplified)
-      const contentMatch = userMessage.match(/ORIGINAL CONTENT:([\s\S]*?)(?:CRITICAL|$)/)
-      if (contentMatch) {
-        // Return the same content with minor "humanization"
-        return contentMatch[1].trim()
+    // Check for various content markers used in different prompts
+    // AI Revision uses "CURRENT HTML CONTENT:", humanization uses "ORIGINAL CONTENT:"
+    const contentMarkers = [
+      /CURRENT HTML CONTENT:\s*([\s\S]*?)(?=\n\nEDITORIAL FEEDBACK|CRITICAL|$)/i,
+      /ORIGINAL CONTENT:\s*([\s\S]*?)(?=CRITICAL|===|$)/i,
+      /CURRENT CONTENT:\s*([\s\S]*?)(?=QUALITY ISSUES|EDITORIAL FEEDBACK|===|$)/i,
+    ]
+
+    for (const marker of contentMarkers) {
+      const contentMatch = userMessage.match(marker)
+      if (contentMatch && contentMatch[1]) {
+        const extractedContent = contentMatch[1].trim()
+        // Only return if we got actual content, not empty string
+        if (extractedContent.length > 100) {
+          console.warn('⚠️ Claude API key not set - returning original content unchanged for safety')
+          return extractedContent
+        }
       }
     }
 
-    // Default mock response
-    return `<h2>Introduction to the Topic</h2>
-<p>Let's dive into this fascinating subject. You know what? It's actually more interesting than most people think.</p>
-
-<p>Here's the thing—understanding this concept doesn't require a PhD. But it does take some attention to detail.</p>
-
-<h2>The Core Concepts</h2>
-<p>First things first. We need to break down the fundamentals.</p>
-
-<p>Think of it this way: every complex system starts with simple building blocks. And this is no different.</p>
-
-<h3>Key Point One</h3>
-<p>This is where things get interesting. The first major concept revolves around understanding the relationship between components.</p>
-
-<h3>Key Point Two</h3>
-<p>Now, building on that foundation, we can explore the next layer. It's all connected—each piece influences the others in subtle but important ways.</p>
-
-<h2>Practical Applications</h2>
-<p>Theory is great, but let's talk about real-world use cases. That's where the rubber meets the road.</p>
-
-<p>I've seen this applied successfully in various contexts. The results? Pretty impressive, actually.</p>
-
-<h2>Common Pitfalls to Avoid</h2>
-<p>Here's what trips people up most often:</p>
-<ul>
-<li>Overcomplicating things right from the start</li>
-<li>Ignoring the fundamentals in favor of advanced techniques</li>
-<li>Not testing assumptions along the way</li>
-</ul>
-
-<h2>Moving Forward</h2>
-<p>So where do you go from here? Start small. Build your understanding incrementally.</p>
-
-<p>The beauty of this approach is that it's forgiving. You can course-correct as you learn more.</p>`
+    // If we couldn't extract content, throw an error instead of returning wrong content
+    // This prevents the client from seeing "a snippet that doesn't look like the original"
+    console.error('❌ Claude API key not set and could not extract original content from prompt')
+    throw new Error('CLAUDE_API_KEY_NOT_SET: Cannot perform AI revision without Claude API key. Please configure VITE_CLAUDE_API_KEY in your environment.')
   }
 
   /**
